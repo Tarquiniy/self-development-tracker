@@ -1,6 +1,8 @@
 import type {UserProfile, ProgressTable, DailyProgress, Category, RadarChartData } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://self-development-tracker.onrender.com/' 
+  : 'http://localhost:8000';
 
 class ApiService {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {

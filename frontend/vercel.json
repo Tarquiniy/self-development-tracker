@@ -1,15 +1,12 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "dist/index.html",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
+      "source": "/api/:path*",
+      "destination": "https://self-development-tracker.onrender.com//api/:path*"
+    },
     {
-      "src": "/(.*)",
-      "dest": "/dist/$1"
+      "source": "/auth/:path*",
+      "destination": "https://self-development-tracker.onrender.com//auth/:path*"
     }
   ]
 }
