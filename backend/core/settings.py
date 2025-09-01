@@ -2,8 +2,6 @@ import os
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
-import re
-import socket
 
 load_dotenv()
 
@@ -13,62 +11,44 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'fallback-secret-key')
 
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = os.getenv('.vercel.app', 'your-app.onrender.com', 'ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
-# Настройки базы данных для Supabase
-#DATABASE_URL = os.getenv('DATABASE_URL')
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+CSRF_TRUSTED_ORIGINS = [
+    'https://your-app.onrender.com',
+    'https://*.vercel.app'
+]
+
+
+# Для статических файлов
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# Настройки Supabase
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+
+# Настройки базы данных
+DATABASE_URL = os.getenv('DATABASE_URL')
+
+if DATABASE_URL and DATABASE_URL.startswith('postgresql://'):
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+            ssl_require=True
+        )
     }
-}
-
-#if DATABASE_URL:
-    # Ручной парсинг строки подключения
-#    match = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', DATABASE_URL)
-    
-#    if match:
-#        username, password, host, port, dbname = match.groups()
-        
-        # Принудительно разрешаем доменное имя в IPv4 адрес
-#        try:
-            # Получаем IPv4 адрес хоста
-#            host_ipv4 = socket.getaddrinfo(host, int(port), socket.AF_INET)[0][4][0]
-#        except:
-#            host_ipv4 = host  # Если не удалось, используем оригинальный хост
-        
-#        DATABASES = {
-#            'default': {
-#                'ENGINE': 'django.db.backends.postgresql',
-#                'NAME': dbname,
-#                'USER': username,
-#                'PASSWORD': password,
-#                'HOST': host_ipv4,  # Используем IPv4 адрес
-#                'PORT': port,
-#                'OPTIONS': {
-#                    'sslmode': 'require',
-#                },
-#            }
-#        }
-#    else:
-        # Fallback на SQLite
-#        print("Предупреждение: Неверный формат DATABASE_URL. Используется SQLite.")
-#        DATABASES = {
-#            'default': {
-#                'ENGINE': 'django.db.backends.sqlite3',
-#                'NAME': BASE_DIR / 'db.sqlite3',
-#            }
-#        }
-#else:
-#    # Fallback на SQLite
-#    DATABASES = {
-#        'default': {
-#            'ENGINE': 'django.db.backends.sqlite3',
-#            'NAME': BASE_DIR / 'db.sqlite3',
-#        }
-#    }
+else:
+    # Fallback на SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -78,18 +58,20 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sites',
-    
+
     # Third-party apps
     'rest_framework',
     'rest_framework.authtoken',
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
+    'allauth.socialaccount.providers.telegram',
     'allauth.socialaccount.providers.vk',
     'allauth.socialaccount.providers.google',
     'allauth.socialaccount.providers.yandex',
+    'social_django',
     'corsheaders',
-    
+
     # Local apps
     'users',
     'tables',
@@ -97,6 +79,30 @@ INSTALLED_APPS = [
     'analytics',
     'blog',
 ]
+
+# Social Auth Settings
+AUTHENTICATION_BACKENDS = (
+    'social_core.backends.telegram.TelegramAuth',
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
+)
+
+# Telegram OAuth Settings
+SOCIAL_AUTH_TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
+SOCIAL_AUTH_TELEGRAM_LOGIN_REDIRECT_URL = os.getenv('TELEGRAM_REDIRECT_URL', 'http://localhost:3000/auth/telegram/callback')
+
+# Allauth Settings
+SOCIALACCOUNT_PROVIDERS = {
+    'telegram': {
+        'APP': {
+            'client_id': os.getenv('TELEGRAM_BOT_NAME', ''),
+            'secret': os.getenv('TELEGRAM_BOT_TOKEN', ''),
+            'key': ''
+        }
+    }
+}
+
+SOCIALACCOUNT_ADAPTER = 'users.adapters.CustomSocialAccountAdapter'
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -196,13 +202,23 @@ ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'optional'
 
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', 'your_bot_token_here')
+TELEGRAM_BOT_NAME = os.getenv('TELEGRAM_BOT_NAME', 'your_bot_name_here')
+TELEGRAM_LOGIN_REDIRECT_URL = os.getenv('TELEGRAM_REDIRECT_URL', 'http://localhost:3000/auth/telegram/callback')
+
+# Social Auth Settings
+SOCIAL_AUTH_TELEGRAM_BOT_TOKEN = TELEGRAM_BOT_TOKEN
+
 # CORS Settings
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://fjqbhcmsqypevfbpzcxj.supabase.co",
+    "https://oauth.telegram.org",
+    "https://telegram.org",
 ]
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = True  # Для разработки, в production следует ограничить
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -213,7 +229,16 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'telegram-auth',
 ]
+
+# Content Security Policy для Telegram
+SECURE_CSP = {
+    'default-src': ["'self'", "https://telegram.org", "https://oauth.telegram.org"],
+    'script-src': ["'self'", "'unsafe-inline'", "https://telegram.org"],
+    'style-src': ["'self'", "'unsafe-inline'"],
+    'img-src': ["'self'", "data:", "https://telegram.org"],
+}
 
 # Custom User Model
 AUTH_USER_MODEL = 'users.CustomUser'

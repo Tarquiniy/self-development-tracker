@@ -32,6 +32,7 @@ const RadarChartComponent: React.FC<RadarChartComponentProps> = ({ tableId }) =>
 
   const loadChartData = async () => {
     try {
+      setLoading(true);
       const data = await apiService.getChartData(
         tableId,
         dateRange.start,
@@ -49,14 +50,18 @@ const RadarChartComponent: React.FC<RadarChartComponentProps> = ({ tableId }) =>
   const prepareRadarData = () => {
     if (!chartData.length) return [];
 
-    // Группируем данные по дате и преобразуем для RadarChart
-    return chartData.map((entry) => {
+    // Преобразуем данные для RadarChart
+    const radarData: any[] = [];
+    
+    chartData.forEach((entry) => {
       const radarEntry: any = { date: entry.date };
       categories.forEach((category) => {
         radarEntry[category.name] = entry[category.id] || 0;
       });
-      return radarEntry;
+      radarData.push(radarEntry);
     });
+
+    return radarData;
   };
 
   const radarData = prepareRadarData();
@@ -100,48 +105,48 @@ const RadarChartComponent: React.FC<RadarChartComponentProps> = ({ tableId }) =>
         </div>
       </div>
 
-      <div className="h-96">
-        <ResponsiveContainer width="100%" height="100%">
-          <RadarChart data={radarData} outerRadius="80%">
-            <PolarGrid />
-            <PolarAngleAxis
-              dataKey="date"
-              tick={({ payload, x, y, textAnchor }: any) => (
-                <text
-                  x={x}
-                  y={y}
-                  textAnchor={textAnchor}
-                  fill="#666"
-                  fontSize="12"
-                >
-                  {new Date(payload.value).toLocaleDateString()}
-                </text>
-              )}
-            />
-            <PolarRadiusAxis angle={30} domain={[0, 100]} />
-            {categories.map((category, index) => (
-              <Radar
-                key={category.id}
-                name={category.name}
-                dataKey={category.name}
-                stroke={`hsl(${(index * 360) / categories.length}, 70%, 50%)`}
-                fill={`hsl(${(index * 360) / categories.length}, 70%, 50%)`}
-                fillOpacity={0.6}
+      {radarData.length > 0 ? (
+        <div className="h-96">
+          <ResponsiveContainer width="100%" height="100%">
+            <RadarChart data={radarData} outerRadius="80%">
+              <PolarGrid />
+              <PolarAngleAxis
+                dataKey="date"
+                tick={({ payload, x, y, textAnchor }: any) => (
+                  <text
+                    x={x}
+                    y={y}
+                    textAnchor={textAnchor}
+                    fill="#666"
+                    fontSize="12"
+                  >
+                    {new Date(payload.value).toLocaleDateString()}
+                  </text>
+                )}
               />
-            ))}
-            <Legend />
-            <Tooltip
-              formatter={(value: number, name: string) => [
-                value,
-                `${name} (баллы)`,
-              ]}
-              labelFormatter={(label) => `Дата: ${new Date(label).toLocaleDateString()}`}
-            />
-          </RadarChart>
-        </ResponsiveContainer>
-      </div>
-
-      {!radarData.length && (
+              <PolarRadiusAxis angle={30} domain={[0, 100]} />
+              {categories.map((category, index) => (
+                <Radar
+                  key={category.id}
+                  name={category.name}
+                  dataKey={category.name}
+                  stroke={`hsl(${(index * 360) / categories.length}, 70%, 50%)`}
+                  fill={`hsl(${(index * 360) / categories.length}, 70%, 50%)`}
+                  fillOpacity={0.6}
+                />
+              ))}
+              <Legend />
+              <Tooltip
+                formatter={(value: number, name: string) => [
+                  value,
+                  `${name} (баллы)`,
+                ]}
+                labelFormatter={(label) => `Дата: ${new Date(label).toLocaleDateString()}`}
+              />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
         <div className="text-center py-12 text-gray-500">
           Нет данных для отображения за выбранный период
         </div>

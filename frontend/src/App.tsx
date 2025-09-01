@@ -1,11 +1,10 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import TableEditor from './components/tables/TableEditor';
-import Dashboard  from './components/Dashboard';
+import Dashboard from './components/Dashboard';
 import DiagramView from './components/diagram/DiagramView';
 
 function App() {

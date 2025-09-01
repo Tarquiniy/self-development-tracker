@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import TelegramLogin from './TelegramLogin';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -26,6 +26,36 @@ const Login: React.FC = () => {
     }
   };
 
+  const handleTelegramAuth = async (telegramUser: any) => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const response = await fetch('http://localhost:8000/api/auth/telegram/login/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(telegramUser),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem('accessToken', data.access);
+        localStorage.setItem('refreshToken', data.refresh);
+        navigate('/dashboard');
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        setError(errorData.error || 'Telegram authentication failed');
+      }
+    } catch (error) {
+      console.error('Telegram authentication error:', error);
+      setError('Network error during Telegram authentication');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -34,43 +64,50 @@ const Login: React.FC = () => {
             Вход в аккаунт
           </h2>
         </div>
+
+        <TelegramLogin
+          botName={import.meta.env.VITE_TELEGRAM_BOT_NAME || ''}
+          onAuth={handleTelegramAuth}
+          buttonSize="large"
+        />
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-gray-50 text-gray-500">Или</span>
+          </div>
+        </div>
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {error}
             </div>
           )}
+          
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
-              <label htmlFor="email" className="sr-only">
-                Email
-              </label>
               <input
-                id="email"
-                name="email"
                 type="email"
-                autoComplete="email"
                 required
                 className="input-field rounded-t-md"
                 placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
               />
             </div>
             <div>
-              <label htmlFor="password" className="sr-only">
-                Пароль
-              </label>
               <input
-                id="password"
-                name="password"
                 type="password"
-                autoComplete="current-password"
                 required
                 className="input-field rounded-b-md"
                 placeholder="Пароль"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
               />
             </div>
           </div>
@@ -79,17 +116,14 @@ const Login: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+              className="btn-primary"
             >
               {loading ? 'Вход...' : 'Войти'}
             </button>
           </div>
 
           <div className="text-center">
-            <Link
-              to="/register"
-              className="font-medium text-primary-600 hover:text-primary-500"
-            >
+            <Link to="/register" className="link-primary">
               Нет аккаунта? Зарегистрироваться
             </Link>
           </div>

@@ -1,4 +1,3 @@
-// types/index.ts
 export interface User {
   id: string;
   email: string;
@@ -40,6 +39,11 @@ export interface DailyProgress {
 export interface ChartData {
   date: string;
   [key: string]: number | string;
+}
+
+export interface RadarChartData {
+  categories: Category[];
+  progress_data: ChartData[];
 }
 
 export interface AuthContextType {

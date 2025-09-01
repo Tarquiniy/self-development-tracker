@@ -34,6 +34,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           console.error('Failed to fetch user profile:', error);
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
+          setUser(null);
+          setProfile(null);
         }
       }
       setLoading(false);
@@ -45,7 +47,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string, password: string) => {
     const data = await apiService.login(email, password);
     setUser(data.user);
-    
+
+    if (data.access) {
+      localStorage.setItem('accessToken', data.access);
+      localStorage.setItem('refreshToken', data.refresh);
+    }
+
     const profileData = await apiService.getProfile();
     setProfile(profileData);
   };
@@ -60,7 +67,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }) => {
     const data = await apiService.register(userData);
     setUser(data.user);
-    
+
+    if (data.access) {
+      localStorage.setItem('accessToken', data.access);
+      localStorage.setItem('refreshToken', data.refresh);
+    }
+
     const profileData = await apiService.getProfile();
     setProfile(profileData);
   };

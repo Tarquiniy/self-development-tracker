@@ -1,8 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ProgressTableViewSet
-
-from .views import ProgressTableViewSet, tables_test 
+from .views import ProgressTableViewSet, tables_test
 
 router = DefaultRouter()
 router.register(r'tables', ProgressTableViewSet, basename='table')

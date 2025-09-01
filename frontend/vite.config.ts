@@ -40,4 +40,21 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    sourcemap: false, // Включаем генерацию source maps
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          telegram: ['./src/components/auth/TelegramLogin'],
+        }
+      }
+    }
+  },
+  define: {
+    'process.env': {
+      VITE_API_BASE_URL: JSON.stringify(process.env.VITE_API_BASE_URL),
+      VITE_TELEGRAM_BOT_NAME: JSON.stringify(process.env.VITE_TELEGRAM_BOT_NAME),
+    }
+  }
 })

@@ -1,54 +1,62 @@
-import type { User, UserProfile, ProgressTable, DailyProgress, Category, ChartData } from '../types';
+import type {UserProfile, ProgressTable, DailyProgress, Category, RadarChartData } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';  
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 class ApiService {
-  private async request(endpoint: string, options: RequestInit = {}) {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
     const token = localStorage.getItem('accessToken');
-    
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    
+
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    
-    // Добавляем переданные заголовки
-    if (options.headers) {
-      Object.assign(headers, options.headers);
-    }
-    
-    const response = await fetch(url, {
+
+    const config: RequestInit = {
       ...options,
-      headers,
-    });
-    
+      headers: { ...headers, ...options.headers } as HeadersInit,
+    };
+
+    const response = await fetch(url, config);
+
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error || 'Request failed');
+      let errorMessage = 'Request failed';
+      
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorData.detail || errorMessage;
+      } catch {
+        errorMessage = await response.text() || errorMessage;
+      }
+      
+      throw new Error(errorMessage);
     }
-    
-    return response.json();
+
+    try {
+      return await response.json();
+    } catch {
+      return null as T;
+    }
   }
-  
-  
+
   // Auth methods
   async login(email: string, password: string) {
-    const data = await this.request('/auth/login/', {
+    const data = await this.request<any>('/auth/login/', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    
+
     if (data.access) {
       localStorage.setItem('accessToken', data.access);
       localStorage.setItem('refreshToken', data.refresh);
     }
-    
+
     return data;
   }
-  
+
   async register(userData: {
     email: string;
     username: string;
@@ -57,77 +65,158 @@ class ApiService {
     last_name?: string;
     phone?: string;
   }) {
-    const data = await this.request('/auth/register/', {
+    const data = await this.request<any>('/auth/register/', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
-    
+
     if (data.access) {
       localStorage.setItem('accessToken', data.access);
       localStorage.setItem('refreshToken', data.refresh);
     }
-    
+
     return data;
   }
-  
+
   async getProfile(): Promise<UserProfile> {
-    return this.request('/auth/profile/');
+    return this.request<UserProfile>('/auth/profile/');
   }
-  
+
   // Tables methods
   async getTables(): Promise<ProgressTable[]> {
-    return this.request('/tables/');
+    try {
+      const response = await this.request<any>('/tables/tables/');
+      
+      // Обрабатываем разные форматы ответа
+      if (Array.isArray(response)) {
+        return response;
+      } else if (response && Array.isArray(response.results)) {
+        return response.results;
+      } else if (response && Array.isArray(response.data)) {
+        return response.data;
+      }
+      
+      console.warn('Unexpected API response format:', response);
+      return [];
+    } catch (error) {
+      console.error('Failed to fetch tables:', error);
+      return [];
+    }
   }
-  
-  async getTable(id: string): Promise<ProgressTable> {
-    return this.request(`/tables/${id}/`);
+
+  async getTable(id: string): Promise<ProgressTable | null> {
+    try {
+      return await this.request<ProgressTable>(`/tables/tables/${id}/`);
+    } catch (error) {
+      console.error('Failed to fetch table:', error);
+      return null;
+    }
   }
-  
+
   async createTable(tableData: {
     title: string;
-    categories: Category[];
-  }): Promise<ProgressTable> {
-    return this.request('/tables/', {
-      method: 'POST',
-      body: JSON.stringify(tableData),
-    });
-  }
-  
-  async updateTable(id: string, tableData: Partial<ProgressTable>): Promise<ProgressTable> {
-    return this.request(`/tables/${id}/`, {
-      method: 'PATCH',
-      body: JSON.stringify(tableData),
-    });
-  }
-  
-  async deleteTable(id: string): Promise<void> {
-    await this.request(`/tables/${id}/`, {
-      method: 'DELETE',
-    });
-  }
-  
-  async updateProgress(tableId: string, date: string, data: Record<string, number>): Promise<DailyProgress> {
-    return this.request(`/tables/${tableId}/update_progress/`, {
-      method: 'POST',
-      body: JSON.stringify({ date, data }),
-    });
-  }
-  
-  async getChartData(tableId: string, startDate?: string, endDate?: string): Promise<{
-    categories: Category[];
-    progress_data: ChartData[];
-  }> {
-    let url = `/tables/${tableId}/progress_chart_data/`;
-    const params = new URLSearchParams();
-    
-    if (startDate) params.append('start_date', startDate);
-    if (endDate) params.append('end_date', endDate);
-    
-    if (params.toString()) {
-      url += `?${params.toString()}`;
+    categories?: Category[];
+  }): Promise<ProgressTable | null> {
+    try {
+      return await this.request<ProgressTable>('/tables/tables/', {
+        method: 'POST',
+        body: JSON.stringify(tableData),
+      });
+    } catch (error) {
+      console.error('Failed to create table:', error);
+      return null;
     }
-    
-    return this.request(url);
+  }
+
+  async updateTable(id: string, tableData: Partial<ProgressTable>): Promise<ProgressTable | null> {
+    try {
+      return await this.request<ProgressTable>(`/tables/tables/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(tableData),
+      });
+    } catch (error) {
+      console.error('Failed to update table:', error);
+      return null;
+    }
+  }
+
+  async deleteTable(id: string): Promise<boolean> {
+    try {
+      await this.request(`/tables/tables/${id}/`, {
+        method: 'DELETE',
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to delete table:', error);
+      return false;
+    }
+  }
+
+  async updateProgress(tableId: string, date: string, data: Record<string, number>): Promise<DailyProgress | null> {
+    try {
+      return await this.request<DailyProgress>(`/tables/tables/${tableId}/update_progress/`, {
+        method: 'POST',
+        body: JSON.stringify({ date, data }),
+      });
+    } catch (error) {
+      console.error('Failed to update progress:', error);
+      return null;
+    }
+  }
+
+  async getChartData(tableId: string, startDate?: string, endDate?: string): Promise<RadarChartData> {
+    try {
+      let url = `/tables/tables/${tableId}/progress_chart_data/`;
+      const params = new URLSearchParams();
+
+      if (startDate) params.append('start_date', startDate);
+      if (endDate) params.append('end_date', endDate);
+
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+
+      return await this.request<RadarChartData>(url);
+    } catch (error) {
+      console.error('Failed to fetch chart data:', error);
+      return { categories: [], progress_data: [] };
+    }
+  }
+
+  async addCategory(tableId: string, name: string): Promise<ProgressTable | null> {
+    try {
+      return await this.request<ProgressTable>(`/tables/tables/${tableId}/add_category/`, {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      });
+    } catch (error) {
+      console.error('Failed to add category:', error);
+      return null;
+    }
+  }
+
+  async removeCategory(tableId: string, categoryId: string): Promise<ProgressTable | null> {
+    try {
+      return await this.request<ProgressTable>(`/tables/tables/${tableId}/remove_category/`, {
+        method: 'POST',
+        body: JSON.stringify({ category_id: categoryId }),
+      });
+    } catch (error) {
+      console.error('Failed to remove category:', error);
+      return null;
+    }
+  }
+
+  async renameCategory(tableId: string, categoryId: string, newName: string): Promise<ProgressTable | null> {
+    try {
+      return await this.request<ProgressTable>(`/tables/tables/${tableId}/rename_category/`, {
+        method: 'POST',
+        body: JSON.stringify({ category_id: categoryId, new_name: newName }),
+      });
+    } catch (error) {
+      console.error('Failed to rename category:', error);
+      return null;
+    }
   }
 }
 
