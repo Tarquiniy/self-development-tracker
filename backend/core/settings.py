@@ -13,8 +13,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'fallback-secret-key')
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
-if not ANY_ALLOWED_HOSTS:
-    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+
 
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',
