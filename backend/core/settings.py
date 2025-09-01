@@ -34,10 +34,11 @@ SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 # Настройки базы данных
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-if DATABASE_URL:
+if 'DATABASE_URL' in os.environ:
+    import dj_database_url
     DATABASES = {
         'default': dj_database_url.config(
-            default=DATABASE_URL,
+            default=os.getenv('DATABASE_URL'),
             conn_max_age=600,
             conn_health_checks=True,
             ssl_require=True
@@ -51,6 +52,13 @@ else:
         }
     }
 
+if 'DATABASE_URL' in os.environ:
+    import dj_database_url
+    DATABASES['default'] = dj_database_url.config(
+        conn_max_age=600,
+        conn_health_checks=True,
+        ssl_require=True
+    )
 
 INSTALLED_APPS = [
     'django.contrib.admin',

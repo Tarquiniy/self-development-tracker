@@ -1,14 +1,31 @@
+# Основные зависимости Django
 Django==5.2.5
 djangorestframework==3.14.0
 django-cors-headers==4.3.1
-gunicorn==21.2.0
-whitenoise==6.6.0
-psycopg2-binary==2.9.9
+
+# Сервер и обработка статических файлов
+gunicorn==23.0.0
+whitenoise==6.9.0
+
+# База данных
+psycopg2-binary==2.9.10
 dj-database-url==2.1.0
+
+# Аутентификация и авторизация
 django-allauth==0.58.2
 djangorestframework-simplejwt==5.3.1
+
+# Утилиты
 python-dotenv==1.0.1
-supabase==2.3.1
-social-auth-app-django==5.4.0
-django-redis==5.4.0
 redis==5.0.1
+
+# Supabase и связанные зависимости (с совместимыми версиями)
+supabase==2.18.1
+httpx==0.28.1  # Совместимая версия для supabase и gotrue
+gotrue==2.12.4  # Совместимая версия с httpx<0.28:cite[4]
+
+# Социальная аутентификация
+social-auth-app-django==5.4.0
+
+# Кэширование
+django-redis==5.4.0
