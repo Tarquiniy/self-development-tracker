@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from datetime import timedelta
+import dj_database_url
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,18 +12,21 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'fallback-secret-key')
 
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.getenv('.vercel.app', 'your-app.onrender.com', 'ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
-
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+if not ANY_ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://your-app.onrender.com',
-    'https://*.vercel.app'
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://self-development-tracker-ten.vercel.app/',
+    'https://*.onrender.com'
 ]
-
 
 # Для статических файлов
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Настройки Supabase
 SUPABASE_URL = os.getenv('SUPABASE_URL')
@@ -31,8 +35,7 @@ SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 # Настройки базы данных
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-if DATABASE_URL and DATABASE_URL.startswith('postgresql://'):
-    import dj_database_url
+if DATABASE_URL:
     DATABASES = {
         'default': dj_database_url.config(
             default=DATABASE_URL,
@@ -42,13 +45,13 @@ if DATABASE_URL and DATABASE_URL.startswith('postgresql://'):
         )
     }
 else:
-    # Fallback на SQLite
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -107,6 +110,7 @@ SOCIALACCOUNT_ADAPTER = 'users.adapters.CustomSocialAccountAdapter'
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -215,10 +219,11 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "https://fjqbhcmsqypevfbpzcxj.supabase.co",
     "https://oauth.telegram.org",
+    'https://self-development-tracker-ten.vercel.app/',
     "https://telegram.org",
 ]
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = True  # Для разработки, в production следует ограничить
+CORS_ALLOW_ALL_ORIGINS = False  # Для разработки, в production следует ограничить
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -242,3 +247,7 @@ SECURE_CSP = {
 
 # Custom User Model
 AUTH_USER_MODEL = 'users.CustomUser'
+
+# Конфигурация для Render
+if 'RENDER' in os.environ:
+    ALLOWED_HOSTS.append(os.environ.get('RENDER_EXTERNAL_HOSTNAME', ''))
