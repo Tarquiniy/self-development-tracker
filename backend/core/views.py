@@ -2,6 +2,7 @@ import os
 from django.http import HttpResponse
 from django.views.generic import View
 from django.conf import settings
+from django.views.generic import TemplateView
 
 class SPAView(View):
     def get(self, request, *args, **kwargs):
@@ -21,3 +22,6 @@ class SPAView(View):
                 """,
                 status=501,
             )
+
+class ReactAppView(TemplateView):
+    template_name = 'index.html'

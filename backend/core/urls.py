@@ -3,6 +3,7 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from .views import SPAView
+from .views import ReactAppView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -13,6 +14,7 @@ urlpatterns = [
     path('api/blog/', include('blog.urls')),
     path('auth/', include('allauth.urls')),
     re_path(r'^.*$', SPAView.as_view(), name='spa'),
+    re_path(r'^.*', ReactAppView.as_view(), name='react_app'),
 ]
 
 if settings.DEBUG:
