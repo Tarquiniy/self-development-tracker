@@ -1,21 +1,4 @@
-import React, { useEffect, useRef } from 'react';
-
-declare global {
-  interface Window {
-    Telegram?: {
-      Login?: {
-        auth: (
-          options: {
-            bot_id: string; // именно числовой ID
-            request_access?: string;
-            size?: 'large' | 'medium' | 'small';
-          },
-          callback: (user: any) => void
-        ) => void;
-      };
-    };
-  }
-}
+import React from 'react';
 
 interface TelegramUser {
   id: number;
@@ -28,103 +11,48 @@ interface TelegramUser {
 }
 
 interface TelegramLoginProps {
+  botName: string;
   onAuth: (user: TelegramUser) => void;
   buttonSize?: 'large' | 'medium' | 'small';
   className?: string;
 }
 
 const TelegramLogin: React.FC<TelegramLoginProps> = ({
+  botName,
   onAuth,
   buttonSize = 'large',
   className = ''
 }) => {
-  const widgetInitialized = useRef(false);
+  const handleTelegramAuth = () => {
+    // Альтернативный метод аутентификации через redirect
+    const botId = botName; // Используем botName как botId
+    const origin = window.location.origin;
+    const returnTo = `${origin}/telegram-callback`;
+    
+    // Открываем окно аутентификации Telegram
+    window.open(
+      `https://oauth.telegram.org/auth?bot_id=${botId}&origin=${origin}&return_to=${returnTo}`,
+      'telegram_auth',
+      'width=600,height=400'
+    );
 
-  // Читаем env-переменные
-  const botId = import.meta.env.VITE_TELEGRAM_BOT_ID; // число
-
-  useEffect(() => {
-    if (!botId || widgetInitialized.current) return;
-
-    const initializeWidget = () => {
-      try {
-        if (window.Telegram && window.Telegram.Login) {
-          console.log('Initializing Telegram widget with bot ID:', botId);
-
-          window.Telegram.Login.auth(
-            {
-              bot_id: botId,
-              request_access: 'write',
-              size: buttonSize,
-            },
-            (user: TelegramUser) => {
-              if (user && user.id) {
-                console.log('Telegram auth successful:', user);
-                onAuth(user);
-              } else {
-                console.error('Invalid Telegram user data received');
-              }
-            }
-          );
-          widgetInitialized.current = true;
-        }
-      } catch (error) {
-        console.error('Error initializing Telegram widget:', error);
+    // Слушаем сообщения от callback страницы
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== origin) return;
+      
+      if (event.data.type === 'TELEGRAM_AUTH_DATA') {
+        onAuth(event.data.user);
+        window.removeEventListener('message', handleMessage);
       }
     };
 
-    if (window.Telegram) {
-      initializeWidget();
-    } else {
-      const scriptCheckInterval = setInterval(() => {
-        if (window.Telegram) {
-          clearInterval(scriptCheckInterval);
-          initializeWidget();
-        }
-      }, 100);
-
-      setTimeout(() => clearInterval(scriptCheckInterval), 5000);
-    }
-
-    return () => {
-      widgetInitialized.current = false;
-    };
-  }, [botId, buttonSize, onAuth]);
-
-  const handleManualClick = () => {
-    if (window.Telegram && window.Telegram.Login) {
-      try {
-        window.Telegram.Login.auth(
-          {
-            bot_id: botId,
-            request_access: 'write',
-            size: buttonSize,
-          },
-          (user: TelegramUser) => {
-            if (user && user.id) {
-              onAuth(user);
-            }
-          }
-        );
-      } catch (error) {
-        console.error('Error on manual Telegram auth:', error);
-      }
-    } else {
-      console.error('Telegram widget not available, fallback to OAuth');
-      // Fallback через OAuth (важно: bot_id — число!)
-      window.open(
-        `https://oauth.telegram.org/auth?bot_id=${botId}&origin=${encodeURIComponent(
-          window.location.origin
-        )}&request_access=write`,
-        '_self'
-      );
-    }
+    window.addEventListener('message', handleMessage);
   };
 
   return (
     <div className={`telegram-login ${className}`}>
       <button
-        onClick={handleManualClick}
+        onClick={handleTelegramAuth}
         className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
       >
         <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">

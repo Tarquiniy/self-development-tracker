@@ -6,6 +6,7 @@ import Register from './components/auth/Register';
 import TableEditor from './components/tables/TableEditor';
 import Dashboard from './components/Dashboard';
 import DiagramView from './components/diagram/DiagramView';
+import TelegramCallback from './components/auth/TelegramCallback';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/telegram-callback" element={<TelegramCallback />} />
             <Route
               path="/dashboard"
               element={

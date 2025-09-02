@@ -30,8 +30,8 @@ const Login: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      
-      const response = await fetch('http://localhost:8000/api/auth/telegram/login/', {
+
+      const response = await fetch('https://self-development-tracker.onrender.com/api/auth/telegram/login/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
