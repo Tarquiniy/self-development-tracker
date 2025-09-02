@@ -53,7 +53,7 @@ StrEnum==0.4.15
 supabase==2.18.1
 supabase_auth==2.12.3
 supabase_functions==0.10.1
-supafunc==0.3.3
+supafunc==0.10.2
 typing-inspection==0.4.1
 typing_extensions==4.15.0
 urllib3==2.5.0
