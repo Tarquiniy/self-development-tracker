@@ -23,33 +23,33 @@ const TelegramLogin: React.FC<TelegramLoginProps> = ({
   className = ''
 }) => {
   const handleTelegramAuth = () => {
-    // Проверяем, что botName не пустой
-    if (!botName) {
-      console.error('Telegram bot name is required');
-      return;
-    }
+  // Убедитесь, что botName - это имя бота (например, "my_bot"), а не URL
+  if (!botName) {
+    console.error('Telegram bot name is required');
+    return;
+  }
 
-    // Альтернативный метод аутентификации через redirect
-    const botId = botName; // Используем botName как botId
-    const origin = encodeURIComponent(window.location.origin);
-    const returnTo = encodeURIComponent(`${window.location.origin}/telegram-callback`);
-    
-    // Формируем URL с правильным форматом параметров
-    const authUrl = `https://oauth.telegram.org/auth?bot_id=${botId}&origin=${origin}&return_to=${returnTo}&request_access=write`;
-    
-    console.log('Opening Telegram auth URL:', authUrl);
+  // Альтернативный метод аутентификации через redirect
+  const botId = botName; // Используем botName как botId
+  const origin = encodeURIComponent(window.location.origin);
+  const returnTo = encodeURIComponent(`${window.location.origin}/telegram-callback`);
+  
+  // Формируем URL с правильным форматом параметров
+  const authUrl = `https://oauth.telegram.org/auth?bot_id=${botId}&origin=${origin}&return_to=${returnTo}&request_access=write`;
+  
+  console.log('Opening Telegram auth URL:', authUrl);
 
-    // Открываем окно аутентификации Telegram
-    const authWindow = window.open(
-      authUrl,
-      'telegram_auth',
-      'width=600,height=400'
-    );
+  // Открываем окно аутентификации Telegram
+  const authWindow = window.open(
+    authUrl,
+    'telegram_auth',
+    'width=600,height=400'
+  );
 
-    if (!authWindow) {
-      console.error('Failed to open authentication window. Please allow popups for this site.');
-      return;
-    }
+  if (!authWindow) {
+    console.error('Failed to open authentication window. Please allow popups for this site.');
+    return;
+  }
 
     // Слушаем сообщения от callback страницы
     const handleMessage = (event: MessageEvent) => {
