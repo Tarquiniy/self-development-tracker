@@ -11,71 +11,40 @@ interface TelegramUser {
 }
 
 interface TelegramLoginProps {
-  botName: string;
+  botName: 'self_development_tracker_bot';
   onAuth: (user: TelegramUser) => void;
   buttonSize?: 'large' | 'medium' | 'small';
   className?: string;
 }
 
 const TelegramLogin: React.FC<TelegramLoginProps> = ({
-  botName,
   onAuth,
   className = ''
 }) => {
   const handleTelegramAuth = () => {
-  // Убедитесь, что botName - это имя бота (например, "my_bot"), а не URL
-  if (!botName) {
-    console.error('Telegram bot name is required');
-    return;
-  }
-
-  // Альтернативный метод аутентификации через redirect
-  const botId = botName; // Используем botName как botId
-  const origin = encodeURIComponent(window.location.origin);
-  const returnTo = encodeURIComponent(`${window.location.origin}/telegram-callback`);
-  
-  // Формируем URL с правильным форматом параметров
-  const authUrl = `https://oauth.telegram.org/auth?bot_id=${botId}&origin=${origin}&return_to=${returnTo}&request_access=write`;
-  
-  console.log('Opening Telegram auth URL:', authUrl);
-
-  // Открываем окно аутентификации Telegram
-  const authWindow = window.open(
-    authUrl,
-    'telegram_auth',
-    'width=600,height=400'
-  );
-
-  if (!authWindow) {
-    console.error('Failed to open authentication window. Please allow popups for this site.');
-    return;
-  }
+    // Альтернативный метод аутентификации через redirect
+    const botId = 'self_development_tracker_bot'; // Используем botName как botId
+    const origin = window.location.origin;
+    const returnTo = `${origin}/telegram-callback`;
+    
+    // Открываем окно аутентификации Telegram
+    window.open(
+      `https://oauth.telegram.org/auth?bot_id=${botId}&origin=${origin}&return_to=${returnTo}`,
+      'telegram_auth',
+      'width=600,height=400'
+    );
 
     // Слушаем сообщения от callback страницы
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+      if (event.origin !== origin) return;
       
-      if (event.data && event.data.type === 'TELEGRAM_AUTH_DATA') {
-        console.log('Received Telegram auth data:', event.data.user);
+      if (event.data.type === 'TELEGRAM_AUTH_DATA') {
         onAuth(event.data.user);
         window.removeEventListener('message', handleMessage);
-        
-        // Закрываем окно аутентификации
-        if (authWindow && !authWindow.closed) {
-          authWindow.close();
-        }
       }
     };
 
     window.addEventListener('message', handleMessage);
-
-    // Добавляем таймаут для обработки случая, если окно не закрылось
-    setTimeout(() => {
-      window.removeEventListener('message', handleMessage);
-      if (authWindow && !authWindow.closed) {
-        authWindow.close();
-      }
-    }, 300000); // 5 минут таймаут
   };
 
   return (
