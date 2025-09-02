@@ -11,39 +11,38 @@ interface TelegramUser {
 }
 
 interface TelegramLoginProps {
-  botName: string;
+  botId: string; // Изменено с botName на botId
   onAuth: (user: TelegramUser) => void;
   buttonSize?: 'large' | 'medium' | 'small';
   className?: string;
 }
 
 const TelegramLogin: React.FC<TelegramLoginProps> = ({
-  botName,
+  botId, // Используем botId вместо botName
   onAuth,
   className = ''
 }) => {
   const handleTelegramAuth = () => {
-    // Убедитесь, что botName - это имя бота, а не URL
-    if (!botName) {
-      console.error('Telegram bot name is required');
+    // Убедитесь, что botId - это числовой ID бота, а не имя
+    if (!botId) {
+      console.error('Telegram bot ID is required');
       return;
     }
 
-    // Проверяем, что botName не содержит URL-пути
-    const cleanBotName = botName.replace(/https?:\/\/[^/]+\/api/, '').replace(/\//g, '');
+    // Проверяем, что botId содержит только цифры
+    const numericBotId = botId.replace(/\D/g, '');
     
-    if (!cleanBotName) {
-      console.error('Invalid bot name. Bot name should be something like "self_development_tracker_bot"');
+    if (!numericBotId) {
+      console.error('Invalid bot ID. Bot ID should contain only numbers');
       return;
     }
 
     // Альтернативный метод аутентификации через redirect
-    const botId = cleanBotName; // Используем очищенное имя бота
     const origin = encodeURIComponent(window.location.origin);
     const returnTo = encodeURIComponent(`${window.location.origin}/telegram-callback`);
     
     // Формируем URL с правильным форматом параметров
-    const authUrl = `https://oauth.telegram.org/auth?bot_id=${botId}&origin=${origin}&return_to=${returnTo}&request_access=write`;
+    const authUrl = `https://oauth.telegram.org/auth?bot_id=${numericBotId}&origin=${origin}&return_to=${returnTo}&request_access=write`;
     
     console.log('Opening Telegram auth URL:', authUrl);
 
