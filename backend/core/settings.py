@@ -233,7 +233,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "https://fjqbhcmsqypevfbpzcxj.supabase.co",
     "https://oauth.telegram.org",
-    'https://self-development-tracker-ten.vercel.app/',
+    'https://self-development-tracker-ten.vercel.app',
     "https://telegram.org",
 ]
 CORS_ALLOW_CREDENTIALS = True
