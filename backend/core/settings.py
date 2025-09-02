@@ -112,7 +112,7 @@ SOCIAL_AUTH_TELEGRAM_LOGIN_REDIRECT_URL = os.getenv('TELEGRAM_REDIRECT_URL', 'ht
 SOCIALACCOUNT_PROVIDERS = {
     'telegram': {
         'APP': {
-            'client_id': os.getenv('TELEGRAM_BOT_NAME', ''),
+            'client_id': os.getenv('TELEGRAM_BOT_TOKEN', ''),  # Используем токен как client_id
             'secret': os.getenv('TELEGRAM_BOT_TOKEN', ''),
             'key': ''
         }
@@ -233,7 +233,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "https://fjqbhcmsqypevfbpzcxj.supabase.co",
     "https://oauth.telegram.org",
-    'https://self-development-tracker-five  .vercel.app',
+    "https://self-development-tracker-five.vercel.app",
+    "https://self-development-tracker.onrender.com",
     "https://telegram.org",
 ]
 

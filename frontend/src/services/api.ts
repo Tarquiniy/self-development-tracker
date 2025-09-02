@@ -223,6 +223,6 @@ class ApiService {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://self-development-tracker.onrender.com';
 //const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 export const apiService = new ApiService(API_BASE_URL);
