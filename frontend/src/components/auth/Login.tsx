@@ -31,7 +31,12 @@ const Login: React.FC = () => {
     setLoading(true);
     setError('');
 
-    const response = await fetch('https://self-development-tracker.onrender.com/api/auth/telegram/login/', {
+    // Используем правильный URL для бэкенда
+    const backendUrl = import.meta.env.PROD 
+      ? 'https://self-development-tracker.onrender.com' 
+      : 'http://localhost:8000';
+
+    const response = await fetch(`${backendUrl}/api/auth/telegram/login/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -66,9 +71,9 @@ const Login: React.FC = () => {
         </div>
 
         <TelegramLogin
-  botName={import.meta.env.VITE_TELEGRAM_BOT_NAME}
-     onAuth={handleTelegramAuth}
-       buttonSize="large"
+  botName={import.meta.env.VITE_TELEGRAM_BOT_NAME || 'self_development_tracker_bot'}
+  onAuth={handleTelegramAuth}
+  className="mb-4"
 />
 
         <div className="relative">

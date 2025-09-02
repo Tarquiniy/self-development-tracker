@@ -1,13 +1,5 @@
 import React from 'react';
 
-declare global {
-  interface Window {
-    TelegramLoginWidget?: {
-      dataOnauth: (user: any) => void;
-    };
-  }
-}
-
 interface TelegramUser {
   id: number;
   first_name: string;
@@ -23,21 +15,16 @@ interface TelegramLoginProps {
   onAuth: (user: TelegramUser) => void;
   buttonSize?: 'large' | 'medium' | 'small';
   className?: string;
-  lang?: string;
 }
 
 const TelegramLogin: React.FC<TelegramLoginProps> = ({
   botName,
   onAuth,
-  buttonSize = 'large',
-  className = '',
-  lang = 'ru'
+  className = ''
 }) => {
-  const containerId = `telegram-login-${botName}`;
-
   React.useEffect(() => {
     // Очищаем предыдущий виджет
-    const container = document.getElementById(containerId);
+    const container = document.getElementById('telegram-login-container');
     if (container) {
       container.innerHTML = '';
     }
@@ -47,28 +34,32 @@ const TelegramLogin: React.FC<TelegramLoginProps> = ({
     script.src = 'https://telegram.org/js/telegram-widget.js?22';
     script.async = true;
     script.setAttribute('data-telegram-login', botName);
-    script.setAttribute('data-size', buttonSize);
+    script.setAttribute('data-size', 'large');
     script.setAttribute('data-request-access', 'write');
     script.setAttribute('data-userpic', 'false');
-    script.setAttribute('data-lang', lang);
+    script.setAttribute('data-lang', 'ru');
     
     // Указываем callback функцию
-    window.TelegramLoginWidget = {
-      dataOnauth: (user: TelegramUser) => onAuth(user)
-    };
-    script.setAttribute('data-onauth', 'TelegramLoginWidget.dataOnauth(user)');
+    const callbackName = `onTelegramAuth_${botName}`;
+    (window as any)[callbackName] = (user: TelegramUser) => onAuth(user);
+    script.setAttribute('data-onauth', `${callbackName}(user)`);
 
-    container?.appendChild(script);
+    const containerElement = document.getElementById('telegram-login-container');
+    if (containerElement) {
+      containerElement.appendChild(script);
+    }
 
     return () => {
       // Удаляем скрипт при размонтировании компонента
-      if (container?.contains(script)) {
-        container.removeChild(script);
+      if (containerElement?.contains(script)) {
+        containerElement.removeChild(script);
       }
+      // Удаляем callback из глобальной области видимости
+      delete (window as any)[callbackName];
     };
-  }, [botName, buttonSize, onAuth, containerId, lang]);
+  }, [botName, onAuth]);
 
-  return <div id={containerId} className={`telegram-login ${className}`} />;
+  return <div id="telegram-login-container" className={`telegram-login ${className}`} />;
 };
 
 export default TelegramLogin;
