@@ -4,11 +4,14 @@ declare global {
   interface Window {
     Telegram?: {
       Login?: {
-        auth: (options: {
-          bot_id: string;
-          request_access?: string;
-          size?: 'large' | 'medium' | 'small';
-        }, callback: (user: any) => void) => void;
+        auth: (
+          options: {
+            bot_id: string; // именно числовой ID
+            request_access?: string;
+            size?: 'large' | 'medium' | 'small';
+          },
+          callback: (user: any) => void
+        ) => void;
       };
     };
   }
@@ -25,31 +28,32 @@ interface TelegramUser {
 }
 
 interface TelegramLoginProps {
-  botName: string;
   onAuth: (user: TelegramUser) => void;
   buttonSize?: 'large' | 'medium' | 'small';
   className?: string;
 }
 
 const TelegramLogin: React.FC<TelegramLoginProps> = ({
-  botName,
   onAuth,
   buttonSize = 'large',
   className = ''
 }) => {
   const widgetInitialized = useRef(false);
 
+  // Читаем env-переменные
+  const botId = import.meta.env.VITE_TELEGRAM_BOT_ID; // число
+
   useEffect(() => {
-    if (!botName || widgetInitialized.current) return;
+    if (!botId || widgetInitialized.current) return;
 
     const initializeWidget = () => {
       try {
         if (window.Telegram && window.Telegram.Login) {
-          console.log('Initializing Telegram widget with bot:', botName);
-          
+          console.log('Initializing Telegram widget with bot ID:', botId);
+
           window.Telegram.Login.auth(
             {
-              bot_id: botName,
+              bot_id: botId,
               request_access: 'write',
               size: buttonSize,
             },
@@ -69,11 +73,9 @@ const TelegramLogin: React.FC<TelegramLoginProps> = ({
       }
     };
 
-    // Попытка инициализации при загрузке скрипта
     if (window.Telegram) {
       initializeWidget();
     } else {
-      // Если скрипт еще не загружен, добавляем обработчик
       const scriptCheckInterval = setInterval(() => {
         if (window.Telegram) {
           clearInterval(scriptCheckInterval);
@@ -81,22 +83,20 @@ const TelegramLogin: React.FC<TelegramLoginProps> = ({
         }
       }, 100);
 
-      // Таймаут для очистки интервала
       setTimeout(() => clearInterval(scriptCheckInterval), 5000);
     }
 
     return () => {
       widgetInitialized.current = false;
     };
-  }, [botName, buttonSize, onAuth]);
+  }, [botId, buttonSize, onAuth]);
 
   const handleManualClick = () => {
-    // Альтернативный метод инициализации при клике
     if (window.Telegram && window.Telegram.Login) {
       try {
         window.Telegram.Login.auth(
           {
-            bot_id: botName,
+            bot_id: botId,
             request_access: 'write',
             size: buttonSize,
           },
@@ -110,9 +110,14 @@ const TelegramLogin: React.FC<TelegramLoginProps> = ({
         console.error('Error on manual Telegram auth:', error);
       }
     } else {
-      console.error('Telegram widget not available');
-      // Fallback: открытие ссылки Telegram
-      window.open(`https://oauth.telegram.org/auth?bot_id=${botName}&origin=${encodeURIComponent(window.location.origin)}`, '_blank');
+      console.error('Telegram widget not available, fallback to OAuth');
+      // Fallback через OAuth (важно: bot_id — число!)
+      window.open(
+        `https://oauth.telegram.org/auth?bot_id=${botId}&origin=${encodeURIComponent(
+          window.location.origin
+        )}&request_access=write`,
+        '_self'
+      );
     }
   };
 
