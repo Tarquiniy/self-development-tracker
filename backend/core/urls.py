@@ -14,7 +14,7 @@ urlpatterns = [
     path('api/blog/', include('blog.urls')),
     path('auth/', include('allauth.urls')),
     re_path(r'^.*$', SPAView.as_view(), name='spa'),
-    re_path(r'^.*', ReactAppView.as_view(), name='react_app'),
+    re_path(r'^.*$', ReactAppView.as_view(), name='react-app'),
 ]
 
 if settings.DEBUG:
