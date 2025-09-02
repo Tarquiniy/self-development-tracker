@@ -20,7 +20,6 @@ interface TelegramLoginProps {
 const TelegramLogin: React.FC<TelegramLoginProps> = ({
   botName,
   onAuth,
-  buttonSize = 'large',
   className = ''
 }) => {
   const handleTelegramAuth = () => {
