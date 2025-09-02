@@ -236,8 +236,10 @@ CORS_ALLOWED_ORIGINS = [
     'https://self-development-tracker-five  .vercel.app',
     "https://telegram.org",
 ]
+
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = False  # Для разработки, в production следует ограничить
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
