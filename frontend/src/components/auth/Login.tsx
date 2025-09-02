@@ -27,34 +27,34 @@ const Login: React.FC = () => {
   };
 
   const handleTelegramAuth = async (telegramUser: any) => {
-    try {
-      setLoading(true);
-      setError('');
+  try {
+    setLoading(true);
+    setError('');
 
-      const response = await fetch('https://self-development-tracker.onrender.com/api/auth/telegram/login/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(telegramUser),
-      });
+    const response = await fetch('https://self-development-tracker.onrender.com/api/auth/telegram/login/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(telegramUser),
+    });
 
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem('accessToken', data.access);
-        localStorage.setItem('refreshToken', data.refresh);
-        navigate('/dashboard');
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        setError(errorData.error || 'Telegram authentication failed');
-      }
-    } catch (error) {
-      console.error('Telegram authentication error:', error);
-      setError('Network error during Telegram authentication');
-    } finally {
-      setLoading(false);
+    if (response.ok) {
+      const data = await response.json();
+      localStorage.setItem('accessToken', data.access);
+      localStorage.setItem('refreshToken', data.refresh);
+      navigate('/dashboard');
+    } else {
+      const errorData = await response.json().catch(() => ({}));
+      setError(errorData.error || 'Telegram authentication failed');
     }
-  };
+  } catch (error) {
+    console.error('Telegram authentication error:', error);
+    setError('Network error during Telegram authentication');
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -66,8 +66,9 @@ const Login: React.FC = () => {
         </div>
 
         <TelegramLogin
-  botId={import.meta.env.VITE_TELEGRAM_BOT_ID}
-  onAuth={handleTelegramAuth}
+  botName={import.meta.env.VITE_TELEGRAM_BOT_NAME}
+     onAuth={handleTelegramAuth}
+       buttonSize="large"
 />
 
         <div className="relative">

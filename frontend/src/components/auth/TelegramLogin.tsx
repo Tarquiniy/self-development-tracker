@@ -1,5 +1,13 @@
 import React from 'react';
 
+declare global {
+  interface Window {
+    TelegramLoginWidget?: {
+      dataOnauth: (user: any) => void;
+    };
+  }
+}
+
 interface TelegramUser {
   id: number;
   first_name: string;
@@ -11,85 +19,56 @@ interface TelegramUser {
 }
 
 interface TelegramLoginProps {
-  botId: string; // Изменено с botName на botId
+  botName: string;
   onAuth: (user: TelegramUser) => void;
   buttonSize?: 'large' | 'medium' | 'small';
   className?: string;
+  lang?: string;
 }
 
 const TelegramLogin: React.FC<TelegramLoginProps> = ({
-  botId, // Используем botId вместо botName
+  botName,
   onAuth,
-  className = ''
+  buttonSize = 'large',
+  className = '',
+  lang = 'ru'
 }) => {
-  const handleTelegramAuth = () => {
-    // Убедитесь, что botId - это числовой ID бота, а не имя
-    if (!botId) {
-      console.error('Telegram bot ID is required');
-      return;
+  const containerId = `telegram-login-${botName}`;
+
+  React.useEffect(() => {
+    // Очищаем предыдущий виджет
+    const container = document.getElementById(containerId);
+    if (container) {
+      container.innerHTML = '';
     }
 
-    // Проверяем, что botId содержит только цифры
-    const numericBotId = botId.replace(/\D/g, '');
+    // Создаем скрипт для Telegram Widget
+    const script = document.createElement('script');
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.async = true;
+    script.setAttribute('data-telegram-login', botName);
+    script.setAttribute('data-size', buttonSize);
+    script.setAttribute('data-request-access', 'write');
+    script.setAttribute('data-userpic', 'false');
+    script.setAttribute('data-lang', lang);
     
-    if (!numericBotId) {
-      console.error('Invalid bot ID. Bot ID should contain only numbers');
-      return;
-    }
+    // Указываем callback функцию
+    window.TelegramLoginWidget = {
+      dataOnauth: (user: TelegramUser) => onAuth(user)
+    };
+    script.setAttribute('data-onauth', 'TelegramLoginWidget.dataOnauth(user)');
 
-    // Альтернативный метод аутентификации через redirect
-    const origin = encodeURIComponent(window.location.origin);
-    const returnTo = encodeURIComponent(`${window.location.origin}/telegram-callback`);
-    
-    // Формируем URL с правильным форматом параметров
-    const authUrl = `https://oauth.telegram.org/auth?bot_id=${numericBotId}&origin=${origin}&return_to=${returnTo}&request_access=write`;
-    
-    console.log('Opening Telegram auth URL:', authUrl);
+    container?.appendChild(script);
 
-    // Открываем окно аутентификации Telegram
-    const authWindow = window.open(
-      authUrl,
-      'telegram_auth',
-      'width=600,height=400'
-    );
-
-    if (!authWindow) {
-      console.error('Failed to open authentication window. Please allow popups for this site.');
-      return;
-    }
-
-    // Слушаем сообщения от callback страницы
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      
-      if (event.data && event.data.type === 'TELEGRAM_AUTH_DATA') {
-        console.log('Received Telegram auth data:', event.data.user);
-        onAuth(event.data.user);
-        window.removeEventListener('message', handleMessage);
+    return () => {
+      // Удаляем скрипт при размонтировании компонента
+      if (container?.contains(script)) {
+        container.removeChild(script);
       }
     };
+  }, [botName, buttonSize, onAuth, containerId, lang]);
 
-    window.addEventListener('message', handleMessage);
-
-    // Добавляем таймаут для обработки случая, если окно не закрылось
-    setTimeout(() => {
-      window.removeEventListener('message', handleMessage);
-    }, 300000); // 5 минут таймаут
-  };
-
-  return (
-    <div className={`telegram-login ${className}`}>
-      <button
-        onClick={handleTelegramAuth}
-        className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-      >
-        <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.022c.242-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.652-.64.136-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
-        </svg>
-        Войти через Telegram
-      </button>
-    </div>
-  );
+  return <div id={containerId} className={`telegram-login ${className}`} />;
 };
 
 export default TelegramLogin;

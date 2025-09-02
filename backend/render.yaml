@@ -20,3 +20,5 @@ services:
         value: "8300811327:AAFnVMh21kSS7vemrdtdGmnhMjF0npCWNhs"
       - key: TELEGRAM_BOT_NAME
         value: "self_development_tracker_bot"
+      - key: ALLOWED_HOSTS
+        value: "self-development-tracker.onrender.com,localhost,127.0.0.1"
