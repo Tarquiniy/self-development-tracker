@@ -66,10 +66,9 @@ const Login: React.FC = () => {
         </div>
 
         <TelegramLogin
-          botName={import.meta.env.VITE_TELEGRAM_BOT_NAME || ''}
-          onAuth={handleTelegramAuth}
-          buttonSize="large"
-        />
+  botName={import.meta.env.VITE_TELEGRAM_BOT_NAME || 'self_development_tracker_bot'}
+  onAuth={handleTelegramAuth}
+/>
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
