@@ -220,9 +220,12 @@ ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'optional'
 
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', 'your_bot_token_here')
-TELEGRAM_BOT_NAME = os.getenv('TELEGRAM_BOT_NAME', 'your_bot_name_here')
-TELEGRAM_LOGIN_REDIRECT_URL = os.getenv('TELEGRAM_REDIRECT_URL', 'http://localhost:3000/auth/telegram/callback')
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_BOT_NAME = os.getenv('TELEGRAM_BOT_NAME', '')
+TELEGRAM_LOGIN_REDIRECT_URL = os.getenv(
+    'TELEGRAM_REDIRECT_URL',
+    'http://localhost:3000/telegram-callback'
+)
 
 # Social Auth Settings
 SOCIAL_AUTH_TELEGRAM_BOT_TOKEN = TELEGRAM_BOT_TOKEN
