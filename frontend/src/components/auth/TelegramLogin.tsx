@@ -28,62 +28,29 @@ const TelegramLogin: React.FC<TelegramLoginProps> = ({
       return;
     }
 
-    // Создаем iframe для Telegram Login Widget
-    const iframe = document.createElement('iframe');
-    iframe.src = `https://oauth.telegram.org/auth?bot_id=${botName}&origin=${encodeURIComponent(window.location.origin)}&embed=1&request_access=write`;
-    iframe.style.width = '100%';
-    iframe.style.height = '100%';
-    iframe.style.border = 'none';
-    iframe.style.borderRadius = '8px';
+    // Open Telegram auth in a new window
+    const authUrl = `https://oauth.telegram.org/auth?bot_id=${botName}&origin=${encodeURIComponent(window.location.origin)}&embed=1&request_access=write`;
     
-    // Создаем контейнер для iframe
-    const container = document.createElement('div');
-    container.style.position = 'fixed';
-    container.style.top = '50%';
-    container.style.left = '50%';
-    container.style.transform = 'translate(-50%, -50%)';
-    container.style.width = '400px';
-    container.style.height = '500px';
-    container.style.backgroundColor = 'white';
-    container.style.borderRadius = '12px';
-    container.style.boxShadow = '0 10px 25px rgba(0, 0, 0, 0.2)';
-    container.style.zIndex = '1000';
-    container.appendChild(iframe);
-    
-    // Создаем overlay
-    const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-    overlay.style.zIndex = '999';
-    
-    // Добавляем кнопку закрытия
-    const closeButton = document.createElement('button');
-    closeButton.innerHTML = '×';
-    closeButton.style.position = 'absolute';
-    closeButton.style.top = '10px';
-    closeButton.style.right = '10px';
-    closeButton.style.background = 'none';
-    closeButton.style.border = 'none';
-    closeButton.style.fontSize = '24px';
-    closeButton.style.color = '#666';
-    closeButton.style.cursor = 'pointer';
-    closeButton.style.zIndex = '1001';
-    
-    closeButton.onclick = () => {
-      document.body.removeChild(overlay);
-      document.body.removeChild(container);
-    };
-    
-    container.appendChild(closeButton);
-    
-    // Обработчик сообщений от Telegram
+    const width = 550;
+    const height = 450;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+
+    const authWindow = window.open(
+      authUrl,
+      'telegram_auth',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+
+    if (!authWindow) {
+      console.error('Failed to open authentication window. Please allow popups for this site.');
+      return;
+    }
+
+    // Listen for messages from the auth window
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== 'https://oauth.telegram.org') return;
-      
+
       try {
         const data = JSON.parse(event.data);
         
@@ -91,61 +58,24 @@ const TelegramLogin: React.FC<TelegramLoginProps> = ({
           const authData = data.result;
           
           if (authData && authData.id) {
-            // Закрываем popup
-            document.body.removeChild(overlay);
-            document.body.removeChild(container);
-            
-            // Отправляем данные на бэкенд
-            fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/auth/telegram/callback/`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(authData),
-            })
-            .then(response => response.json())
-            .then(data => {
-              if (data.status === 'success') {
-                // Сохраняем токены
-                localStorage.setItem('accessToken', data.tokens.access);
-                localStorage.setItem('refreshToken', data.tokens.refresh);
-                
-                // Вызываем callback
-                onAuth(authData);
-              } else {
-                console.error('Telegram auth failed:', data.message);
-              }
-            })
-            .catch(error => {
-              console.error('Telegram auth error:', error);
-            });
+            authWindow.close();
+            onAuth(authData);
           }
         }
       } catch (error) {
         console.error('Error parsing Telegram message:', error);
       }
     };
-    
-    // Добавляем обработчик сообщений
+
     window.addEventListener('message', handleMessage);
-    
-    // Удаляем обработчик при закрытии
-    const cleanup = () => {
+
+    // Cleanup after 5 minutes
+    setTimeout(() => {
       window.removeEventListener('message', handleMessage);
-      if (document.body.contains(overlay)) {
-        document.body.removeChild(overlay);
+      if (!authWindow.closed) {
+        authWindow.close();
       }
-      if (document.body.contains(container)) {
-        document.body.removeChild(container);
-      }
-    };
-    
-    overlay.onclick = cleanup;
-    closeButton.onclick = cleanup;
-    
-    // Добавляем элементы на страницу
-    document.body.appendChild(overlay);
-    document.body.appendChild(container);
+    }, 300000);
   };
 
   return (

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import TelegramLoginWidget from './TelegramLoginWidget';
+import TelegramLogin from './TelegramLogin';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -26,20 +26,40 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleTelegramAuth = async (_telegramUser: any) => {
-  try {
-    setLoading(true);
-    setError('');
+  const handleTelegramAuth = async (telegramUser: any) => {
+    try {
+      setLoading(true);
+      setError('');
 
-    // Перенаправляем на dashboard после успешной аутентификации
-    navigate('/dashboard');
-  } catch (error) {
-    console.error('Telegram authentication error:', error);
-    setError('Ошибка аутентификации через Telegram');
-  } finally {
-    setLoading(false);
-  }
-};
+      const response = await fetch(
+        `${
+          import.meta.env.VITE_API_URL || 'http://localhost:8000'
+        }/api/auth/telegram/callback/`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(telegramUser),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem('accessToken', data.tokens.access);
+        localStorage.setItem('refreshToken', data.tokens.refresh);
+        navigate('/dashboard');
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        setError(errorData.error || 'Telegram authentication failed');
+      }
+    } catch (error) {
+      console.error('Telegram authentication error:', error);
+      setError('Network error during Telegram authentication');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -51,8 +71,8 @@ const Login: React.FC = () => {
         </div>
 
         {/* Кнопка Telegram */}
-        <TelegramLoginWidget
-          botName="self_development_tracker_bot"
+        <TelegramLogin
+          botName={import.meta.env.VITE_TELEGRAM_BOT_NAME || 'self_development_tracker_bot'}
           onAuth={handleTelegramAuth}
         />
 
