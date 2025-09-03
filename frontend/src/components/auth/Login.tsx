@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import TelegramLogin from './TelegramLogin';
 
@@ -10,6 +10,68 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Проверяем, есть ли данные аутентификации Telegram в состоянии навигации
+  useEffect(() => {
+    if (location.state?.telegramAuthData) {
+      handleTelegramAuth(location.state.telegramAuthData);
+    }
+    
+    if (location.state?.error) {
+      setError(location.state.error);
+      if (location.state.errorDetails) {
+        console.error('Auth error details:', location.state.errorDetails);
+      }
+    }
+  }, [location.state]);
+
+  // Обработчик сообщений от callback окна
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Проверяем origin для безопасности
+      if (event.origin !== window.location.origin) return;
+      
+      if (event.data && event.data.type === 'TELEGRAM_AUTH_DATA') {
+        console.log('Received Telegram auth data from callback:', event.data.user);
+        handleTelegramAuth(event.data.user);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, []);
+
+  // Проверяем localStorage на наличие данных аутентификации
+  useEffect(() => {
+    const checkStoredAuthData = () => {
+      const storedData = localStorage.getItem('telegramAuthData');
+      if (storedData) {
+        try {
+          const authData = JSON.parse(storedData);
+          console.log('Found stored Telegram auth data:', authData);
+          handleTelegramAuth(authData);
+          localStorage.removeItem('telegramAuthData');
+        } catch (error) {
+          console.error('Error parsing stored auth data:', error);
+          localStorage.removeItem('telegramAuthData');
+        }
+      }
+    };
+
+    // Проверяем сразу после загрузки компонента
+    checkStoredAuthData();
+    
+    // Также проверяем при фокусировке окна (на случай возврата из callback)
+    window.addEventListener('focus', checkStoredAuthData);
+    
+    return () => {
+      window.removeEventListener('focus', checkStoredAuthData);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +108,11 @@ const Login: React.FC = () => {
         const data = await response.json();
         localStorage.setItem('accessToken', data.access);
         localStorage.setItem('refreshToken', data.refresh);
+        
+        // Обновляем контекст аутентификации
+        const { login } = useAuth();
+        await login(data.access, data.refresh);
+        
         navigate('/dashboard');
       } else {
         const errorData = await response.json().catch(() => ({}));
