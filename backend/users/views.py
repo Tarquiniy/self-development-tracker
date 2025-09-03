@@ -1,4 +1,10 @@
 import logging
+import json
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework_simplejwt.tokens import RefreshToken
+from .models import CustomUser
+from .telegram_utils import check_telegram_auth
 from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -142,25 +148,33 @@ def telegram_auth(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
-@api_view(["POST"])
+@csrf_exempt
 def telegram_login(request):
-    data = request.data
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=400)
+
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
 
     if not check_telegram_auth(data):
-        return Response({"error": "Invalid Telegram data"}, status=status.HTTP_400_BAD_REQUEST)
+        return JsonResponse({"error": "Invalid Telegram auth"}, status=400)
 
     telegram_id = data.get("id")
-    username = data.get("username", "")
-    first_name = data.get("first_name", "")
-    last_name = data.get("last_name", "")
+    username = data.get("username") or f"user{telegram_id}"
 
-    user, created = User.objects.get_or_create(
-        username=f"tg_{telegram_id}",
-        defaults={"first_name": first_name, "last_name": last_name, "email": f"{telegram_id}@telegram.local"},
+    user, _ = CustomUser.objects.get_or_create(
+        telegram_id=telegram_id,
+        defaults={
+            "username": username,
+            "registration_method": "telegram",
+        },
     )
 
     refresh = RefreshToken.for_user(user)
-    return Response({
+
+    return JsonResponse({
         "access": str(refresh.access_token),
         "refresh": str(refresh),
     })

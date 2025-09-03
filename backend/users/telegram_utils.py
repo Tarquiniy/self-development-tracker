@@ -1,11 +1,13 @@
 import hmac
 import hashlib
+import os
 import time
 import logging
 from django.conf import settings
 from .exceptions import TelegramDataIsOutdatedError, NotTelegramDataError
 
 logger = logging.getLogger(__name__)
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 def verify_telegram_authentication(bot_token, request_data):
     """
@@ -58,5 +60,28 @@ def verify_telegram_authentication(bot_token, request_data):
     logger.debug("Telegram authentication data verified successfully")
     return request_data
 
-# Ensure the function is available for import
+def check_telegram_auth(data: dict) -> bool:
+    """
+    Проверяем подлинность данных, которые вернул Telegram Login Widget
+    """
+    if not BOT_TOKEN:
+        raise ValueError("TELEGRAM_BOT_TOKEN is not задан в переменных окружения")
+
+    auth_data = data.copy()
+    received_hash = auth_data.pop("hash", None)
+    if not received_hash:
+        return False
+
+    # Строим строку для проверки
+    data_check_string = "\n".join(
+        [f"{k}={v}" for k, v in sorted(auth_data.items())]
+    )
+
+    secret_key = hashlib.sha256(BOT_TOKEN.encode()).digest()
+    computed_hash = hmac.new(
+        secret_key, data_check_string.encode(), hashlib.sha256
+    ).hexdigest()
+
+    return computed_hash == received_hash
+
 __all__ = ['verify_telegram_authentication', 'TelegramDataIsOutdatedError', 'NotTelegramDataError']
