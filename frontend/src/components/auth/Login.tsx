@@ -26,7 +26,7 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleTelegramAuth = async (telegramUser: any) => {
+  const handleTelegramAuth = async (_telegramUser: any) => {
   try {
     setLoading(true);
     setError('');

@@ -85,13 +85,9 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.telegram',
-    'allauth.socialaccount.providers.vk',
-    'allauth.socialaccount.providers.google',
-    'allauth.socialaccount.providers.yandex',
-    'social_django',
     'corsheaders',
 
-    # Local apps
+    # Local apps - используйте правильные имена без backend.
     'users',
     'tables',
     'payments',
