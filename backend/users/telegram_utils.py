@@ -62,7 +62,7 @@ def verify_telegram_authentication(bot_token, request_data):
 
 def check_telegram_auth(data: dict) -> bool:
     """
-    Проверяем подлинность данных, которые вернул Telegram Login Widget
+    Проверяет подлинность данных, полученных от Telegram Login Widget.
     """
     if not BOT_TOKEN:
         raise ValueError("TELEGRAM_BOT_TOKEN is not задан в переменных окружения")
@@ -72,9 +72,9 @@ def check_telegram_auth(data: dict) -> bool:
     if not received_hash:
         return False
 
-    # Строим строку для проверки
+    # сортируем по ключам
     data_check_string = "\n".join(
-        [f"{k}={v}" for k, v in sorted(auth_data.items())]
+        f"{k}={v}" for k, v in sorted(auth_data.items())
     )
 
     secret_key = hashlib.sha256(BOT_TOKEN.encode()).digest()

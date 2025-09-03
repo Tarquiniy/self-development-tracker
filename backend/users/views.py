@@ -150,6 +150,10 @@ def telegram_auth(request):
     
 @csrf_exempt
 def telegram_login(request):
+    """
+    Обрабатывает POST-запрос от фронта после авторизации в Telegram Login Widget.
+    Проверяет подпись данных и выдает JWT-токены.
+    """
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=400)
 
@@ -164,17 +168,28 @@ def telegram_login(request):
     telegram_id = data.get("id")
     username = data.get("username") or f"user{telegram_id}"
 
-    user, _ = CustomUser.objects.get_or_create(
+    # либо находим, либо создаём пользователя
+    user, created = CustomUser.objects.get_or_create(
         telegram_id=telegram_id,
         defaults={
             "username": username,
             "registration_method": "telegram",
+            "telegram_username": username,
+            "telegram_data": data,
         },
     )
 
+    # обновляем данные, если уже есть
+    if not created:
+        user.telegram_username = username
+        user.telegram_data = data
+        user.save(update_fields=["telegram_username", "telegram_data"])
+
     refresh = RefreshToken.for_user(user)
 
-    return JsonResponse({
-        "access": str(refresh.access_token),
-        "refresh": str(refresh),
-    })
+    return JsonResponse(
+        {
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+        }
+    )

@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import TelegramLogin from './TelegramLogin';
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+import TelegramLoginWidget from "./TelegramLoginWidget";
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -14,13 +14,13 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       await login(email, password);
-      navigate('/dashboard');
+      navigate("/dashboard");
     } catch (err: any) {
-      setError(err.message || 'Failed to login');
+      setError(err.message || "Не удалось войти");
     } finally {
       setLoading(false);
     }
@@ -29,16 +29,16 @@ const Login: React.FC = () => {
   const handleTelegramAuth = async (telegramUser: any) => {
     try {
       setLoading(true);
-      setError('');
+      setError("");
 
       const response = await fetch(
         `${
-          import.meta.env.VITE_API_URL || 'http://localhost:8000'
-        }/api/auth/telegram/callback/`,
+          import.meta.env.VITE_API_URL || "http://localhost:8000"
+        }/api/auth/telegram/login/`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(telegramUser),
         }
@@ -46,16 +46,16 @@ const Login: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        localStorage.setItem('accessToken', data.tokens.access);
-        localStorage.setItem('refreshToken', data.tokens.refresh);
-        navigate('/dashboard');
+        localStorage.setItem("accessToken", data.access);
+        localStorage.setItem("refreshToken", data.refresh);
+        navigate("/dashboard");
       } else {
         const errorData = await response.json().catch(() => ({}));
-        setError(errorData.error || 'Telegram authentication failed');
+        setError(errorData.error || "Ошибка входа через Telegram");
       }
     } catch (error) {
-      console.error('Telegram authentication error:', error);
-      setError('Network error during Telegram authentication');
+      console.error("Telegram auth error:", error);
+      setError("Сетевая ошибка при входе через Telegram");
     } finally {
       setLoading(false);
     }
@@ -70,9 +70,9 @@ const Login: React.FC = () => {
           </h2>
         </div>
 
-        {/* Кнопка Telegram */}
-        <TelegramLogin
-          botName={import.meta.env.VITE_TELEGRAM_BOT_NAME || 'self_development_tracker_bot'}
+        {/* 👇 Кнопка Telegram Login Widget */}
+        <TelegramLoginWidget
+          botName="SelfDevelopmentTrackerBot" // ⚠️ username бота из BotFather, без @
           onAuth={handleTelegramAuth}
         />
 
@@ -118,12 +118,8 @@ const Login: React.FC = () => {
           </div>
 
           <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary"
-            >
-              {loading ? 'Вход...' : 'Войти'}
+            <button type="submit" disabled={loading} className="btn-primary">
+              {loading ? "Вход..." : "Войти"}
             </button>
           </div>
 
