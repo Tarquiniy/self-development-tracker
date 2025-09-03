@@ -27,37 +27,19 @@ const Login: React.FC = () => {
   };
 
   const handleTelegramAuth = async (telegramUser: any) => {
-    try {
-      setLoading(true);
-      setError('');
+  try {
+    setLoading(true);
+    setError('');
 
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/auth/telegram/login/`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(telegramUser),
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem('accessToken', data.access);
-        localStorage.setItem('refreshToken', data.refresh);
-        navigate('/dashboard');
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        setError(errorData.error || 'Telegram authentication failed');
-      }
-    } catch (error) {
-      console.error('Telegram authentication error:', error);
-      setError('Network error during Telegram authentication');
-    } finally {
-      setLoading(false);
-    }
-  };
+    // Перенаправляем на dashboard после успешной аутентификации
+    navigate('/dashboard');
+  } catch (error) {
+    console.error('Telegram authentication error:', error);
+    setError('Ошибка аутентификации через Telegram');
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

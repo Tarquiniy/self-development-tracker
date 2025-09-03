@@ -18,10 +18,9 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
-    'https://oauth.telegram.org',
-    'https://telegram.org',
     'https://self-development-tracker-five.vercel.app',
     'https://self-development-tracker.onrender.com',
+    'https://oauth.telegram.org',
     "https://fjqbhcmsqypevfbpzcxj.supabase.co",
 ]
 
@@ -102,23 +101,21 @@ INSTALLED_APPS = [
 
 # Social Auth Settings
 AUTHENTICATION_BACKENDS = (
-    'social_core.backends.telegram.TelegramAuth',
     'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
 )
-
-# Telegram OAuth Settings
-SOCIAL_AUTH_TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-SOCIAL_AUTH_TELEGRAM_LOGIN_REDIRECT_URL = os.getenv('TELEGRAM_REDIRECT_URL', 'http://localhost:3000/auth/telegram/callback')
 
 # Allauth Settings
 SOCIALACCOUNT_PROVIDERS = {
     'telegram': {
         'APP': {
-            'client_id': os.getenv('TELEGRAM_BOT_TOKEN', ''),  # Используем токен как client_id
+            'client_id': os.getenv('TELEGRAM_BOT_NAME', ''),
             'secret': os.getenv('TELEGRAM_BOT_TOKEN', ''),
             'key': ''
-        }
+        },
+        'SCOPE': ['basic'],
+        'AUTH_PARAMS': {'auth_type': 'reauthenticate'},
+        'METHOD': 'oauth2',
     }
 }
 
@@ -239,9 +236,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "https://fjqbhcmsqypevfbpzcxj.supabase.co",
     "https://oauth.telegram.org",
+    "https://telegram.org",
     "https://self-development-tracker-five.vercel.app",
     "https://self-development-tracker.onrender.com",
-    "https://telegram.org",
 ]
 
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'

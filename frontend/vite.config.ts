@@ -38,6 +38,10 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      '/auth': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
   },
   build: {
@@ -56,5 +60,5 @@ export default defineConfig({
       VITE_API_BASE_URL: JSON.stringify(process.env.VITE_API_BASE_URL),
       VITE_TELEGRAM_BOT_NAME: JSON.stringify(process.env.VITE_TELEGRAM_BOT_NAME),
     }
-  }
+  },
 })

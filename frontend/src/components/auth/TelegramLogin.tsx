@@ -11,71 +11,141 @@ interface TelegramUser {
 }
 
 interface TelegramLoginProps {
-  botId: string; // должен быть числовой ID бота
+  botName: string;
   onAuth: (user: TelegramUser) => void;
   buttonSize?: 'large' | 'medium' | 'small';
   className?: string;
 }
 
 const TelegramLogin: React.FC<TelegramLoginProps> = ({
-  botId,
+  botName,
   onAuth,
-  className = '',
+  className = ''
 }) => {
   const handleTelegramAuth = () => {
-    if (!botId) {
-      console.error('Telegram bot ID is required');
+    if (!botName) {
+      console.error('Telegram bot name is required');
       return;
     }
 
-    const numericBotId = botId.replace(/\D/g, '');
-    if (!numericBotId) {
-      console.error('Invalid bot ID. Bot ID should contain only numbers');
-      return;
-    }
-
-    // Определяем текущий origin (всегда совпадает с реальным доменом)
-    const origin = encodeURIComponent(window.location.origin);
-
-    // Адрес для возврата
-    const returnTo = encodeURIComponent(
-      `${window.location.origin}/telegram-callback`
-    );
-
-    // Формируем URL
-    const authUrl = `https://oauth.telegram.org/auth?bot_id=${numericBotId}&origin=${origin}&return_to=${returnTo}&request_access=write`;
-
-    console.log('Opening Telegram auth URL:', authUrl);
-
-    const authWindow = window.open(
-      authUrl,
-      'telegram_auth',
-      'width=600,height=400'
-    );
-
-    if (!authWindow) {
-      console.error(
-        'Failed to open authentication window. Please allow popups for this site.'
-      );
-      return;
-    }
-
+    // Создаем iframe для Telegram Login Widget
+    const iframe = document.createElement('iframe');
+    iframe.src = `https://oauth.telegram.org/auth?bot_id=${botName}&origin=${encodeURIComponent(window.location.origin)}&embed=1&request_access=write`;
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = 'none';
+    iframe.style.borderRadius = '8px';
+    
+    // Создаем контейнер для iframe
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.top = '50%';
+    container.style.left = '50%';
+    container.style.transform = 'translate(-50%, -50%)';
+    container.style.width = '400px';
+    container.style.height = '500px';
+    container.style.backgroundColor = 'white';
+    container.style.borderRadius = '12px';
+    container.style.boxShadow = '0 10px 25px rgba(0, 0, 0, 0.2)';
+    container.style.zIndex = '1000';
+    container.appendChild(iframe);
+    
+    // Создаем overlay
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    overlay.style.zIndex = '999';
+    
+    // Добавляем кнопку закрытия
+    const closeButton = document.createElement('button');
+    closeButton.innerHTML = '×';
+    closeButton.style.position = 'absolute';
+    closeButton.style.top = '10px';
+    closeButton.style.right = '10px';
+    closeButton.style.background = 'none';
+    closeButton.style.border = 'none';
+    closeButton.style.fontSize = '24px';
+    closeButton.style.color = '#666';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.zIndex = '1001';
+    
+    closeButton.onclick = () => {
+      document.body.removeChild(overlay);
+      document.body.removeChild(container);
+    };
+    
+    container.appendChild(closeButton);
+    
+    // Обработчик сообщений от Telegram
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-
-      if (event.data && event.data.type === 'TELEGRAM_AUTH_DATA') {
-        console.log('Received Telegram auth data:', event.data.user);
-        onAuth(event.data.user);
-        window.removeEventListener('message', handleMessage);
+      if (event.origin !== 'https://oauth.telegram.org') return;
+      
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.event === 'auth_result') {
+          const authData = data.result;
+          
+          if (authData && authData.id) {
+            // Закрываем popup
+            document.body.removeChild(overlay);
+            document.body.removeChild(container);
+            
+            // Отправляем данные на бэкенд
+            fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/auth/telegram/callback/`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(authData),
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.status === 'success') {
+                // Сохраняем токены
+                localStorage.setItem('accessToken', data.tokens.access);
+                localStorage.setItem('refreshToken', data.tokens.refresh);
+                
+                // Вызываем callback
+                onAuth(authData);
+              } else {
+                console.error('Telegram auth failed:', data.message);
+              }
+            })
+            .catch(error => {
+              console.error('Telegram auth error:', error);
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing Telegram message:', error);
       }
     };
-
+    
+    // Добавляем обработчик сообщений
     window.addEventListener('message', handleMessage);
-
-    // Чистим обработчик через 5 минут
-    setTimeout(() => {
+    
+    // Удаляем обработчик при закрытии
+    const cleanup = () => {
       window.removeEventListener('message', handleMessage);
-    }, 300000);
+      if (document.body.contains(overlay)) {
+        document.body.removeChild(overlay);
+      }
+      if (document.body.contains(container)) {
+        document.body.removeChild(container);
+      }
+    };
+    
+    overlay.onclick = cleanup;
+    closeButton.onclick = cleanup;
+    
+    // Добавляем элементы на страницу
+    document.body.appendChild(overlay);
+    document.body.appendChild(container);
   };
 
   return (
