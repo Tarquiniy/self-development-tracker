@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 interface TelegramUser {
   id: number;
@@ -11,75 +11,65 @@ interface TelegramUser {
 }
 
 interface TelegramLoginProps {
-  botId: string; // Должен быть числовой ID бота
+  botName: string; // Используем имя бота, а не ID
   onAuth: (user: TelegramUser) => void;
-  buttonSize?: 'large' | 'medium' | 'small';
   className?: string;
 }
 
 const TelegramLogin: React.FC<TelegramLoginProps> = ({
-  botId,
+  botName,
   onAuth,
   className = ''
 }) => {
-  const handleTelegramAuth = () => {
-    // Убедитесь, что botId - это числовой ID бота, а не имя
-    if (!botId) {
-      console.error('Telegram bot ID is required');
-      return;
-    }
-
-    // Проверяем, что botId содержит только цифры
-    const numericBotId = botId.replace(/\D/g, '');
-    
-    if (!numericBotId) {
-      console.error('Invalid bot ID. Bot ID should contain only numbers');
-      return;
-    }
-
-    // Формируем URL для аутентификации через Telegram
-    const origin = encodeURIComponent(window.location.origin);
-    const returnTo = encodeURIComponent(`${window.location.origin}/telegram-callback`);
-    
-    const authUrl = `https://oauth.telegram.org/auth?bot_id=${numericBotId}&origin=${origin}&return_to=${returnTo}&request_access=write`;
-
-    console.log('Opening Telegram auth URL:', authUrl);
-
-    // Открываем окно аутентификации Telegram
-    const authWindow = window.open(
-      authUrl,
-      'telegram_auth',
-      'width=600,height=400'
-    );
-
-    if (!authWindow) {
-      console.error('Failed to open authentication window. Please allow popups for this site.');
-      return;
-    }
-
-    // Слушаем сообщения от callback страницы
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-
-      if (event.data && event.data.type === 'TELEGRAM_AUTH_DATA') {
-        console.log('Received Telegram auth data:', event.data.user);
-        onAuth(event.data.user);
-        window.removeEventListener('message', handleMessage);
-      }
+  useEffect(() => {
+    // Создаем глобальную функцию обратного вызова
+    (window as any).onTelegramAuth = (userData: TelegramUser) => {
+      console.log('Telegram auth data received:', userData);
+      onAuth(userData);
     };
 
-    window.addEventListener('message', handleMessage);
+    // Очищаем предыдущий виджет
+    const container = document.getElementById('telegram-login-container');
+    if (container) {
+      container.innerHTML = '';
+    }
 
-    // Добавляем таймаут для обработки случая, если окно не закрылось
-    setTimeout(() => {
-      window.removeEventListener('message', handleMessage);
-    }, 300000); // 5 минут таймаут
-  };
+    // Создаем скрипт виджета Telegram
+    const script = document.createElement('script');
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.async = true;
+    script.setAttribute('data-telegram-login', botName);
+    script.setAttribute('data-size', 'large');
+    script.setAttribute('data-auth-url', `${window.location.origin}/telegram-callback`);
+    script.setAttribute('data-request-access', 'write');
+    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+
+    if (container) {
+      container.appendChild(script);
+    }
+
+    return () => {
+      // Удаляем скрипт при размонтировании компонента
+      if (container && container.contains(script)) {
+        container.removeChild(script);
+      }
+      // Удаляем глобальную функцию
+      delete (window as any).onTelegramAuth;
+    };
+  }, [botName, onAuth]);
 
   return (
-    <div className={`telegram-login ${className}`}>
+    <div id="telegram-login-container" className={`telegram-login ${className}`}>
+      {/* Резервная кнопка на случай проблем с виджетом */}
       <button
-        onClick={handleTelegramAuth}
+        onClick={() => {
+          // Альтернативный метод: открытие в новом окне
+          window.open(
+            `https://oauth.telegram.org/auth?bot_id=${botName}&origin=${encodeURIComponent(window.location.origin)}&return_to=${encodeURIComponent(`${window.location.origin}/telegram-callback`)}&request_access=write`,
+            'telegram_auth',
+            'width=600,height=400'
+          );
+        }}
         className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
       >
         <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">

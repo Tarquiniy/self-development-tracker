@@ -135,9 +135,9 @@ const Login: React.FC = () => {
         </div>
 
         <TelegramLogin
-          botId={import.meta.env.VITE_TELEGRAM_BOT_ID || '8300811327'} // Используйте числовой ID!
-          onAuth={handleTelegramAuth}
-          buttonSize="large"
+          botName={import.meta.env.VITE_TELEGRAM_BOT_NAME || 'self_development_tracker_bot'} // Используем имя бота!
+  onAuth={handleTelegramAuth}
+  className="mb-4"
         />
 
         <div className="relative">
