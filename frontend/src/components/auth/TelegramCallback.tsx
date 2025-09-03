@@ -1,57 +1,47 @@
-import React, { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const TelegramCallback: React.FC = () => {
+  const [status, setStatus] = useState('Обработка авторизации...');
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    // Простая обработка callback - перенаправляем данные обратно
-    const authData: Record<string, string> = {};
-    
-    // Собираем все параметры
-    searchParams.forEach((value, key) => {
-      authData[key] = value;
-    });
+    try {
+      // В Telegram OAuth данные приходят в hash (#tgAuthResult=...)
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      const authDataRaw = hashParams.get('tgAuthResult');
 
-    // Если есть hash (стандартный способ Telegram)
-    if (window.location.hash) {
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      hashParams.forEach((value, key) => {
-        authData[key] = value;
-      });
-    }
-
-    console.log('Telegram callback data:', authData);
-
-    // Проверяем наличие минимальных необходимых данных
-    if (authData.id && authData.auth_date && authData.hash) {
-      // Отправляем сообщение родительскому окну
-      if (window.opener) {
-        window.opener.postMessage({
-          type: 'TELEGRAM_AUTH_DATA',
-          user: authData
-        }, window.location.origin);
-      } else {
-        // Сохраняем в localStorage для обработки в основном окне
-        localStorage.setItem('telegramAuthData', JSON.stringify(authData));
+      if (!authDataRaw) {
+        setStatus('❌ Ошибка: данные авторизации не получены');
+        return;
       }
-      
-      // Закрываем окно
-      window.close();
-    } else {
-      console.error('Invalid Telegram auth data');
-      navigate('/login', { 
-        state: { error: 'Invalid authentication data from Telegram' } 
-      });
+
+      // Декодируем JSON
+      const authData = JSON.parse(decodeURIComponent(authDataRaw));
+      console.log('Telegram OAuth данные:', authData);
+
+      // Отправляем данные в родительское окно
+      if (window.opener) {
+        window.opener.postMessage(
+          { type: 'TELEGRAM_AUTH_DATA', user: authData },
+          window.location.origin
+        );
+        setStatus('✅ Авторизация прошла успешно, окно закроется...');
+        setTimeout(() => window.close(), 2000);
+      } else {
+        setStatus('❌ Ошибка: не удалось связаться с приложением');
+      }
+    } catch (error) {
+      console.error('Ошибка в TelegramCallback:', error);
+      setStatus('❌ Ошибка при обработке авторизации');
     }
-  }, [navigate, searchParams]);
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h2 className="text-lg font-medium text-gray-900">Завершение аутентификации</h2>
-        <p className="mt-2 text-sm text-gray-600">Пожалуйста, подождите...</p>
+      <div className="p-6 bg-white rounded shadow text-center">
+        <h2 className="text-lg font-bold mb-4">Telegram Авторизация</h2>
+        <p>{status}</p>
       </div>
     </div>
   );

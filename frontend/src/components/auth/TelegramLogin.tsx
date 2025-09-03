@@ -11,7 +11,7 @@ interface TelegramUser {
 }
 
 interface TelegramLoginProps {
-  botId: string; // Должен быть числовой ID бота
+  botId: string; // должен быть числовой ID бота
   onAuth: (user: TelegramUser) => void;
   buttonSize?: 'large' | 'medium' | 'small';
   className?: string;
@@ -20,32 +20,33 @@ interface TelegramLoginProps {
 const TelegramLogin: React.FC<TelegramLoginProps> = ({
   botId,
   onAuth,
-  className = ''
+  className = '',
 }) => {
   const handleTelegramAuth = () => {
-    // Убедитесь, что botId - это числовой ID бота, а не имя
     if (!botId) {
       console.error('Telegram bot ID is required');
       return;
     }
 
-    // Проверяем, что botId содержит только цифры
     const numericBotId = botId.replace(/\D/g, '');
-    
     if (!numericBotId) {
       console.error('Invalid bot ID. Bot ID should contain only numbers');
       return;
     }
 
-    // Формируем URL для аутентификации через Telegram
+    // Определяем текущий origin (всегда совпадает с реальным доменом)
     const origin = encodeURIComponent(window.location.origin);
-    const returnTo = encodeURIComponent(`${window.location.origin}/telegram-callback`);
-    
+
+    // Адрес для возврата
+    const returnTo = encodeURIComponent(
+      `${window.location.origin}/telegram-callback`
+    );
+
+    // Формируем URL
     const authUrl = `https://oauth.telegram.org/auth?bot_id=${numericBotId}&origin=${origin}&return_to=${returnTo}&request_access=write`;
 
     console.log('Opening Telegram auth URL:', authUrl);
 
-    // Открываем окно аутентификации Telegram
     const authWindow = window.open(
       authUrl,
       'telegram_auth',
@@ -53,11 +54,12 @@ const TelegramLogin: React.FC<TelegramLoginProps> = ({
     );
 
     if (!authWindow) {
-      console.error('Failed to open authentication window. Please allow popups for this site.');
+      console.error(
+        'Failed to open authentication window. Please allow popups for this site.'
+      );
       return;
     }
 
-    // Слушаем сообщения от callback страницы
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
 
@@ -70,10 +72,10 @@ const TelegramLogin: React.FC<TelegramLoginProps> = ({
 
     window.addEventListener('message', handleMessage);
 
-    // Добавляем таймаут для обработки случая, если окно не закрылось
+    // Чистим обработчик через 5 минут
     setTimeout(() => {
       window.removeEventListener('message', handleMessage);
-    }, 300000); // 5 минут таймаут
+    }, 300000);
   };
 
   return (
