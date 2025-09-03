@@ -6,45 +6,67 @@ const TelegramCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    // Парсим данные из URL hash или query параметров
-    let authData: any = {};
-    
-    // Сначала проверяем hash (стандартный способ для Telegram OAuth)
-    if (window.location.hash) {
-      const hash = window.location.hash.substring(1);
-      const params = new URLSearchParams(hash);
+    // Функция для извлечения параметров авторизации
+    const extractAuthParams = () => {
+      let authData: any = {};
       
-      params.forEach((value, key) => {
-        authData[key] = value;
-      });
-    } 
-    // Если в hash нет данных, проверяем query параметры
-    else {
-      searchParams.forEach((value, key) => {
-        authData[key] = value;
-      });
-    }
+      // Telegram может отправлять данные как в hash, так и в query параметрах
+      if (window.location.hash) {
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        
+        params.forEach((value, key) => {
+          authData[key] = value;
+        });
+      } else {
+        searchParams.forEach((value, key) => {
+          authData[key] = value;
+        });
+      }
+      
+      return authData;
+    };
 
+    const authData = extractAuthParams();
     console.log('Telegram auth data received:', authData);
 
-    // Проверяем, что есть необходимые данные
-    if (authData.id && authData.auth_date && authData.hash) {
+    // Проверяем обязательные поля
+    const requiredFields = ['id', 'auth_date', 'hash'];
+    const hasAllRequiredFields = requiredFields.every(field => field in authData);
+
+    if (hasAllRequiredFields) {
       // Отправляем данные обратно в родительское окно
       if (window.opener) {
-        window.opener.postMessage({
-          type: 'TELEGRAM_AUTH_DATA',
-          user: authData
-        }, window.location.origin);
-        
-        // Закрываем окно
-        window.close();
+        try {
+          window.opener.postMessage({
+            type: 'TELEGRAM_AUTH_DATA',
+            user: authData
+          }, window.location.origin);
+          
+          // Даем время на обработку сообщения перед закрытием
+          setTimeout(() => {
+            window.close();
+          }, 100);
+        } catch (error) {
+          console.error('Error sending message to opener:', error);
+          navigate('/login', { 
+            state: { error: 'Failed to communicate with parent window' } 
+          });
+        }
       } else {
         console.error('No window opener found');
-        navigate('/login', { state: { error: 'Authentication failed: no opener window' } });
+        // Если opener недоступен, сохраняем данные в localStorage
+        // и перенаправляем на главную страницу
+        localStorage.setItem('telegramAuthData', JSON.stringify(authData));
+        navigate('/login', { 
+          state: { telegramAuthData: authData } 
+        });
       }
     } else {
-      console.error('Invalid Telegram auth data:', authData);
-      navigate('/login', { state: { error: 'Invalid authentication data received from Telegram' } });
+      console.error('Invalid Telegram auth data: missing required fields', authData);
+      navigate('/login', { 
+        state: { error: 'Invalid authentication data received from Telegram' } 
+      });
     }
   }, [navigate, searchParams]);
 
@@ -53,6 +75,9 @@ const TelegramCallback: React.FC = () => {
       <div className="text-center">
         <h2 className="text-lg font-medium text-gray-900">Завершение аутентификации через Telegram</h2>
         <p className="mt-2 text-sm text-gray-600">Пожалуйста, подождите...</p>
+        <p className="mt-1 text-xs text-gray-500">
+          Если окно не закрывается автоматически, закройте его вручную.
+        </p>
       </div>
     </div>
   );
