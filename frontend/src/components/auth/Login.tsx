@@ -70,7 +70,7 @@ const Login: React.FC = () => {
 
         {/* Кнопка Telegram */}
         <TelegramLoginWidget
-          botName="self_development_tracker_bot" // 👈 username твоего бота
+          botName="self_development_tracker_bot"
           onAuth={handleTelegramAuth}
         />
 
