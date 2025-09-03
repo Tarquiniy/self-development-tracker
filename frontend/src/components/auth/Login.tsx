@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import TelegramLogin from './TelegramLogin';
+import TelegramLoginWidget from './TelegramLoginWidget';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -68,13 +68,13 @@ const Login: React.FC = () => {
           </h2>
         </div>
 
-        <TelegramLogin
-          botId={import.meta.env.VITE_TELEGRAM_BOT_ID || ''}
+        {/* Новый виджет Telegram */}
+        <TelegramLoginWidget
+          botName="self_development_tracker_bot"
           onAuth={handleTelegramAuth}
-          buttonSize="large"
         />
 
-        <div className="relative">
+        <div className="relative mt-6">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-gray-300" />
           </div>

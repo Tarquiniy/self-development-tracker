@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model, authenticate
 from django.utils import timezone
 from .models import UserProfile
 from .serializers import UserSerializer, UserProfileSerializer, UserRegistrationSerializer, TelegramAuthSerializer
-from .telegram_utils import verify_telegram_authentication
+from .telegram_utils import check_telegram_auth
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -141,3 +141,26 @@ def telegram_auth(request):
             {'error': 'Internal server error during authentication'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+    
+@api_view(["POST"])
+def telegram_login(request):
+    data = request.data
+
+    if not check_telegram_auth(data):
+        return Response({"error": "Invalid Telegram data"}, status=status.HTTP_400_BAD_REQUEST)
+
+    telegram_id = data.get("id")
+    username = data.get("username", "")
+    first_name = data.get("first_name", "")
+    last_name = data.get("last_name", "")
+
+    user, created = User.objects.get_or_create(
+        username=f"tg_{telegram_id}",
+        defaults={"first_name": first_name, "last_name": last_name, "email": f"{telegram_id}@telegram.local"},
+    )
+
+    refresh = RefreshToken.for_user(user)
+    return Response({
+        "access": str(refresh.access_token),
+        "refresh": str(refresh),
+    })
