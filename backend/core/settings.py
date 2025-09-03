@@ -223,8 +223,8 @@ ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'optional'
 
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-TELEGRAM_BOT_NAME = os.getenv('TELEGRAM_BOT_NAME', '')
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8300811327:AAFnVMh21kSS7vemrdtdGmnhMjF0npCWNhs')
+TELEGRAM_BOT_ID = os.getenv('TELEGRAM_BOT_ID', '8300811327')
 TELEGRAM_LOGIN_REDIRECT_URL = os.getenv(
     'TELEGRAM_REDIRECT_URL',
     'http://localhost:3000/telegram-callback'
