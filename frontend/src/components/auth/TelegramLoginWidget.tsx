@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 
 interface TelegramLoginWidgetProps {
-  botName: string;
+  botName: string; // username бота, например "self_development_tracker_bot"
   onAuth: (user: any) => void;
 }
 
@@ -18,12 +18,12 @@ const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({ botName, onAu
       return;
     }
 
-    container.innerHTML = ''; // очистим на всякий случай
+    container.innerHTML = ''; // очищаем перед вставкой
 
     const script = document.createElement('script');
     script.src = 'https://telegram.org/js/telegram-widget.js?22';
     script.async = true;
-    script.setAttribute('data-telegram-login', botName);
+    script.setAttribute('data-telegram-login', botName); // 👈 только username!
     script.setAttribute('data-size', 'large');
     script.setAttribute('data-request-access', 'write');
     script.setAttribute('data-userpic', 'false');
@@ -34,10 +34,6 @@ const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({ botName, onAu
     (window as any).onTelegramAuth = (user: any) => {
       console.log('✅ Telegram user data:', user);
       onAuth(user);
-    };
-
-    return () => {
-      delete (window as any).onTelegramAuth;
     };
   }, [botName, onAuth]);
 
