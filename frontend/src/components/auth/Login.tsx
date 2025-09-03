@@ -12,7 +12,7 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Проверяем, есть ли данные аутентификации Telegram в состоянии навигации
+  // Check if there is Telegram authentication data in navigation state
   useEffect(() => {
     if (location.state?.telegramAuthData) {
       handleTelegramAuth(location.state.telegramAuthData);
@@ -26,10 +26,10 @@ const Login: React.FC = () => {
     }
   }, [location.state]);
 
-  // Обработчик сообщений от callback окна
+  // Message handler from callback window
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // Проверяем origin для безопасности
+      // Check origin for security
       if (event.origin !== window.location.origin) return;
       
       if (event.data && event.data.type === 'TELEGRAM_AUTH_DATA') {
@@ -45,7 +45,7 @@ const Login: React.FC = () => {
     };
   }, []);
 
-  // Проверяем localStorage на наличие данных аутентификации
+  // Check localStorage for authentication data
   useEffect(() => {
     const checkStoredAuthData = () => {
       const storedData = localStorage.getItem('telegramAuthData');
@@ -62,10 +62,10 @@ const Login: React.FC = () => {
       }
     };
 
-    // Проверяем сразу после загрузки компонента
+    // Check immediately after component loads
     checkStoredAuthData();
     
-    // Также проверяем при фокусировке окна (на случай возврата из callback)
+    // Also check on window focus (in case of returning from callback)
     window.addEventListener('focus', checkStoredAuthData);
     
     return () => {
@@ -109,8 +109,7 @@ const Login: React.FC = () => {
         localStorage.setItem('accessToken', data.access);
         localStorage.setItem('refreshToken', data.refresh);
         
-        // Обновляем контекст аутентификации
-        const { login } = useAuth();
+        // Update auth context
         await login(data.access, data.refresh);
         
         navigate('/dashboard');
@@ -136,9 +135,9 @@ const Login: React.FC = () => {
         </div>
 
         <TelegramLogin
-          botId={import.meta.env.VITE_TELEGRAM_BOT_ID || ''}
+          botName={import.meta.env.VITE_TELEGRAM_BOT_NAME || 'self_development_tracker_bot'}
           onAuth={handleTelegramAuth}
-          buttonSize="large"
+          className="mb-4"
         />
 
         <div className="relative">

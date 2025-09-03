@@ -153,7 +153,7 @@ const Register: React.FC = () => {
                 id="password"
                 name="password"
                 type="password"
-                autoComplete="new-password"
+                autoComplete='new-password'
                 required
                 className="input-field rounded-md"
                 placeholder="Пароль"

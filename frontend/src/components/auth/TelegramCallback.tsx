@@ -12,19 +12,19 @@ const TelegramCallback: React.FC = () => {
       try {
         console.log('Processing Telegram callback...');
         
-        // Извлекаем данные авторизации из URL
+        // Extract auth data from URL
         let authData: Record<string, string> = {};
         
-        // Telegram OAuth может передавать данные в hash или query параметрах
+        // Telegram OAuth can send data in hash or query parameters
         if (window.location.hash) {
-          // Данные в hash (стандартный способ)
+          // Data in hash (standard way)
           const hash = window.location.hash.substring(1);
           const params = new URLSearchParams(hash);
           params.forEach((value, key) => {
             authData[key] = value;
           });
         } else {
-          // Данные в query параметрах (альтернативный способ)
+          // Data in query parameters (alternative way)
           searchParams.forEach((value, key) => {
             authData[key] = value;
           });
@@ -32,24 +32,24 @@ const TelegramCallback: React.FC = () => {
 
         console.log('Extracted auth data:', authData);
 
-        // Проверяем наличие обязательных полей
+        // Check for required fields
         const requiredFields = ['id', 'auth_date', 'hash'];
         const missingFields = requiredFields.filter(field => !authData[field]);
         
         if (missingFields.length > 0) {
-          throw new Error(`Отсутствуют обязательные поля: ${missingFields.join(', ')}`);
+          throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
         }
 
-        // Проверяем, не устарели ли данные (больше 24 часов)
+        // Check if data is outdated (more than 24 hours)
         const authDate = parseInt(authData.auth_date, 10);
         const currentTime = Math.floor(Date.now() / 1000);
-        const isDataOutdated = currentTime - authDate > 86400; // 24 часа
+        const isDataOutdated = currentTime - authDate > 86400; // 24 hours
         
         if (isDataOutdated) {
-          throw new Error('Данные аутентификации устарели. Пожалуйста, войдите снова.');
+          throw new Error('Authentication data is outdated. Please log in again.');
         }
 
-        // Отправляем данные в родительское окно
+        // Send data back to parent window
         if (window.opener) {
           window.opener.postMessage(
             {
@@ -59,13 +59,13 @@ const TelegramCallback: React.FC = () => {
             window.location.origin
           );
           
-          // Даем время на обработку сообщения
+          // Give time for message processing
           setTimeout(() => {
             setStatus('success');
             setTimeout(() => window.close(), 1000);
           }, 500);
         } else {
-          // Если нет родительского окна, сохраняем данные и перенаправляем
+          // If no parent window, save data and redirect
           localStorage.setItem('telegramAuthData', JSON.stringify(authData));
           setStatus('success');
           setTimeout(() => navigate('/login', { 
@@ -75,14 +75,14 @@ const TelegramCallback: React.FC = () => {
       } catch (error) {
         console.error('Telegram auth processing error:', error);
         setStatus('error');
-        setErrorMessage(error instanceof Error ? error.message : 'Неизвестная ошибка');
+        setErrorMessage(error instanceof Error ? error.message : 'Unknown error');
         
-        // Перенаправляем с ошибкой
+        // Redirect with error
         setTimeout(() => {
           navigate('/login', { 
             state: { 
-              error: 'Ошибка аутентификации через Telegram',
-              errorDetails: error instanceof Error ? error.message : 'Неизвестная ошибка'
+              error: 'Telegram authentication failed',
+              errorDetails: error instanceof Error ? error.message : 'Unknown error'
             } 
           });
         }, 2000);
@@ -92,7 +92,7 @@ const TelegramCallback: React.FC = () => {
     processTelegramAuth();
   }, [navigate, searchParams]);
 
-  // Функция для ручного закрытия окна
+  // Function for manual window closing
   const handleCloseWindow = () => {
     window.close();
   };
@@ -105,8 +105,8 @@ const TelegramCallback: React.FC = () => {
             <div className="flex justify-center mb-4">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
             </div>
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">Обработка авторизации</h2>
-            <p className="text-gray-600">Подождите, завершаем вход через Telegram...</p>
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Processing authentication</h2>
+            <p className="text-gray-600">Please wait, completing Telegram login...</p>
           </>
         )}
         
@@ -117,13 +117,13 @@ const TelegramCallback: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">Успешная авторизация!</h2>
-            <p className="text-gray-600 mb-4">Окно закроется автоматически через несколько секунд.</p>
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Authentication successful!</h2>
+            <p className="text-gray-600 mb-4">The window will close automatically in a few seconds.</p>
             <button
               onClick={handleCloseWindow}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              Закрыть окно
+              Close window
             </button>
           </>
         )}
@@ -135,14 +135,14 @@ const TelegramCallback: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">Ошибка авторизации</h2>
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Authentication error</h2>
             <p className="text-gray-600 mb-2">{errorMessage}</p>
-            <p className="text-gray-500 text-sm mb-4">Вы будете перенаправлены на страницу входа...</p>
+            <p className="text-gray-500 text-sm mb-4">You will be redirected to the login page...</p>
             <button
               onClick={() => navigate('/login')}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              Перейти к входу
+              Go to login
             </button>
           </>
         )}

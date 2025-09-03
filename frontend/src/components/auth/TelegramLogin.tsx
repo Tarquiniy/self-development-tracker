@@ -11,77 +11,56 @@ interface TelegramUser {
 }
 
 interface TelegramLoginProps {
-  botId: string; // должен быть числовой ID бота
+  botName: string;
   onAuth: (user: TelegramUser) => void;
   buttonSize?: 'large' | 'medium' | 'small';
   className?: string;
 }
 
 const TelegramLogin: React.FC<TelegramLoginProps> = ({
-  botId,
+  botName,
   onAuth,
   className = '',
 }) => {
-  const handleTelegramAuth = () => {
-    if (!botId) {
-      console.error('Telegram bot ID is required');
-      return;
-    }
-
-    const numericBotId = botId.replace(/\D/g, '');
-    if (!numericBotId) {
-      console.error('Invalid bot ID. Bot ID should contain only numbers');
-      return;
-    }
-
-    // Определяем текущий origin (всегда совпадает с реальным доменом)
-    const origin = encodeURIComponent(window.location.origin);
-
-    // Адрес для возврата
-    const returnTo = encodeURIComponent(
-      `${window.location.origin}/telegram-callback`
-    );
-
-    // Формируем URL
-    const authUrl = `https://oauth.telegram.org/auth?bot_id=${numericBotId}&origin=${origin}&return_to=${returnTo}&request_access=write`;
-
-    console.log('Opening Telegram auth URL:', authUrl);
-
-    const authWindow = window.open(
-      authUrl,
-      'telegram_auth',
-      'width=600,height=400'
-    );
-
-    if (!authWindow) {
-      console.error(
-        'Failed to open authentication window. Please allow popups for this site.'
-      );
-      return;
-    }
-
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-
-      if (event.data && event.data.type === 'TELEGRAM_AUTH_DATA') {
-        console.log('Received Telegram auth data:', event.data.user);
-        onAuth(event.data.user);
-        window.removeEventListener('message', handleMessage);
-      }
+  React.useEffect(() => {
+    // Initialize Telegram Login Widget
+    const script = document.createElement('script');
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.async = true;
+    script.setAttribute('data-telegram-login', botName);
+    script.setAttribute('data-size', 'large');
+    script.setAttribute('data-request-access', 'write');
+    script.setAttribute('data-auth-url', `${window.location.origin}/telegram-callback`);
+    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+    
+    // Add global callback function
+    (window as any).onTelegramAuth = (user: TelegramUser) => {
+      console.log('Telegram auth data received:', user);
+      onAuth(user);
     };
 
-    window.addEventListener('message', handleMessage);
+    const container = document.getElementById('telegram-login-container');
+    if (container) {
+      container.appendChild(script);
+    }
 
-    // Чистим обработчик через 5 минут
-    setTimeout(() => {
-      window.removeEventListener('message', handleMessage);
-    }, 300000);
-  };
+    return () => {
+      // Cleanup
+      if (container && container.contains(script)) {
+        container.removeChild(script);
+      }
+      delete (window as any).onTelegramAuth;
+    };
+  }, [botName, onAuth]);
 
   return (
-    <div className={`telegram-login ${className}`}>
+    <div id="telegram-login-container" className={`telegram-login ${className}`}>
+      {/* Fallback button for cases when widget doesn't load */}
       <button
-        onClick={handleTelegramAuth}
+        onClick={() => {
+          const authUrl = `https://oauth.telegram.org/auth?bot_id=${botName}&origin=${encodeURIComponent(window.location.origin)}&return_to=${encodeURIComponent(`${window.location.origin}/telegram-callback`)}&request_access=write`;
+          window.open(authUrl, 'telegram_auth', 'width=600,height=400');
+        }}
         className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
       >
         <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">

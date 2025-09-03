@@ -18,8 +18,11 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
-    'https://self-development-tracker-five.vercel.app/',
-    'https://self-development-tracker.onrender.com/'
+    'https://oauth.telegram.org',
+    'https://telegram.org',
+    'https://self-development-tracker-five.vercel.app',
+    'https://self-development-tracker.onrender.com',
+    "https://fjqbhcmsqypevfbpzcxj.supabase.co",
 ]
 
 # Для статических файлов
