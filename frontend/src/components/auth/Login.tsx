@@ -1,15 +1,39 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import TelegramLoginWidget from "./TelegramLoginWidget";
+import TelegramLoginButton from "./TelegramLoginButton";
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const [showTelegramButton, setShowTelegramButton] = useState(true);
+  const { login, setUser, setProfile } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Проверяем, находится ли пользователь в Telegram Web App
+    const isTelegramWebApp = !!(window as any).Telegram?.WebApp;
+    
+    if (isTelegramWebApp) {
+      // В Telegram Web App используем встроенную авторизацию
+      const tg = (window as any).Telegram.WebApp;
+      tg.ready();
+      
+      if (tg.initDataUnsafe?.user) {
+        // Пользователь уже авторизован в Telegram Web App
+        handleTelegramAuth(tg.initDataUnsafe.user);
+      } else {
+        // Запрашиваем данные пользователя
+        tg.expand();
+        tg.enableClosingConfirmation();
+      }
+    } else {
+      // Вне Telegram Web App показываем кнопку
+      setShowTelegramButton(true);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +55,17 @@ const Login: React.FC = () => {
       setLoading(true);
       setError("");
 
+      // Форматируем данные для отправки на сервер
+      const authData = {
+        id: telegramUser.id,
+        first_name: telegramUser.first_name || "",
+        last_name: telegramUser.last_name || "",
+        username: telegramUser.username || "",
+        photo_url: telegramUser.photo_url || "",
+        auth_date: Math.floor(Date.now() / 1000),
+        hash: telegramUser.hash || (window as any).Telegram?.WebApp?.initData || ""
+      };
+
       const response = await fetch(
         `${
           import.meta.env.VITE_API_URL || "https://self-development-tracker.onrender.com"
@@ -40,8 +75,8 @@ const Login: React.FC = () => {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(telegramUser),
-          credentials: "include", // Важно для cookies
+          body: JSON.stringify(authData),
+          credentials: "include",
         }
       );
 
@@ -56,9 +91,35 @@ const Login: React.FC = () => {
         
         // Обновляем контекст аутентификации
         if (data.user) {
-          // Здесь нужно обновить контекст аутентификации
-          // В реальном приложении это должно быть сделано через вызов метода контекста
-          console.log("User authenticated:", data.user);
+          setUser({
+            id: data.user.id,
+            email: data.user.email || "",
+            username: data.user.username,
+            first_name: data.user.first_name || "",
+            last_name: data.user.last_name || "",
+            phone: data.user.phone || "",
+          });
+        }
+
+        // Получаем профиль пользователя
+        try {
+          const profileResponse = await fetch(
+            `${
+              import.meta.env.VITE_API_URL || "https://self-development-tracker.onrender.com"
+            }/api/auth/profile/`,
+            {
+              headers: {
+                Authorization: `Bearer ${data.tokens.access}`,
+              },
+            }
+          );
+          
+          if (profileResponse.ok) {
+            const profileData = await profileResponse.json();
+            setProfile(profileData);
+          }
+        } catch (profileError) {
+          console.error("Failed to fetch profile:", profileError);
         }
         
         navigate("/dashboard");
@@ -100,13 +161,15 @@ const Login: React.FC = () => {
           )}
         </div>
 
-        {/* 👇 Telegram Login Widget */}
-        <TelegramLoginWidget
-          botName="self_development_tracker_bot"
-          onAuth={handleTelegramAuth}
-          buttonSize="large"
-          lang="ru"
-        />
+        {/* 👇 Telegram Login Button */}
+        {showTelegramButton && !isTelegramWebApp && (
+          <TelegramLoginButton
+            botName="self_development_tracker_bot"
+            onAuth={handleTelegramAuth}
+            buttonSize="large"
+            lang="ru"
+          />
+        )}
 
         {!isTelegramWebApp && (
           <>
@@ -165,6 +228,18 @@ const Login: React.FC = () => {
               </div>
             </form>
           </>
+        )}
+
+        {isTelegramWebApp && (
+          <div className="text-center">
+            <button
+              onClick={() => handleTelegramAuth((window as any).Telegram.WebApp.initDataUnsafe.user)}
+              disabled={loading}
+              className="btn-primary w-full"
+            >
+              {loading ? "Вход через Telegram..." : "Войти через Telegram"}
+            </button>
+          </div>
         )}
       </div>
     </div>
