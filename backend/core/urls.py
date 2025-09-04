@@ -1,21 +1,11 @@
 from django.contrib import admin
-from django.urls import path, include, re_path
-from django.conf import settings
-from django.conf.urls.static import static
-from .views import SPAView
-from .views import ReactAppView
+from django.urls import path, include
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path("admin/", admin.site.urls),
     path("api/auth/", include("users.urls")),
-    path('api/tables/', include('tables.urls')),
-    path('api/payments/', include('payments.urls')),
-    path('api/analytics/', include('analytics.urls')),
-    path('api/blog/', include('blog.urls')),
-    path('auth/', include('allauth.urls')),
-    re_path(r'^.*$', SPAView.as_view(), name='spa'),
-    re_path(r'^.*$', ReactAppView.as_view(), name='react-app'),
+    path("api/tables/", include("tables.urls")),
+    path("api/payments/", include("payments.urls")),
+    path("api/analytics/", include("analytics.urls")),
+    path("api/blog/", include("blog.urls")),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
