@@ -223,7 +223,6 @@ ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'optional'
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8300811327:AAFnVMh21kSS7vemrdtdGmnhMjF0npCWNhs')
-TELEGRAM_BOT_USERNAME = os.getenv('TELEGRAM_BOT_USERNAME', 'self_development_tracker_bot')
 TELEGRAM_BOT_ID = os.getenv('TELEGRAM_BOT_ID', '8300811327')
 TELEGRAM_LOGIN_REDIRECT_URL = os.getenv(
     'TELEGRAM_REDIRECT_URL',
@@ -264,12 +263,11 @@ CORS_ALLOW_HEADERS = [
 
 # Content Security Policy для Telegram
 SECURE_CSP = {
-    'default-src': ["'self'", "https://telegram.org", "https://oauth.telegram.org"],
-    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://telegram.org", "https://oauth.telegram.org"],
+    'default-src': ["'self'", "https://telegram.org", "https://oauth.telegram.org", "https://web.telegram.org"],
+    'script-src': ["'self'", "'unsafe-inline'", "https://telegram.org", "https://web.telegram.org"],
     'style-src': ["'self'", "'unsafe-inline'", "https://telegram.org"],
-    'img-src': ["'self'", "data:", "https://telegram.org", "https://oauth.telegram.org"],
-    'frame-src': ["'self'", "https://oauth.telegram.org", "https://telegram.org"],
-    'connect-src': ["'self'", "https://telegram.org", "https://oauth.telegram.org"],
+    'img-src': ["'self'", "data:", "https://telegram.org", "https://web.telegram.org"],
+    'connect-src': ["'self'", "https://telegram.org", "https://oauth.telegram.org", "https://web.telegram.org"],
 }
 
 # Custom User Model
@@ -279,13 +277,11 @@ AUTH_USER_MODEL = 'users.CustomUser'
 if 'RENDER' in os.environ:
     ALLOWED_HOSTS.append(os.environ.get('RENDER_EXTERNAL_HOSTNAME', ''))
 
-# Настройки сессий и cookies
-SESSION_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_HTTPONLY = True
-
 if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
 
