@@ -70,9 +70,9 @@ const Login: React.FC = () => {
           </h2>
         </div>
 
-        {/* 👇 Кнопка Telegram Login Widget */}
+        {/* 👇 Telegram Login Widget (без bot_id, только username) */}
         <TelegramLoginWidget
-          botName="self_development_tracker_bot"
+          botName="self_development_tracker_bot" // ⚠️ username бота из BotFather, без @
           onAuth={handleTelegramAuth}
         />
 
@@ -85,6 +85,7 @@ const Login: React.FC = () => {
           </div>
         </div>
 
+        {/* 👇 Обычный логин через email/пароль */}
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
