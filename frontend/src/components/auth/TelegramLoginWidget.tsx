@@ -33,7 +33,7 @@ const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({
       script.setAttribute("data-size", "large");
       script.setAttribute("data-request-access", "write");
       script.setAttribute("data-userpic", "false");
-      script.setAttribute("data-onauth", "onTelegramAuth(user)");
+      script.setAttribute("data-onauth", "onTelegramAuth");
       container.appendChild(script);
     }
 
