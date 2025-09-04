@@ -27,6 +27,7 @@ def verify_telegram_authentication(bot_token, request_data):
         raise NotTelegramDataError("Missing hash or auth_date in Telegram data")
 
     # Check if data is outdated (older than 24 hours)
+    import time
     current_time = time.time()
     if current_time - int(auth_date) > 86400:  # 24 hours
         logger.warning("Telegram authentication data is outdated")

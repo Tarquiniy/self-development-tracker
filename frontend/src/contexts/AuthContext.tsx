@@ -19,7 +19,7 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfileState] = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,13 +29,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         try {
           const profileData = await apiService.getProfile();
           setUser(profileData.user);
-          setProfileState(profileData);
+          setProfile(profileData);
         } catch (error) {
           console.error('Failed to fetch user profile:', error);
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
           setUser(null);
-          setProfileState(null);
+          setProfile(null);
         }
       }
       setLoading(false);
@@ -54,7 +54,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     const profileData = await apiService.getProfile();
-    setProfileState(profileData);
+    setProfile(profileData);
   };
 
   const register = async (userData: {
@@ -74,25 +74,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     const profileData = await apiService.getProfile();
-    setProfileState(profileData);
+    setProfile(profileData);
   };
 
   const logout = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     setUser(null);
-    setProfileState(null);
+    setProfile(null);
   };
 
-  // Функция для установки пользователя
+  // Функция для установки пользователя (для Telegram авторизации)
   const setUserData = (userData: User) => {
     setUser(userData);
   };
 
   // Функция для установки профиля
-  const setProfile = (profileData: UserProfile) => {
-    setProfileState(profileData);
-    setUser(profileData.user); // Также обновляем данные пользователя
+  const setProfileData = (profileData: UserProfile) => {
+    setProfile(profileData);
+    setUser(profileData.user);
   };
 
   const value: AuthContextType = {
@@ -103,7 +103,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     loading,
     setUser: setUserData,
-    setProfile,
+    setProfile: setProfileData,
   };
 
   return (

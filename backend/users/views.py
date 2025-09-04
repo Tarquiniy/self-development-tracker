@@ -2,12 +2,16 @@ import logging
 import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import CustomUser
+from .telegram_utils import verify_telegram_authentication
 from .telegram_utils import check_telegram_auth
+from django.conf import settings
 from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model, authenticate
 from django.utils import timezone
@@ -79,74 +83,116 @@ def get_user_profile(request):
     return Response(serializer.data)
 
 @api_view(['POST'])
-@permission_classes([permissions.AllowAny])
+@permission_classes([AllowAny])
+@csrf_exempt
 def telegram_auth(request):
     """
-    Обработчик аутентификации через Telegram
+    Обработчик аутентификации через Telegram Web App
     """
-    logger.info("Telegram auth request received")
-    
-    serializer = TelegramAuthSerializer(data=request.data)
-    
-    if not serializer.is_valid():
-        logger.warning(f"Telegram auth validation failed: {serializer.errors}")
-        return Response(
-            {'error': 'Invalid Telegram data', 'details': serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
     try:
-        telegram_data = serializer.validated_data
-        telegram_id = str(telegram_data['id'])
+        logger.info("Telegram auth request received")
         
-        logger.info(f"Processing Telegram auth for user ID: {telegram_id}")
-        
+        # Получаем данные из запроса
+        if request.content_type == 'application/json':
+            telegram_data = request.data
+        else:
+            telegram_data = request.POST.dict()
+
+        logger.debug(f"Telegram data: {telegram_data}")
+
+        # Проверяем наличие обязательных полей
+        if not telegram_data.get('hash'):
+            return JsonResponse({
+                'error': 'Missing authentication hash'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Верифицируем данные Telegram
         try:
-            # Поиск существующего пользователя
+            verified_data = verify_telegram_authentication(
+                settings.TELEGRAM_BOT_TOKEN,
+                telegram_data
+            )
+        except Exception as e:
+            logger.error(f"Telegram auth verification failed: {str(e)}")
+            return JsonResponse({
+                'error': 'Telegram authentication failed',
+                'details': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        telegram_id = str(verified_data['id'])
+        username = verified_data.get('username', '')
+        first_name = verified_data.get('first_name', '')
+        last_name = verified_data.get('last_name', '')
+
+        logger.info(f"Processing Telegram auth for user ID: {telegram_id}")
+
+        # Ищем или создаем пользователя
+        try:
             user = User.objects.get(telegram_id=telegram_id)
             logger.info(f"Found existing user: {user.username}")
             
-            # Обновление данных пользователя
-            user.telegram_username = telegram_data.get('username', user.telegram_username)
-            user.first_name = telegram_data.get('first_name', user.first_name)
-            user.last_name = telegram_data.get('last_name', user.last_name)
+            # Обновляем данные пользователя
+            user.telegram_username = username
+            user.first_name = first_name
+            user.last_name = last_name
             user.save()
             
         except User.DoesNotExist:
-            # Создание нового пользователя
-            username = f"tg_{telegram_id}"
-            logger.info(f"Creating new user: {username}")
-            
+            # Создаем нового пользователя
+            username = f"tg_{telegram_id}" if not username else username
             user = User.objects.create(
                 username=username,
                 telegram_id=telegram_id,
-                telegram_username=telegram_data.get('username', ''),
-                first_name=telegram_data.get('first_name', ''),
-                last_name=telegram_data.get('last_name', ''),
+                telegram_username=username,
+                first_name=first_name,
+                last_name=last_name,
                 registration_method='telegram'
             )
-            
-            # Создание профиля пользователя
             UserProfile.objects.create(user=user)
-            logger.info(f"User profile created for: {username}")
+            logger.info(f"Created new user: {username}")
 
-        # Генерация JWT токенов
+        # Генерируем JWT токены
         refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+
+        # Формируем ответ
+        response_data = {
+            'status': 'success',
+            'user': {
+                'id': user.id,
+                'email': user.email or '',
+                'username': user.username,
+                'telegram_id': user.telegram_id,
+                'telegram_username': user.telegram_username,
+                'first_name': user.first_name,
+                'last_name': user.last_name
+            },
+            'tokens': {
+                'refresh': str(refresh),
+                'access': access_token,
+            }
+        }
+
+        # Устанавливаем access token в cookie для автоматической аутентификации
+        response = JsonResponse(response_data)
+        response.set_cookie(
+            key='access_token',
+            value=access_token,
+            httponly=True,
+            secure=not settings.DEBUG,
+            samesite='Lax',
+            max_age=60 * 60 * 24 * 7  # 1 неделя
+        )
         
-        logger.info(f"Successful Telegram auth for user: {user.username}")
-        
-        return Response({
-            'user': UserSerializer(user).data,
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-        })
-    
+        return response
+
     except Exception as e:
         logger.error(f"Telegram auth error: {str(e)}")
-        return Response(
-            {'error': 'Internal server error during authentication'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Internal server error',
+            'details': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @csrf_exempt
 def telegram_login(request):
