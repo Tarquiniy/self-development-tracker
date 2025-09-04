@@ -264,37 +264,12 @@ CORS_ALLOW_HEADERS = [
 
 # Content Security Policy для Telegram
 SECURE_CSP = {
-    'default-src': [
-        "'self'",
-        "https://telegram.org",
-        "https://oauth.telegram.org",
-    ],
-    'script-src': [
-        "'self'",
-        "'unsafe-inline'",
-        "'unsafe-eval'",
-        "https://telegram.org",
-    ],
-    'style-src': [
-        "'self'",
-        "'unsafe-inline'",
-        "https://telegram.org",
-    ],
-    'img-src': [
-        "'self'",
-        "data:",
-        "https://telegram.org",
-    ],
-    'frame-src': [
-        "'self'",
-        "https://oauth.telegram.org",
-        "https://t.me",
-    ],
-    'connect-src': [
-        "'self'",
-        "https://oauth.telegram.org",
-        "https://telegram.org",
-    ],
+    'default-src': ["'self'", "https://telegram.org", "https://oauth.telegram.org"],
+    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://telegram.org", "https://oauth.telegram.org"],
+    'style-src': ["'self'", "'unsafe-inline'", "https://telegram.org"],
+    'img-src': ["'self'", "data:", "https://telegram.org", "https://oauth.telegram.org"],
+    'frame-src': ["'self'", "https://oauth.telegram.org", "https://telegram.org"],
+    'connect-src': ["'self'", "https://telegram.org", "https://oauth.telegram.org"],
 }
 
 # Custom User Model
