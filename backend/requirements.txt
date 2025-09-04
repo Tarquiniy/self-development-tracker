@@ -7,15 +7,12 @@ charset-normalizer==3.4.3
 cryptography==45.0.6
 defusedxml==0.7.1
 deprecation==2.1.0
+dj-database-url==2.1.0
 Django==5.2.5
 django-allauth==0.58.2
-djangorestframework==3.14.0
 django-cors-headers==4.3.1
 django-redis==5.4.0
-whitenoise==6.6.0
-dj-database-url==2.2.0
-python-dotenv==1.0.0
-django-allauth==0.58.2
+djangorestframework==3.14.0
 djangorestframework-simplejwt==5.3.1
 gotrue==2.12.4
 gunicorn==23.0.0
