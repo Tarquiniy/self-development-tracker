@@ -1,55 +1,82 @@
+// frontend/src/services/api.ts
 import type {UserProfile, ProgressTable, DailyProgress, Category, RadarChartData } from '../types';
 
 class ApiService {
   private baseUrl: string;
 
   constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
+    // нормализуем базовый URL сразу при создании
+    this.baseUrl = (baseUrl || '').toString();
   }
 
-  private join(urlBase: string, endpoint: string) {
-    return `${urlBase.replace(/\/+$/, '')}/${endpoint.replace(/^\/+/, '')}`;
+  // Собирает URL из base + endpoint без двойных слэшей,
+  // и поправляет случайные /api/api -> /api
+  private buildUrl(endpoint: string) {
+    const base = this.baseUrl.replace(/\s+$/, '');
+    const ep = (endpoint || '').toString();
+
+    // если базовый пустой, берем из env (без изменений если уже установлен)
+    const rawBase =
+      base ||
+      (import.meta.env.VITE_API_BASE_URL ? String(import.meta.env.VITE_API_BASE_URL) : 'https://self-development-tracker.onrender.com');
+
+    // Уберём пробелы
+    const b = rawBase.replace(/\s+/g, '');
+
+    // Собираем с одним слэшем между частями
+    const joined = `${b.replace(/\/+$/, '')}/${ep.replace(/^\/+/, '')}`;
+
+    // Уберём лишние двойные слэши после протокола (https://)
+    const collapsed = joined.replace(/([^:]\/)\/+/g, '$1');
+
+    // Если вдруг получилось /api/api, сводим к /api
+    const fixedApiDup = collapsed.replace(/\/api\/api(\/|$)/g, '/api$1');
+
+    return fixedApiDup;
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = this.join(this.baseUrl, endpoint);
+    const url = this.buildUrl(endpoint);
     const token = localStorage.getItem('accessToken');
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
 
     const config: RequestInit = {
       ...options,
-      headers: { ...headers, ...(options.headers as any) },
+      headers: { ...headers, ...((options.headers as Record<string,string>) || {}) } as HeadersInit,
     };
 
     const response = await fetch(url, config);
 
     if (!response.ok) {
       let errorMessage = 'Request failed';
+
       try {
         const errorData = await response.json();
-        errorMessage = errorData.error || errorData.detail || JSON.stringify(errorData) || errorMessage;
+        errorMessage = errorData.error || errorData.detail || errorMessage;
       } catch {
         errorMessage = (await response.text()) || errorMessage;
       }
+
       throw new Error(errorMessage);
     }
 
     try {
       return await response.json();
     } catch {
-      // no content
       return null as T;
     }
   }
 
-  // Auth
+  // Auth methods (endpoint строки — без опасений: buildUrl исправит лишние слэши)
   async login(email: string, password: string) {
-    const data = await this.request<any>('auth/login/', {
+    const data = await this.request<any>('api/auth/login/', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
@@ -62,8 +89,15 @@ class ApiService {
     return data;
   }
 
-  async register(userData: { email: string; username: string; password: string }) {
-    const data = await this.request<any>('auth/register/', {
+  async register(userData: {
+    email: string;
+    username: string;
+    password: string;
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+  }) {
+    const data = await this.request<any>('api/auth/register/', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
@@ -77,17 +111,18 @@ class ApiService {
   }
 
   async getProfile(): Promise<UserProfile> {
-    return this.request<UserProfile>('/api/auth/profile/');
+    return this.request<UserProfile>('api/auth/profile/');
   }
 
-  // ---- Остальные методы (без изменений) ----
-
+  // Tables methods — оставлены с префиксом api/
   async getTables(): Promise<ProgressTable[]> {
     try {
-      const response = await this.request<any>('/api/tables/tables/');
+      const response = await this.request<any>('api/tables/tables/');
+
       if (Array.isArray(response)) return response;
-      if (response?.results && Array.isArray(response.results)) return response.results;
-      if (response?.data && Array.isArray(response.data)) return response.data;
+      if (response && Array.isArray(response.results)) return response.results;
+      if (response && Array.isArray(response.data)) return response.data;
+
       console.warn('Unexpected API response format:', response);
       return [];
     } catch (error) {
@@ -98,7 +133,7 @@ class ApiService {
 
   async getTable(id: string): Promise<ProgressTable | null> {
     try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${id}/`);
+      return await this.request<ProgressTable>(`api/tables/tables/${id}/`);
     } catch (error) {
       console.error('Failed to fetch table:', error);
       return null;
@@ -107,7 +142,7 @@ class ApiService {
 
   async createTable(tableData: { title: string; categories?: Category[]; }): Promise<ProgressTable | null> {
     try {
-      return await this.request<ProgressTable>('/api/tables/tables/', {
+      return await this.request<ProgressTable>('api/tables/tables/', {
         method: 'POST',
         body: JSON.stringify(tableData),
       });
@@ -119,7 +154,7 @@ class ApiService {
 
   async updateTable(id: string, tableData: Partial<ProgressTable>): Promise<ProgressTable | null> {
     try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${id}/`, {
+      return await this.request<ProgressTable>(`api/tables/tables/${id}/`, {
         method: 'PATCH',
         body: JSON.stringify(tableData),
       });
@@ -131,7 +166,7 @@ class ApiService {
 
   async deleteTable(id: string): Promise<boolean> {
     try {
-      await this.request(`/api/tables/tables/${id}/`, { method: 'DELETE' });
+      await this.request(`api/tables/tables/${id}/`, { method: 'DELETE' });
       return true;
     } catch (error) {
       console.error('Failed to delete table:', error);
@@ -141,7 +176,7 @@ class ApiService {
 
   async updateProgress(tableId: string, date: string, data: Record<string, number>): Promise<DailyProgress | null> {
     try {
-      return await this.request<DailyProgress>(`/api/tables/tables/${tableId}/update_progress/`, {
+      return await this.request<DailyProgress>(`api/tables/tables/${tableId}/update_progress/`, {
         method: 'POST',
         body: JSON.stringify({ date, data }),
       });
@@ -153,7 +188,7 @@ class ApiService {
 
   async getChartData(tableId: string, startDate?: string, endDate?: string): Promise<RadarChartData> {
     try {
-      let url = `/api/tables/tables/${tableId}/progress_chart_data/`;
+      let url = `api/tables/tables/${tableId}/progress_chart_data/`;
       const params = new URLSearchParams();
       if (startDate) params.append('start_date', startDate);
       if (endDate) params.append('end_date', endDate);
@@ -167,7 +202,7 @@ class ApiService {
 
   async addCategory(tableId: string, name: string): Promise<ProgressTable | null> {
     try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${tableId}/add_category/`, {
+      return await this.request<ProgressTable>(`api/tables/tables/${tableId}/add_category/`, {
         method: 'POST',
         body: JSON.stringify({ name }),
       });
@@ -179,7 +214,7 @@ class ApiService {
 
   async removeCategory(tableId: string, categoryId: string): Promise<ProgressTable | null> {
     try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${tableId}/remove_category/`, {
+      return await this.request<ProgressTable>(`api/tables/tables/${tableId}/remove_category/`, {
         method: 'POST',
         body: JSON.stringify({ category_id: categoryId }),
       });
@@ -191,7 +226,7 @@ class ApiService {
 
   async renameCategory(tableId: string, categoryId: string, newName: string): Promise<ProgressTable | null> {
     try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${tableId}/rename_category/`, {
+      return await this.request<ProgressTable>(`api/tables/tables/${tableId}/rename_category/`, {
         method: 'POST',
         body: JSON.stringify({ category_id: categoryId, new_name: newName }),
       });
@@ -202,8 +237,11 @@ class ApiService {
   }
 }
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.toString() ||
-  'https://self-development-tracker.onrender.com';
+// Создаём сервис: VITE_API_BASE_URL можно установить как:
+// - https://self-development-tracker.onrender.com  OR
+// - https://self-development-tracker.onrender.com/api
+// buildUrl() будет корректировать двойные слэши.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.toString() || 'https://self-development-tracker.onrender.com';
 
 export const apiService = new ApiService(API_BASE_URL);
+export default apiService;

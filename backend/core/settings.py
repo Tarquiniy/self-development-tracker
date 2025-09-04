@@ -9,16 +9,15 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'fallback-secret-key')
-
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 ALLOWED_HOSTS.extend([
     'self-development-tracker-chi.vercel.app',
     'self-development-tracker-five.vercel.app',
-    '.vercel.app'
+    '.vercel.app',
+    'self-development-tracker.onrender.com',
 ])
-
 
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',
@@ -26,37 +25,22 @@ CSRF_TRUSTED_ORIGINS = [
     'https://self-development-tracker-chi.vercel.app',
     'https://self-development-tracker-five.vercel.app',
     'https://self-development-tracker.onrender.com',
-    'https://oauth.telegram.org',
-    "https://fjqbhcmsqypevfbpzcxj.supabase.co",
 ]
 
-# Для статических файлов
+# Static files
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-]
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
-if not DEBUG:
-    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
-# Настройки Supabase
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')
-
-# Настройки базы данных
-DATABASE_URL = os.getenv('DATABASE_URL')
-
+# Database
 if 'DATABASE_URL' in os.environ:
-    import dj_database_url
     DATABASES = {
         'default': dj_database_url.config(
             default=os.getenv('DATABASE_URL'),
             conn_max_age=600,
             conn_health_checks=True,
-            ssl_require=True
+            ssl_require=True,
         )
     }
 else:
@@ -66,14 +50,6 @@ else:
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
-
-if 'DATABASE_URL' in os.environ:
-    import dj_database_url
-    DATABASES['default'] = dj_database_url.config(
-        conn_max_age=600,
-        conn_health_checks=True,
-        ssl_require=True
-    )
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -87,41 +63,15 @@ INSTALLED_APPS = [
     # Third-party apps
     'rest_framework',
     'rest_framework.authtoken',
-    'allauth',
-    'allauth.account',
-    'allauth.socialaccount',
-    'allauth.socialaccount.providers.telegram',
     'corsheaders',
 
-    # Local apps - используйте правильные имена без backend.
+    # Local apps
     'users',
     'tables',
     'payments',
     'analytics',
     'blog',
 ]
-
-# Social Auth Settings
-AUTHENTICATION_BACKENDS = (
-    'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend',
-)
-
-# Allauth Settings
-SOCIALACCOUNT_PROVIDERS = {
-    'telegram': {
-        'APP': {
-            'client_id': os.getenv('TELEGRAM_BOT_NAME', ''),
-            'secret': os.getenv('TELEGRAM_BOT_TOKEN', ''),
-            'key': ''
-        },
-        'SCOPE': ['basic'],
-        'AUTH_PARAMS': {'auth_type': 'reauthenticate'},
-        'METHOD': 'oauth2',
-    }
-}
-
-SOCIALACCOUNT_ADAPTER = 'users.adapters.CustomSocialAccountAdapter'
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -133,7 +83,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -161,26 +110,16 @@ CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": os.getenv('REDIS_URL', 'redis://localhost:6379/0'),
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        }
+        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
     }
 }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 # Internationalization
@@ -188,10 +127,6 @@ LANGUAGE_CODE = 'ru-ru'
 TIME_ZONE = 'Europe/Moscow'
 USE_I18N = True
 USE_TZ = True
-
-# Static files
-STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -205,7 +140,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20
+    'PAGE_SIZE': 20,
 }
 
 # JWT Settings
@@ -216,38 +151,20 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
 }
 
-# Allauth Settings
+# Allauth (по email+паролю)
 SITE_ID = 1
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'optional'
 
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8300811327:AAFnVMh21kSS7vemrdtdGmnhMjF0npCWNhs')
-TELEGRAM_BOT_ID = os.getenv('TELEGRAM_BOT_ID', '8300811327')
-TELEGRAM_LOGIN_REDIRECT_URL = os.getenv(
-    'TELEGRAM_REDIRECT_URL',
-    'http://localhost:3000/telegram-callback'
-)
-
-# Social Auth Settings
-SOCIAL_AUTH_TELEGRAM_BOT_TOKEN = TELEGRAM_BOT_TOKEN
-
-# CORS Settings
+# CORS
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://fjqbhcmsqypevfbpzcxj.supabase.co",
-    "https://oauth.telegram.org",
-    "https://telegram.org",
-    "https://web.telegram.org",
     "https://self-development-tracker-chi.vercel.app",
     "https://self-development-tracker-five.vercel.app",
-    "https://self-development-tracker.onrender.com",
 ]
-
-SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -258,10 +175,9 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
-    'telegram-auth',
 ]
 
-# Content Security Policy для Telegram
+# CSP — только для email/пароля
 SECURE_CSP = {
     'default-src': ["'self'"],
     'script-src': ["'self'", "'unsafe-inline'"],
@@ -270,14 +186,14 @@ SECURE_CSP = {
     'frame-src': ["'none'"],
     'connect-src': [
         "'self'",
-        "https://self-development-tracker.onrender.com"
+        "https://self-development-tracker.onrender.com",
     ],
 }
 
 # Custom User Model
 AUTH_USER_MODEL = 'users.CustomUser'
 
-# Конфигурация для Render
+# Render settings
 if 'RENDER' in os.environ:
     ALLOWED_HOSTS.append(os.environ.get('RENDER_EXTERNAL_HOSTNAME', ''))
 
@@ -288,4 +204,3 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
-
