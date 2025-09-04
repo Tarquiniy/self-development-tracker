@@ -1,52 +1,62 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import ProtectedRoute from './components/auth/ProtectedRoute';
-import Login from './components/auth/Login';
-import Register from './components/auth/Register';
-import TableEditor from './components/tables/TableEditor';
-import Dashboard from './components/Dashboard';
-import DiagramView from './components/diagram/DiagramView';
-import TelegramCallback from './components/auth/TelegramCallback';
+import React from 'react';
+import { Routes, Route, Navigate, Link } from 'react-router-dom';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
 
-function App() {
+const isAuthed = () => !!localStorage.getItem('accessToken');
+
+const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return isAuthed() ? <>{children}</> : <Navigate to="/login" replace />;
+};
+
+const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="min-h-screen bg-gray-50">
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/telegram-callback" element={<TelegramCallback />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/table/:id"
-              element={
-                <ProtectedRoute>
-                  <TableEditor />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/diagram/:id"
-              element={
-                <ProtectedRoute>
-                  <DiagramView />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </div>
-      </Router>
-    </AuthProvider>
+    <div className="app">
+      <header className="container header">
+        <Link to="/" className="logo">SDT</Link>
+        <nav className="nav">
+          {isAuthed() ? (
+            <>
+              <Link to="/dashboard">Дэшборд</Link>
+              <button
+                className="linklike"
+                onClick={() => {
+                  localStorage.removeItem('accessToken');
+                  localStorage.removeItem('refreshToken');
+                  window.location.href = '/login';
+                }}
+              >
+                Выйти
+              </button>
+            </>
+          ) : (
+            <>
+              <Link to="/login">Войти</Link>
+              <Link to="/register">Регистрация</Link>
+            </>
+          )}
+        </nav>
+      </header>
+
+      <main className="container">
+        <Routes>
+          <Route path="/" element={<Navigate to={isAuthed() ? '/dashboard' : '/login'} replace />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route
+            path="/dashboard"
+            element={
+              <PrivateRoute>
+                <Dashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+    </div>
   );
-}
+};
 
 export default App;
