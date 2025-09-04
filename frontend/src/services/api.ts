@@ -49,7 +49,7 @@ class ApiService {
 
   // Auth
   async login(email: string, password: string) {
-    const data = await this.request<any>('/api/auth/login/', {
+    const data = await this.request<any>('auth/login/', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
@@ -63,7 +63,7 @@ class ApiService {
   }
 
   async register(userData: { email: string; username: string; password: string }) {
-    const data = await this.request<any>('/api/auth/register/', {
+    const data = await this.request<any>('auth/register/', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
