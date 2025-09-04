@@ -1,45 +1,113 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import TelegramLoginWidget from './TelegramLoginWidget';
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+import TelegramLoginWidget from "./TelegramLoginWidget";
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, setUser, setProfile } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       await login(email, password);
-      navigate('/dashboard');
+      navigate("/dashboard");
     } catch (err: any) {
-      setError(err.message || 'Failed to login');
+      setError(err.message || "Не удалось войти");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleTelegramAuth = async (_telegramUser: any) => {
-  try {
-    setLoading(true);
-    setError('');
+  const handleTelegramAuth = async (telegramUser: any) => {
+    try {
+      setLoading(true);
+      setError("");
 
-    // Перенаправляем на dashboard после успешной аутентификации
-    navigate('/dashboard');
-  } catch (error) {
-    console.error('Telegram authentication error:', error);
-    setError('Ошибка аутентификации через Telegram');
-  } finally {
-    setLoading(false);
-  }
-};
+      const response = await fetch(
+        `${
+          import.meta.env.VITE_API_URL || "https://self-development-tracker.onrender.com"
+        }/api/auth/telegram/login/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(telegramUser),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem("accessToken", data.access);
+        localStorage.setItem("refreshToken", data.refresh);
+        
+        // Получаем профиль пользователя
+        const profileResponse = await fetch(
+          `${
+            import.meta.env.VITE_API_URL || "https://self-development-tracker.onrender.com"
+          }/api/auth/profile/`,
+          {
+            headers: {
+              Authorization: `Bearer ${data.access}`,
+            },
+          }
+        );
+        
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          
+          // Полноценно обновляем контекст аутентификации
+          setUser({
+            id: data.user.id,
+            email: data.user.email || "",
+            username: data.user.username,
+            first_name: data.user.first_name || "",
+            last_name: data.user.last_name || "",
+            phone: data.user.phone || "",
+          });
+          
+          setProfile(profileData);
+        } else {
+          // Если не удалось получить профиль, устанавливаем базовые данные пользователя
+          setUser({
+            id: data.user.id,
+            email: data.user.email || "",
+            username: data.user.username,
+            first_name: data.user.first_name || "",
+            last_name: data.user.last_name || "",
+            phone: data.user.phone || "",
+          });
+        }
+        
+        navigate("/dashboard");
+      } else {
+        const errorText = await response.text();
+        console.error("Auth error:", errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: "Неизвестная ошибка сервера" };
+        }
+        
+        setError(errorData.error || "Ошибка входа через Telegram");
+      }
+    } catch (error) {
+      console.error("Telegram auth error:", error);
+      setError("Сетевая ошибка при входе через Telegram");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -50,7 +118,7 @@ const Login: React.FC = () => {
           </h2>
         </div>
 
-        {/* Кнопка Telegram */}
+        {/* 👇 Telegram Login Widget */}
         <TelegramLoginWidget
           botName="self_development_tracker_bot"
           onAuth={handleTelegramAuth}
@@ -65,6 +133,7 @@ const Login: React.FC = () => {
           </div>
         </div>
 
+        {/* 👇 обычный логин */}
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
@@ -98,12 +167,8 @@ const Login: React.FC = () => {
           </div>
 
           <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary"
-            >
-              {loading ? 'Вход...' : 'Войти'}
+            <button type="submit" disabled={loading} className="btn-primary">
+              {loading ? "Вход..." : "Войти"}
             </button>
           </div>
 
