@@ -5,7 +5,10 @@ interface TelegramLoginWidgetProps {
   onAuth: (user: any) => void;
 }
 
-const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({ botName, onAuth }) => {
+const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({
+  botName,
+  onAuth,
+}) => {
   useEffect(() => {
     if (!botName) {
       console.error("❌ botName (username бота) не задан");
@@ -20,7 +23,7 @@ const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({ botName, onAu
 
     container.innerHTML = "";
 
-    // Загружаем виджет только один раз
+    // загружаем виджет только один раз
     if (!document.getElementById("telegram-widget-script")) {
       const script = document.createElement("script");
       script.id = "telegram-widget-script";
