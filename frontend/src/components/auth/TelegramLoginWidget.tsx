@@ -1,14 +1,11 @@
 import React, { useEffect } from "react";
 
 interface TelegramLoginWidgetProps {
-  botName: string; // username бота (например, "self_development_tracker_bot")
+  botName: string; // username бота, например "self_development_tracker_bot"
   onAuth: (user: any) => void;
 }
 
-const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({
-  botName,
-  onAuth,
-}) => {
+const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({ botName, onAuth }) => {
   useEffect(() => {
     if (!botName) {
       console.error("❌ botName (username бота) не задан");
@@ -23,7 +20,7 @@ const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({
 
     container.innerHTML = "";
 
-    // загружаем виджет только один раз
+    // Загружаем виджет только один раз
     if (!document.getElementById("telegram-widget-script")) {
       const script = document.createElement("script");
       script.id = "telegram-widget-script";
@@ -33,10 +30,11 @@ const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({
       script.setAttribute("data-size", "large");
       script.setAttribute("data-request-access", "write");
       script.setAttribute("data-userpic", "false");
-      script.setAttribute("data-onauth", "onTelegramAuth");
+      script.setAttribute("data-onauth", "onTelegramAuth"); // ✅ исправлено
       container.appendChild(script);
     }
 
+    // Глобальная функция, которую вызывает Telegram
     (window as any).onTelegramAuth = (user: any) => {
       console.log("✅ Telegram user data:", user);
       onAuth(user);
