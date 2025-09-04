@@ -35,11 +35,11 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'https://self-development-tracker-chi.vercel.app/',
         changeOrigin: true,
       },
       '/auth': {
-        target: 'http://localhost:8000',
+        target: 'https://self-development-tracker-chi.vercel.app/',
         changeOrigin: true,
       },
     },
