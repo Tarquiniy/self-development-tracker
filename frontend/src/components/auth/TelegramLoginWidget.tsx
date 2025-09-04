@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 
 interface TelegramLoginWidgetProps {
-  botName: "self_development_tracker_bot"; // username бота, например "self_development_tracker_bot"
+  botName: string; // username бота, например "self_development_tracker_bot"
   onAuth: (user: any) => void;
 }
 
