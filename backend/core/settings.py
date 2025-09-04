@@ -86,7 +86,6 @@ INSTALLED_APPS = [
     'allauth.socialaccount',
     'allauth.socialaccount.providers.telegram',
     'corsheaders',
-    'csp',
 
     # Local apps - используйте правильные имена без backend.
     'users',
@@ -129,7 +128,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
-    "csp.middleware.CSPMiddleware",
 ]
 
 ROOT_URLCONF = 'core.urls'
