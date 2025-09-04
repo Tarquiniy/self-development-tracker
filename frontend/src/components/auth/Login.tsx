@@ -8,7 +8,7 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login, setUser, setProfile } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,7 +33,7 @@ const Login: React.FC = () => {
 
       const response = await fetch(
         `${
-          import.meta.env.VITE_API_URL || "https://self-development-tracker.onrender.com"
+          import.meta.env.VITE_API_URL || "http://localhost:8000"
         }/api/auth/telegram/login/`,
         {
           method: "POST",
@@ -48,57 +48,9 @@ const Login: React.FC = () => {
         const data = await response.json();
         localStorage.setItem("accessToken", data.access);
         localStorage.setItem("refreshToken", data.refresh);
-        
-        // Получаем профиль пользователя
-        const profileResponse = await fetch(
-          `${
-            import.meta.env.VITE_API_URL || "https://self-development-tracker.onrender.com"
-          }/api/auth/profile/`,
-          {
-            headers: {
-              Authorization: `Bearer ${data.access}`,
-            },
-          }
-        );
-        
-        if (profileResponse.ok) {
-          const profileData = await profileResponse.json();
-          
-          // Полноценно обновляем контекст аутентификации
-          setUser({
-            id: data.user.id,
-            email: data.user.email || "",
-            username: data.user.username,
-            first_name: data.user.first_name || "",
-            last_name: data.user.last_name || "",
-            phone: data.user.phone || "",
-          });
-          
-          setProfile(profileData);
-        } else {
-          // Если не удалось получить профиль, устанавливаем базовые данные пользователя
-          setUser({
-            id: data.user.id,
-            email: data.user.email || "",
-            username: data.user.username,
-            first_name: data.user.first_name || "",
-            last_name: data.user.last_name || "",
-            phone: data.user.phone || "",
-          });
-        }
-        
         navigate("/dashboard");
       } else {
-        const errorText = await response.text();
-        console.error("Auth error:", errorText);
-        
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: "Неизвестная ошибка сервера" };
-        }
-        
+        const errorData = await response.json().catch(() => ({}));
         setError(errorData.error || "Ошибка входа через Telegram");
       }
     } catch (error) {
@@ -120,7 +72,7 @@ const Login: React.FC = () => {
 
         {/* 👇 Telegram Login Widget */}
         <TelegramLoginWidget
-          botName="self_development_tracker_bot"
+          botName="self_development_tracker_bot" // username бота (без @)
           onAuth={handleTelegramAuth}
         />
 
