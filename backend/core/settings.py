@@ -13,11 +13,17 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'fallback-secret-key')
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+ALLOWED_HOSTS.extend([
+    'self-development-tracker-chi.vercel.app',
+    'self-development-tracker-five.vercel.app',
+    '.vercel.app'
+])
 
 
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'https://self-development-tracker-chi.vercel.app',
     'https://self-development-tracker-five.vercel.app',
     'https://self-development-tracker.onrender.com',
     'https://oauth.telegram.org',
@@ -233,6 +239,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://fjqbhcmsqypevfbpzcxj.supabase.co",
     "https://oauth.telegram.org",
     "https://telegram.org",
+    "https://self-development-tracker-chi.vercel.app",
     "https://self-development-tracker-five.vercel.app",
     "https://self-development-tracker.onrender.com",
 ]
@@ -267,3 +274,12 @@ AUTH_USER_MODEL = 'users.CustomUser'
 # Конфигурация для Render
 if 'RENDER' in os.environ:
     ALLOWED_HOSTS.append(os.environ.get('RENDER_EXTERNAL_HOSTNAME', ''))
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
