@@ -159,37 +159,60 @@ def telegram_login(request):
 
     try:
         data = json.loads(request.body)
-    except Exception:
+        logger.info(f"Telegram login attempt: {data}")
+    except Exception as e:
+        logger.error(f"Error parsing JSON: {e}")
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
+    # Добавьте проверку обязательных полей
+    required_fields = ['id', 'hash', 'auth_date']
+    for field in required_fields:
+        if field not in data:
+            logger.error(f"Missing required field: {field}")
+            return JsonResponse({"error": f"Missing required field: {field}"}, status=400)
+
     if not check_telegram_auth(data):
+        logger.error("Telegram auth validation failed")
         return JsonResponse({"error": "Invalid Telegram auth"}, status=400)
 
     telegram_id = data.get("id")
     username = data.get("username") or f"user{telegram_id}"
 
-    # либо находим, либо создаём пользователя
-    user, created = CustomUser.objects.get_or_create(
-        telegram_id=telegram_id,
-        defaults={
-            "username": username,
-            "registration_method": "telegram",
-            "telegram_username": username,
-            "telegram_data": data,
-        },
-    )
+    try:
+        # либо находим, либо создаём пользователя
+        user, created = CustomUser.objects.get_or_create(
+            telegram_id=telegram_id,
+            defaults={
+                "username": username,
+                "registration_method": "telegram",
+                "telegram_username": username,
+                "telegram_data": data,
+            },
+        )
 
-    # обновляем данные, если уже есть
-    if not created:
-        user.telegram_username = username
-        user.telegram_data = data
-        user.save(update_fields=["telegram_username", "telegram_data"])
+        # обновляем данные, если уже есть
+        if not created:
+            user.telegram_username = username
+            user.telegram_data = data
+            user.save(update_fields=["telegram_username", "telegram_data"])
 
-    refresh = RefreshToken.for_user(user)
+        refresh = RefreshToken.for_user(user)
 
-    return JsonResponse(
-        {
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-        }
-    )
+        logger.info(f"Successful Telegram login for user: {user.username}")
+
+        return JsonResponse(
+            {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "telegram_id": user.telegram_id,
+                }
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error during Telegram login: {e}")
+        return JsonResponse({"error": "Internal server error"}, status=500)

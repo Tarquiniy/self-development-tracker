@@ -239,6 +239,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://fjqbhcmsqypevfbpzcxj.supabase.co",
     "https://oauth.telegram.org",
     "https://telegram.org",
+    "https://web.telegram.org",
     "https://self-development-tracker-chi.vercel.app",
     "https://self-development-tracker-five.vercel.app",
     "https://self-development-tracker.onrender.com",
@@ -262,10 +263,11 @@ CORS_ALLOW_HEADERS = [
 
 # Content Security Policy для Telegram
 SECURE_CSP = {
-    'default-src': ["'self'", "https://telegram.org", "https://oauth.telegram.org"],
-    'script-src': ["'self'", "'unsafe-inline'", "https://telegram.org"],
-    'style-src': ["'self'", "'unsafe-inline'"],
-    'img-src': ["'self'", "data:", "https://telegram.org"],
+    'default-src': ["'self'", "https://telegram.org", "https://oauth.telegram.org", "https://web.telegram.org"],
+    'script-src': ["'self'", "'unsafe-inline'", "https://telegram.org", "https://web.telegram.org"],
+    'style-src': ["'self'", "'unsafe-inline'", "https://telegram.org"],
+    'img-src': ["'self'", "data:", "https://telegram.org", "https://web.telegram.org"],
+    'connect-src': ["'self'", "https://telegram.org", "https://oauth.telegram.org", "https://web.telegram.org"],
 }
 
 # Custom User Model

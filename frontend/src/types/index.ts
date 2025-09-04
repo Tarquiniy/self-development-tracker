@@ -60,4 +60,6 @@ export interface AuthContextType {
   }) => Promise<void>;
   logout: () => void;
   loading: boolean;
+  setUser: (user: User) => void;
+  setProfile: (profile: UserProfile) => void;
 }
