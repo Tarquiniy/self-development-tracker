@@ -1,42 +1,38 @@
-import React, { useEffect } from "react";
+import React, { useEffect } from 'react';
 
 interface TelegramLoginWidgetProps {
-  botName: string; // username бота, например "self_development_tracker_bot"
+  botName: "self_development_tracker_bot"; // username бота, например "self_development_tracker_bot"
   onAuth: (user: any) => void;
 }
 
 const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({ botName, onAuth }) => {
   useEffect(() => {
     if (!botName) {
-      console.error("❌ botName (username бота) не задан");
+      console.error('❌ botName (username бота) не задан');
       return;
     }
 
-    const container = document.getElementById("telegram-button");
+    const container = document.getElementById('telegram-button');
     if (!container) {
-      console.error("❌ Контейнер для Telegram кнопки не найден");
+      console.error('❌ Контейнер для Telegram кнопки не найден');
       return;
     }
 
-    container.innerHTML = "";
+    container.innerHTML = '';
 
-    // Загружаем виджет только один раз
-    if (!document.getElementById("telegram-widget-script")) {
-      const script = document.createElement("script");
-      script.id = "telegram-widget-script";
-      script.src = "https://telegram.org/js/telegram-widget.js?22";
-      script.async = true;
-      script.setAttribute("data-telegram-login", botName);
-      script.setAttribute("data-size", "large");
-      script.setAttribute("data-request-access", "write");
-      script.setAttribute("data-userpic", "false");
-      script.setAttribute("data-onauth", "onTelegramAuth"); // ✅ исправлено
-      container.appendChild(script);
-    }
+    const script = document.createElement('script');
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.async = true;
+    script.setAttribute('data-telegram-login', botName); // username бота
+    script.setAttribute('data-size', 'large');
+    script.setAttribute('data-request-access', 'write');
+    script.setAttribute('data-userpic', 'false');
+    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
 
-    // Глобальная функция, которую вызывает Telegram
+    container.appendChild(script);
+
     (window as any).onTelegramAuth = (user: any) => {
-      console.log("✅ Telegram user data:", user);
+      console.log('✅ Telegram user data:', user);
       onAuth(user);
     };
   }, [botName, onAuth]);
@@ -45,7 +41,7 @@ const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({ botName, onAu
     <div className="flex justify-center mt-4">
       <div
         id="telegram-button"
-        style={{ minHeight: "60px", minWidth: "220px" }}
+        style={{ minHeight: '60px', minWidth: '220px', border: '1px solid #ddd' }}
       ></div>
     </div>
   );
