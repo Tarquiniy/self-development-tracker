@@ -1,4 +1,4 @@
-import type {UserProfile, ProgressTable, DailyProgress, Category, RadarChartData } from '../types';
+import type { UserProfile, ProgressTable, DailyProgress, Category, RadarChartData } from '../types';
 
 class ApiService {
   private baseUrl: string;
@@ -33,7 +33,7 @@ class ApiService {
         const errorData = await response.json();
         errorMessage = errorData.error || errorData.detail || errorMessage;
       } catch {
-        errorMessage = await response.text() || errorMessage;
+        errorMessage = (await response.text()) || errorMessage;
       }
 
       throw new Error(errorMessage);
@@ -48,7 +48,7 @@ class ApiService {
 
   // Auth methods
   async login(email: string, password: string) {
-    const data = await this.request<any>('/api/auth/login/', {
+    const data = await this.request<any>('/auth/login/', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
@@ -69,7 +69,7 @@ class ApiService {
     last_name?: string;
     phone?: string;
   }) {
-    const data = await this.request<any>('/api/auth/register/', {
+    const data = await this.request<any>('/auth/register/', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
@@ -83,13 +83,13 @@ class ApiService {
   }
 
   async getProfile(): Promise<UserProfile> {
-    return this.request<UserProfile>('/api/auth/profile/');
+    return this.request<UserProfile>('/auth/profile/');
   }
 
   // Tables methods
   async getTables(): Promise<ProgressTable[]> {
     try {
-      const response = await this.request<any>('/api/tables/tables/');
+      const response = await this.request<any>('/tables/tables/');
 
       if (Array.isArray(response)) {
         return response;
@@ -109,7 +109,7 @@ class ApiService {
 
   async getTable(id: string): Promise<ProgressTable | null> {
     try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${id}/`);
+      return await this.request<ProgressTable>(`/tables/tables/${id}/`);
     } catch (error) {
       console.error('Failed to fetch table:', error);
       return null;
@@ -121,7 +121,7 @@ class ApiService {
     categories?: Category[];
   }): Promise<ProgressTable | null> {
     try {
-      return await this.request<ProgressTable>('/api/tables/tables/', {
+      return await this.request<ProgressTable>('/tables/tables/', {
         method: 'POST',
         body: JSON.stringify(tableData),
       });
@@ -133,7 +133,7 @@ class ApiService {
 
   async updateTable(id: string, tableData: Partial<ProgressTable>): Promise<ProgressTable | null> {
     try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${id}/`, {
+      return await this.request<ProgressTable>(`/tables/tables/${id}/`, {
         method: 'PATCH',
         body: JSON.stringify(tableData),
       });
@@ -145,7 +145,7 @@ class ApiService {
 
   async deleteTable(id: string): Promise<boolean> {
     try {
-      await this.request(`/api/tables/tables/${id}/`, {
+      await this.request(`/tables/tables/${id}/`, {
         method: 'DELETE',
       });
       return true;
@@ -157,7 +157,7 @@ class ApiService {
 
   async updateProgress(tableId: string, date: string, data: Record<string, number>): Promise<DailyProgress | null> {
     try {
-      return await this.request<DailyProgress>(`/api/tables/tables/${tableId}/update_progress/`, {
+      return await this.request<DailyProgress>(`/tables/tables/${tableId}/update_progress/`, {
         method: 'POST',
         body: JSON.stringify({ date, data }),
       });
@@ -169,7 +169,7 @@ class ApiService {
 
   async getChartData(tableId: string, startDate?: string, endDate?: string): Promise<RadarChartData> {
     try {
-      let url = `/api/tables/tables/${tableId}/progress_chart_data/`;
+      let url = `/tables/tables/${tableId}/progress_chart_data/`;
       const params = new URLSearchParams();
 
       if (startDate) params.append('start_date', startDate);
@@ -188,7 +188,7 @@ class ApiService {
 
   async addCategory(tableId: string, name: string): Promise<ProgressTable | null> {
     try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${tableId}/add_category/`, {
+      return await this.request<ProgressTable>(`/tables/tables/${tableId}/add_category/`, {
         method: 'POST',
         body: JSON.stringify({ name }),
       });
@@ -200,7 +200,7 @@ class ApiService {
 
   async removeCategory(tableId: string, categoryId: string): Promise<ProgressTable | null> {
     try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${tableId}/remove_category/`, {
+      return await this.request<ProgressTable>(`/tables/tables/${tableId}/remove_category/`, {
         method: 'POST',
         body: JSON.stringify({ category_id: categoryId }),
       });
@@ -212,7 +212,7 @@ class ApiService {
 
   async renameCategory(tableId: string, categoryId: string, newName: string): Promise<ProgressTable | null> {
     try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${tableId}/rename_category/`, {
+      return await this.request<ProgressTable>(`/tables/tables/${tableId}/rename_category/`, {
         method: 'POST',
         body: JSON.stringify({ category_id: categoryId, new_name: newName }),
       });
@@ -223,6 +223,7 @@ class ApiService {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://self-development-tracker.onrender.com';
-//const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'https://self-development-tracker.onrender.com/api';
+
 export const apiService = new ApiService(API_BASE_URL);
