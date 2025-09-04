@@ -263,40 +263,12 @@ CORS_ALLOW_HEADERS = [
 
 # Content Security Policy для Telegram
 SECURE_CSP = {
-    "default-src": [
-        "'self'",
-        "https://telegram.org",
-        "https://oauth.telegram.org",
-    ],
-    "script-src": [
-        "'self'",
-        "'unsafe-inline'",
-        "'unsafe-eval'",        # нужно для telegram-widget.js
-        "https://telegram.org",
-        "https://oauth.telegram.org",
-    ],
-    "style-src": [
-        "'self'",
-        "'unsafe-inline'",
-        "https://telegram.org",
-    ],
-    "img-src": [
-        "'self'",
-        "data:",
-        "https://telegram.org",
-        "https://oauth.telegram.org",
-    ],
-    "frame-src": [
-        "'self'",
-        "https://telegram.org",
-        "https://oauth.telegram.org",
-    ],
-    "connect-src": [
-        "'self'",
-        "https://telegram.org",
-        "https://oauth.telegram.org",
-        "https://self-development-tracker.onrender.com",  # ✅ backend API
-    ],
+    'default-src': ["'self'", "https://telegram.org", "https://oauth.telegram.org"],
+    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://telegram.org"],
+    'style-src': ["'self'", "'unsafe-inline'", "https://telegram.org"],
+    'img-src': ["'self'", "data:", "https://telegram.org", "https://oauth.telegram.org"],
+    'frame-src': ["'self'", "https://oauth.telegram.org", "https://telegram.org"],
+    'connect-src': ["'self'", "https://oauth.telegram.org", "https://telegram.org", "https://self-development-tracker.onrender.com"],
 }
 
 # Custom User Model
