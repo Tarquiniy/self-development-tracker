@@ -4,9 +4,15 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model, authenticate
 from .serializers import UserSerializer
+from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+import requests
+import json
 
 User = get_user_model()
-
+SUPABASE_URL = settings.SUPABASE_URL
+SUPABASE_KEY = settings.SUPABASE_KEY
 
 class RegisterView(generics.CreateAPIView):
     """Регистрация нового пользователя"""
@@ -56,3 +62,36 @@ class ProfileView(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+    
+@csrf_exempt
+def register(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            email = data.get("email")
+            password = data.get("password")
+
+            if not email or not password:
+                return JsonResponse({"error": "Email и пароль обязательны"}, status=400)
+
+            # Запрос в Supabase Auth API
+            response = requests.post(
+                f"{SUPABASE_URL}/auth/v1/signup",
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={"email": email, "password": password},
+            )
+
+            if response.status_code >= 400:
+                return JsonResponse(response.json(), status=response.status_code)
+
+            return JsonResponse(response.json(), status=201)
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Метод не разрешён"}, status=405)
+
