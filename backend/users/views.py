@@ -95,3 +95,44 @@ def register(request):
 
     return JsonResponse({"error": "Метод не разрешён"}, status=405)
 
+@csrf_exempt
+def login(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            email = data.get("email")
+            password = data.get("password")
+
+            if not email or not password:
+                return JsonResponse({"error": "Email и пароль обязательны"}, status=400)
+
+            # Авторизация через Supabase
+            response = requests.post(
+                f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={"email": email, "password": password},
+            )
+
+            if response.status_code >= 400:
+                return JsonResponse(response.json(), status=response.status_code)
+
+            result = response.json()
+            # Возвращаем access_token и user
+            return JsonResponse(
+                {
+                    "access_token": result.get("access_token"),
+                    "refresh_token": result.get("refresh_token"),
+                    "user": result.get("user"),
+                    "redirect": "/dashboard",  # 👈 фронт поймает и сделает редирект
+                },
+                status=200,
+            )
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Метод не разрешён"}, status=405)
