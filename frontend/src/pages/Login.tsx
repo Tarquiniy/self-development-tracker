@@ -1,68 +1,59 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { apiService } from '../services/api';
+import React, { useState } from "react";
 
-const Login: React.FC = () => {
-  const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+export default function LoginForm() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
+    setError("");
+
     try {
-      await apiService.login(email, password);
-      navigate('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Ошибка входа');
-    } finally {
-      setLoading(false);
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/auth/login/`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error?.message || JSON.stringify(data.error));
+        return;
+      }
+
+      // сохраняем токен в localStorage
+      localStorage.setItem("access_token", data.access_token);
+
+      // редирект
+      window.location.href = data.redirect || "/dashboard";
+    } catch (err) {
+      setError("Ошибка сети: " + err);
     }
-  }
+  };
 
   return (
-    <section className="auth-card">
-      <h1>Вход</h1>
-      <form onSubmit={handleSubmit} className="form">
-        <label className="field">
-          <span>Email</span>
-          <input
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </label>
-
-        <label className="field">
-          <span>Пароль</span>
-          <input
-            type="password"
-            autoComplete="current-password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </label>
-
-        {error && <div className="error">{error}</div>}
-
-        <button type="submit" disabled={loading}>
-          {loading ? 'Входим…' : 'Войти'}
-        </button>
-      </form>
-
-      <p className="muted">
-        Нет аккаунта? <Link to="/register">Зарегистрируйтесь</Link>
-      </p>
-    </section>
+    <form onSubmit={handleLogin}>
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        required
+      />
+      <input
+        type="password"
+        placeholder="Пароль"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        required
+      />
+      <button type="submit">Войти</button>
+      {error && <p style={{ color: "red" }}>{error}</p>}
+    </form>
   );
-};
-
-export default Login;
+}

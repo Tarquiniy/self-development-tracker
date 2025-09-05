@@ -1,12 +1,22 @@
-import React from 'react';
+import { useEffect, useState } from "react";
 
-const Dashboard: React.FC = () => {
+export default function Dashboard() {
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      window.location.href = "/";
+    } else {
+      // В реальном проекте — запросить данные профиля у Supabase
+      setUser({ email: "demo@example.com" });
+    }
+  }, []);
+
   return (
-    <section className="card">
-      <h1>Добро пожаловать! 👋</h1>
-      <p>Вы успешно вошли. Здесь будет ваш дэшборд.</p>
-    </section>
+    <div>
+      <h1>Добро пожаловать в Dashboard!</h1>
+      {user && <p>Вы вошли как {user.email}</p>}
+    </div>
   );
-};
-
-export default Dashboard;
+}

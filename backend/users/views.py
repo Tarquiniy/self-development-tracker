@@ -106,7 +106,6 @@ def login(request):
             if not email or not password:
                 return JsonResponse({"error": "Email и пароль обязательны"}, status=400)
 
-            # Авторизация через Supabase
             response = requests.post(
                 f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
                 headers={
@@ -117,17 +116,18 @@ def login(request):
                 json={"email": email, "password": password},
             )
 
-            if response.status_code >= 400:
-                return JsonResponse(response.json(), status=response.status_code)
-
             result = response.json()
-            # Возвращаем access_token и user
+
+            if response.status_code != 200:
+                # Проброс ошибки Supabase для дебага
+                return JsonResponse({"error": result}, status=400)
+
             return JsonResponse(
                 {
                     "access_token": result.get("access_token"),
                     "refresh_token": result.get("refresh_token"),
                     "user": result.get("user"),
-                    "redirect": "/dashboard",  # 👈 фронт поймает и сделает редирект
+                    "redirect": "/dashboard",
                 },
                 status=200,
             )
