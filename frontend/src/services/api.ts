@@ -208,7 +208,7 @@ async request<T>(url: string, options: RequestInit = {}): Promise<T> {
 // - https://self-development-tracker.onrender.com  OR
 // - https://self-development-tracker.onrender.com/api
 // buildUrl() будет корректировать двойные слэши.
-const API_BASE_URL = "https://self-development-tracker.onrender.com/";
+const API_BASE_URL = "https://self-development-tracker.onrender.com";
 
 export const apiService = new ApiService(API_BASE_URL);
 export default apiService;
