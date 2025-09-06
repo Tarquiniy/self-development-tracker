@@ -9,31 +9,6 @@ class ApiService {
     this.baseUrl = (baseUrl || '').toString();
   }
 
-  // Собирает URL из base + endpoint без двойных слэшей,
-  // и поправляет случайные /api/api -> /api
-  private buildUrl(endpoint: string) {
-    const base = this.baseUrl.replace(/\s+$/, '');
-    const ep = (endpoint || '').toString();
-
-    // если базовый пустой, берем из env (без изменений если уже установлен)
-    const rawBase =
-      base ||
-      (import.meta.env.VITE_API_BASE_URL ? String(import.meta.env.VITE_API_BASE_URL) : 'https://self-development-tracker.onrender.com');
-
-    // Уберём пробелы
-    const b = rawBase.replace(/\s+/g, '');
-
-    // Собираем с одним слэшем между частями
-    const joined = `${b.replace(/\/+$/, '')}/${ep.replace(/^\/+/, '')}`;
-
-    // Уберём лишние двойные слэши после протокола (https://)
-    const collapsed = joined.replace(/([^:]\/)\/+/g, '$1');
-
-    // Если вдруг получилось /api/api, сводим к /api
-    const fixedApiDup = collapsed.replace(/\/api\/api(\/|$)/g, '/api$1');
-
-    return fixedApiDup;
-  }
 
   private async request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${this.baseUrl}${url}`, {
