@@ -167,6 +167,16 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = True
+
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]
+
 CORS_ALLOW_HEADERS = [
     "accept",
     "accept-encoding",
@@ -180,17 +190,17 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # CSP — только для API и фронта
-SECURE_CSP = {
-    "default-src": ["'self'"],
-    "script-src": ["'self'", "'unsafe-inline'"],
-    "style-src": ["'self'", "'unsafe-inline'"],
-    "img-src": ["'self'", "data:"],
-    "frame-src": ["'none'"],
-    "connect-src": [
-        "'self'",
-        "https://self-development-tracker.onrender.com",
-    ],
-}
+#SECURE_CSP = {
+#    "default-src": ["'self'"],
+#    "script-src": ["'self'", "'unsafe-inline'"],
+#    "style-src": ["'self'", "'unsafe-inline'"],
+#    "img-src": ["'self'", "data:"],
+#    "frame-src": ["'none'"],
+#    "connect-src": [
+#        "'self'",
+#       "https://self-development-tracker.onrender.com",
+#    ],
+#}
 
 # Production security
 if not DEBUG:
