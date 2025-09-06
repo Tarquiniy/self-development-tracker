@@ -76,18 +76,18 @@ class ApiService {
 
   // Auth methods (endpoint строки — без опасений: buildUrl исправит лишние слэши)
   async login(email: string, password: string) {
-    const data = await this.request<any>('api/auth/login/', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
+  const data = await this.request<any>('/api/auth/login/', {
+    method: 'POST',
+    body: JSON.stringify({ username: email, password }),
+  });
 
-    if (data?.access) {
-      localStorage.setItem('accessToken', data.access);
-      if (data.refresh) localStorage.setItem('refreshToken', data.refresh);
-    }
-
-    return data;
+  if (data.access) {
+    localStorage.setItem('accessToken', data.access);
+    localStorage.setItem('refreshToken', data.refresh);
   }
+
+  return data;
+}
 
   async register(userData: {
     email: string;
