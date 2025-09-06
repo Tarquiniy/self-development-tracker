@@ -1,138 +1,98 @@
-from rest_framework import generics, status
+from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import get_user_model, authenticate
-from .serializers import UserSerializer
+from rest_framework import status
+from django.contrib.auth import authenticate
+from django.contrib.auth.hashers import make_password
 from django.conf import settings
-from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
-import requests
-import json
+from users.models import CustomUser
+from rest_framework_simplejwt.tokens import RefreshToken
+from supabase import create_client, Client
 
-User = get_user_model()
-SUPABASE_URL = settings.SUPABASE_URL
-SUPABASE_KEY = settings.SUPABASE_KEY
+supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 
-class RegisterView(generics.CreateAPIView):
-    """Регистрация нового пользователя"""
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [AllowAny]
 
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+class RegisterView(APIView):
+    def post(self, request):
+        email = request.data.get("email")
+        password = request.data.get("password")
+        username = request.data.get("username", email.split("@")[0])
 
+        if not email or not password:
+            return Response({"error": "Email и пароль обязательны"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if CustomUser.objects.filter(email=email).exists():
+            return Response({"error": "Пользователь с таким email уже существует"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Создаём пользователя в Django
+        user = CustomUser.objects.create(
+            email=email,
+            username=username,
+            password=make_password(password),
+        )
+
+        # Создаём пользователя в Supabase
+        try:
+            result = supabase.auth.sign_up({
+                "email": email,
+                "password": password
+            })
+            if result.get("error"):
+                return Response({"error": str(result["error"])}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": f"Supabase error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # JWT токены
         refresh = RefreshToken.for_user(user)
+
         return Response({
-            "user": UserSerializer(user).data,
-            "refresh": str(refresh),
-            "access": str(refresh.access_token),
+            "message": "Регистрация прошла успешно",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+            },
+            "tokens": {
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+            }
         }, status=status.HTTP_201_CREATED)
 
 
-class LoginView(generics.GenericAPIView):
-    """Вход по email и паролю"""
-    serializer_class = UserSerializer
-    permission_classes = [AllowAny]
-
-    def post(self, request, *args, **kwargs):
+class LoginView(APIView):
+    def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
 
-        user = authenticate(request, email=email, password=password)
+        if not email or not password:
+            return Response({"error": "Email и пароль обязательны"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Сначала проверим в Django
+        user = authenticate(request, username=email, password=password)
         if not user:
-            return Response({"error": "Неверный email или пароль"},
-                            status=status.HTTP_401_UNAUTHORIZED)
+            return Response({"error": "Неверный email или пароль"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Проверим в Supabase (на всякий случай синхронизируем)
+        try:
+            result = supabase.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+            if result.get("error"):
+                return Response({"error": "Ошибка входа в Supabase"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": f"Supabase error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         refresh = RefreshToken.for_user(user)
+
         return Response({
-            "user": UserSerializer(user).data,
-            "refresh": str(refresh),
-            "access": str(refresh.access_token),
-        })
-
-
-class ProfileView(generics.RetrieveAPIView):
-    """Получение профиля авторизованного пользователя"""
-    serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self):
-        return self.request.user
-    
-@csrf_exempt
-def register(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            email = data.get("email")
-            password = data.get("password")
-
-            if not email or not password:
-                return JsonResponse({"error": "Email и пароль обязательны"}, status=400)
-
-            # Запрос в Supabase Auth API
-            response = requests.post(
-                f"{SUPABASE_URL}/auth/v1/signup",
-                headers={
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": f"Bearer {SUPABASE_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={"email": email, "password": password},
-            )
-
-            if response.status_code >= 400:
-                return JsonResponse(response.json(), status=response.status_code)
-
-            return JsonResponse(response.json(), status=201)
-
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
-
-    return JsonResponse({"error": "Метод не разрешён"}, status=405)
-
-@csrf_exempt
-def login(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            email = data.get("email")
-            password = data.get("password")
-
-            if not email or not password:
-                return JsonResponse({"error": "Email и пароль обязательны"}, status=400)
-
-            response = requests.post(
-                f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
-                headers={
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": f"Bearer {SUPABASE_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={"email": email, "password": password},
-            )
-
-            result = response.json()
-
-            if response.status_code != 200:
-                # Проброс ошибки Supabase для дебага
-                return JsonResponse({"error": result}, status=400)
-
-            return JsonResponse(
-                {
-                    "access_token": result.get("access_token"),
-                    "refresh_token": result.get("refresh_token"),
-                    "user": result.get("user"),
-                    "redirect": "/dashboard",
-                },
-                status=200,
-            )
-
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
-
-    return JsonResponse({"error": "Метод не разрешён"}, status=405)
+            "message": "Успешный вход",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+            },
+            "tokens": {
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+            }
+        }, status=status.HTTP_200_OK)
