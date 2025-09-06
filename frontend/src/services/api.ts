@@ -78,7 +78,7 @@ class ApiService {
   async login(email: string, password: string) {
   const data = await this.request<any>('/api/auth/login/', {
     method: 'POST',
-    body: JSON.stringify({ username: email, password }),
+    body: JSON.stringify({ email, password }),
   });
 
   if (data.access) {
@@ -88,6 +88,7 @@ class ApiService {
 
   return data;
 }
+
 
   async register(userData: {
     email: string;
