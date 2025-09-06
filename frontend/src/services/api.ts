@@ -2,7 +2,7 @@
 import type {UserProfile, ProgressTable, DailyProgress, Category, RadarChartData } from '../types';
 
 class ApiService {
-  private baseUrl: string;
+    private baseUrl = "https://self-development-tracker.onrender.com";
 
   constructor(baseUrl: string) {
     // нормализуем базовый URL сразу при создании
@@ -10,14 +10,14 @@ class ApiService {
   }
 
 
-  private async request<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${this.baseUrl}${url}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: localStorage.getItem('accessToken')
-        ? `Bearer ${localStorage.getItem('accessToken')}`
-        : '',
-    },
+async request<T>(url: string, options: RequestInit = {}): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${url.startsWith("/") ? "" : "/"}${url}`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: localStorage.getItem("accessToken")
+          ? `Bearer ${localStorage.getItem("accessToken")}`
+          : "",
+      },
     ...options,
   });
 
@@ -208,7 +208,7 @@ class ApiService {
 // - https://self-development-tracker.onrender.com  OR
 // - https://self-development-tracker.onrender.com/api
 // buildUrl() будет корректировать двойные слэши.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.toString() || 'https://self-development-tracker.onrender.com';
+const API_BASE_URL = "https://self-development-tracker.onrender.com/";
 
 export const apiService = new ApiService(API_BASE_URL);
 export default apiService;
