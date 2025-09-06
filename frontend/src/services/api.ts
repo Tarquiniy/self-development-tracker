@@ -35,44 +35,35 @@ class ApiService {
     return fixedApiDup;
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = this.buildUrl(endpoint);
-    const token = localStorage.getItem('accessToken');
-
-    const headers: Record<string, string> = {
+  private async request<T>(url: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${this.baseUrl}${url}`, {
+    headers: {
       'Content-Type': 'application/json',
-    };
+      Authorization: localStorage.getItem('accessToken')
+        ? `Bearer ${localStorage.getItem('accessToken')}`
+        : '',
+    },
+    ...options,
+  });
 
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const config: RequestInit = {
-      ...options,
-      headers: { ...headers, ...((options.headers as Record<string,string>) || {}) } as HeadersInit,
-    };
-
-    const response = await fetch(url, config);
-
-    if (!response.ok) {
-      let errorMessage = 'Request failed';
-
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.error || errorData.detail || errorMessage;
-      } catch {
-        errorMessage = (await response.text()) || errorMessage;
-      }
-
-      throw new Error(errorMessage);
-    }
-
+  if (!response.ok) {
+    let errorDetail: any;
     try {
-      return await response.json();
+      errorDetail = await response.json();
     } catch {
-      return null as T;
+      errorDetail = await response.text();
     }
+    console.error("API error:", errorDetail);
+    throw new Error(
+      typeof errorDetail === "string"
+        ? errorDetail
+        : JSON.stringify(errorDetail)
+    );
   }
+
+  return response.json();
+}
+
 
   // Auth methods (endpoint строки — без опасений: buildUrl исправит лишние слэши)
   async login(email: string, password: string) {
