@@ -12,15 +12,21 @@ SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key")
 
 DEBUG = os.getenv("DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
-ALLOWED_HOSTS.extend([
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+
+#LLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
+ALLOWED_HOSTS = [
     "self-development-tracker-chi.vercel.app",
     "self-development-tracker-five.vercel.app",
     ".vercel.app",
     "self-development-tracker.onrender.com",
     "localhost",
     "127.0.0.1",
-])
+    "https://sdtracker.onrender.com"
+]
+
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
@@ -29,6 +35,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://self-development-tracker-five.vercel.app",
     "https://self-development-tracker.onrender.com",
     "https://fjqbhcmsqypevfbpzcxj.supabase.co",
+    "https://sdtracker.onrender.com"
 ]
 
 # Static files
@@ -165,10 +172,10 @@ CORS_ALLOWED_ORIGINS = [
     "https://self-development-tracker-chi.vercel.app",
     "https://self-development-tracker-five.vercel.app",
     "https://self-development-tracker.onrender.com",
-    "https://self-development-tracker.onrender.com/api/auth/register/"
+    "https://sdtracker.onrender.com"
 ]
 
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_CREDENTIALS = True 
 CORS_ALLOW_ALL_ORIGINS = False  # Изменено на False для безопасности
 
 CORS_ALLOW_METHODS = [
@@ -203,3 +210,4 @@ if not DEBUG:
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+

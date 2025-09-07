@@ -6,9 +6,98 @@ from users.models import CustomUser, UserProfile
 from rest_framework_simplejwt.tokens import RefreshToken
 from supabase import create_client, Client
 import logging
+from .serializers import UserProfileSerializer
+from django.contrib.auth import get_user_model
+from rest_framework.permissions import IsAuthenticated
 
 logger = logging.getLogger(__name__)
 supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+
+User = get_user_model()
+
+class ProfileView(APIView):
+    """
+    Представление для получения и обновления профиля пользователя
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """
+        Получить профиль текущего пользователя
+        """
+        try:
+            user = request.user
+            profile, created = UserProfile.objects.get_or_create(user=user)
+            serializer = UserProfileSerializer({
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'username': user.username,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'phone': user.phone,
+                },
+                'subscription_active': profile.subscription_active,
+                'subscription_expires': profile.subscription_expires,
+                'tables_limit': profile.tables_limit
+            })
+            return Response(serializer.data)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request):
+        """
+        Обновить профиль пользователя
+        """
+        try:
+            user = request.user
+            profile = UserProfile.objects.get(user=user)
+            
+            # Обновление данных пользователя
+            if 'first_name' in request.data:
+                user.first_name = request.data['first_name']
+            if 'last_name' in request.data:
+                user.last_name = request.data['last_name']
+            if 'phone' in request.data:
+                user.phone = request.data['phone']
+            user.save()
+            
+            # Обновление данных профиля
+            if 'subscription_active' in request.data:
+                profile.subscription_active = request.data['subscription_active']
+            if 'subscription_expires' in request.data:
+                profile.subscription_expires = request.data['subscription_expires']
+            if 'tables_limit' in request.data:
+                profile.tables_limit = request.data['tables_limit']
+            profile.save()
+            
+            serializer = UserProfileSerializer({
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'username': user.username,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'phone': user.phone,
+                },
+                'subscription_active': profile.subscription_active,
+                'subscription_expires': profile.subscription_expires,
+                'tables_limit': profile.tables_limit
+            })
+            return Response(serializer.data)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {'error': 'Profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class RegisterView(APIView):
     def post(self, request):
