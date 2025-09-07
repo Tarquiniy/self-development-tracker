@@ -165,6 +165,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://self-development-tracker-chi.vercel.app",
     "https://self-development-tracker-five.vercel.app",
     "https://self-development-tracker.onrender.com",
+    "https://self-development-tracker.onrender.com/api/auth/register/"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
