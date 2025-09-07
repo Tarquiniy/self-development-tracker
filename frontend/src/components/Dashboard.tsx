@@ -22,8 +22,7 @@ const Dashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       const tablesData = await apiService.getTables();
-      
-      // Убедимся, что tablesData - массив
+
       if (Array.isArray(tablesData)) {
         setTables(tablesData);
       } else {
@@ -67,13 +66,8 @@ const Dashboard: React.FC = () => {
 
     try {
       setError(null);
-      const success = await apiService.deleteTable(id);
-      
-      if (success) {
-        setTables(tables.filter(table => table.id !== id));
-      } else {
-        setError('Не удалось удалить таблицу');
-      }
+      await apiService.deleteTable(id);
+      setTables(tables.filter(table => table.id !== id));
     } catch (error: any) {
       console.error('Failed to delete table:', error);
       setError(error.message || 'Ошибка при удалении таблицы');
@@ -89,16 +83,16 @@ const Dashboard: React.FC = () => {
 
   const calculateTableProgress = (table: ProgressTable) => {
     if (!table.progress_entries || !table.progress_entries.length) return 0;
-    
+
     const today = new Date().toISOString().split('T')[0];
     const todayProgress = table.progress_entries.find(entry => entry.date === today);
-    
+
     if (!todayProgress) return 0;
-    
+
     const values = Object.values(todayProgress.data);
     const total = values.reduce((sum: number, val: any) => sum + val, 0);
     const maxPossible = values.length * 99;
-    
+
     return Math.round((total / maxPossible) * 100);
   };
 
@@ -132,14 +126,14 @@ const Dashboard: React.FC = () => {
               )}
             </p>
           </div>
-          
+
           <div className="text-right">
             <div className="flex items-center justify-end mb-2">
               <span className="text-2xl font-bold mr-2">{tablesUsed}</span>
               <span className="opacity-90">/ {tablesLimit}</span>
             </div>
             <div className="w-32 h-3 bg-white bg-opacity-20 rounded-full">
-              <div 
+              <div
                 className="h-full bg-white rounded-full transition-all duration-300"
                 style={{ width: `${(tablesUsed / tablesLimit) * 100}%` }}
               />
@@ -176,7 +170,7 @@ const Dashboard: React.FC = () => {
       {!canCreateMoreTables && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
           <p className="text-yellow-800">
-            {profile?.subscription_active 
+            {profile?.subscription_active
               ? 'Достигнут лимит таблиц. Рассмотрите возможность удаления старых таблиц.'
               : 'Достигнут лимит таблиц для бесплатного аккаунта. Перейдите на премиум для создания большего количества таблиц.'
             }
@@ -199,20 +193,20 @@ const Dashboard: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {tables.map((table) => {
             const progress = calculateTableProgress(table);
-            
+
             return (
               <div key={table.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
                 {/* Индикатор прогресса */}
                 <div className="h-2 bg-gray-200 rounded-t-lg">
-                  <div 
+                  <div
                     className={`h-full rounded-t-lg ${getProgressColor(progress)}`}
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                
+
                 <div className="p-6">
                   <h3 className="text-lg font-medium text-gray-900 mb-2">{table.title}</h3>
-                  
+
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-sm text-gray-600">
                       {table.categories?.length || 0} категорий

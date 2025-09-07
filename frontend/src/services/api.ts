@@ -82,8 +82,8 @@ class ApiService {
   }
 
   async deleteTable(id: string): Promise<void> {
-    await this.request(`/api/tables/tables/${id}/`, { method: 'DELETE' });
-  }
+  await this.request(`/api/tables/tables/${id}/`, { method: 'DELETE' });
+}
 
   async updateProgress(tableId: string, date: string, data: Record<string, number>): Promise<DailyProgress> {
     return this.request<DailyProgress>(`/api/tables/tables/${tableId}/update_progress/`, {
