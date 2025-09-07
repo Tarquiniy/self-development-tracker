@@ -18,6 +18,8 @@ ALLOWED_HOSTS.extend([
     "self-development-tracker-five.vercel.app",
     ".vercel.app",
     "self-development-tracker.onrender.com",
+    "localhost",
+    "127.0.0.1",
 ])
 
 CSRF_TRUSTED_ORIGINS = [
@@ -27,6 +29,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://self-development-tracker-five.vercel.app",
     "https://self-development-tracker.onrender.com",
     "https://fjqbhcmsqypevfbpzcxj.supabase.co",
+    "https://self-development-tracker-*.vercel.app",  # Паттерн для всех Vercel доменов
 ]
 
 # Static files
@@ -163,6 +166,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://self-development-tracker-chi.vercel.app",
     "https://self-development-tracker-five.vercel.app",
     "https://self-development-tracker.onrender.com",
+    "https://self-development-tracker-*.vercel.app",  # Паттерн для всех Vercel доменов
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -178,15 +182,15 @@ CORS_ALLOW_METHODS = [
 ]
 
 CORS_ALLOW_HEADERS = [
-    "accept",
-    "accept-encoding",
-    "authorization",
-    "content-type",
-    "dnt",
-    "origin",
-    "user-agent",
-    "x-csrftoken",
-    "x-requested-with",
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
 ]
 
 # CSP — только для API и фронта
