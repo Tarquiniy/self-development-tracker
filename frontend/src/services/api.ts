@@ -8,24 +8,38 @@ class ApiService {
   }
 
   async request<T>(url: string, options: RequestInit = {}): Promise<T> {
-    const token = localStorage.getItem("accessToken");
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
+  const token = localStorage.getItem("accessToken");
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 
+  try {
     const response = await fetch(`${this.baseUrl}${url}`, {
       headers,
       ...options,
+      mode: 'cors', // Явно указываем режим CORS
+      credentials: 'include', // Включаем передачу куки
     });
 
     if (!response.ok) {
+      // Проверяем, является ли ошибка CORS ошибкой
+      if (response.status === 0) {
+        throw new Error('CORS error: Unable to make request to server');
+      }
+      
       const error = await response.text();
       throw new Error(error || `HTTP error! status: ${response.status}`);
     }
 
     return response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      throw new Error('Network error: Unable to connect to server. Please check your internet connection and try again.');
+    }
+    throw error;
   }
+}
 
   async login(email: string, password: string) {
     return this.request<any>('/api/auth/login/', {
