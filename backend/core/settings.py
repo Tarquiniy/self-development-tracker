@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key-2025-change-in-production")
 
