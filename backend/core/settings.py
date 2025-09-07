@@ -14,32 +14,32 @@ DEBUG = os.getenv("DEBUG", "False") == "True"
 
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 
-ALLOWED_HOSTS = [
-    "self-development-tracker-chi.vercel.app",
-    "self-development-tracker-five.vercel.app",
-    ".vercel.app",
-    "self-development-tracker.onrender.com",
-    "sdtracker.onrender.com",
+
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") + [
     "localhost",
     "127.0.0.1",
-    "https://self-development-tracker-mu.vercel.app",
-    "https://sdtracker.onrender.com"
 ]
 
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://self-development-tracker-chi.vercel.app",
-    "https://self-development-tracker-five.vercel.app",
-    "https://self-development-tracker.onrender.com",
-    "https://sdtracker.onrender.com",
-    "https://fjqbhcmsqypevfbpzcxj.supabase.co",
-    "https://self-development-tracker-mu.vercel.app",
-    "https://sdtracker.onrender.com"
+    "https://*.vercel.app",
+    "https://*.onrender.com",
+    "https://*.supabase.co",
 ]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://*.vercel.app",
+    "https://*.onrender.com",
+    "https://*.supabase.co",
+]
+
 
 # Static files
 STATIC_URL = "/static/"

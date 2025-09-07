@@ -35,9 +35,10 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'https://sdtracker.onrender.com',
+        target: 'https://self-development-tracker.onrender.com',
         changeOrigin: true,
         secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
       },
     },
   },
@@ -52,8 +53,6 @@ export default defineConfig({
     }
   },
   define: {
-    'process.env': {
-      VITE_API_BASE_URL: JSON.stringify(process.env.VITE_API_BASE_URL),
-    }
+    'process.env': {}
   },
 })
