@@ -7,6 +7,7 @@ class CustomUser(AbstractUser):
     phone = models.CharField(max_length=15, blank=True, null=True)
     email_verified = models.BooleanField(default=False)
     phone_verified = models.BooleanField(default=False)
+    supabase_uid = models.CharField(max_length=255, blank=True, null=True)
 
     # Analytics fields
     registration_method = models.CharField(max_length=20, default='email')

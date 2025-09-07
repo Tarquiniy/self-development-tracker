@@ -40,9 +40,9 @@ async request<T>(url: string, options: RequestInit = {}): Promise<T> {
 }
 
 
-  // Auth methods (endpoint строки — без опасений: buildUrl исправит лишние слэши)
-  async login(email: string, password: string) {
-  const data = await this.request<any>('/api/auth/login/', {
+
+async login(email: string, password: string) {
+  const data = await this.request<any>('api/auth/login/', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
@@ -55,27 +55,33 @@ async request<T>(url: string, options: RequestInit = {}): Promise<T> {
   return data;
 }
 
+async register(userData: {
+  email: string;
+  password: string;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+}) {
+  const data = await this.request<any>('api/auth/register/', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: userData.email,
+      password: userData.password,
+      username: userData.username || userData.email.split('@')[0],
+      first_name: userData.first_name,
+      last_name: userData.last_name,
+      phone: userData.phone
+    }),
+  });
 
-  async register(userData: {
-    email: string;
-    username: string;
-    password: string;
-    first_name?: string;
-    last_name?: string;
-    phone?: string;
-  }) {
-    const data = await this.request<any>('api/auth/register/', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    });
-
-    if (data?.access) {
-      localStorage.setItem('accessToken', data.access);
-      if (data.refresh) localStorage.setItem('refreshToken', data.refresh);
-    }
-
-    return data;
+  if (data.access) {
+    localStorage.setItem('accessToken', data.access);
+    localStorage.setItem('refreshToken', data.refresh);
   }
+
+  return data;
+}
 
   async getProfile(): Promise<UserProfile> {
     return this.request<UserProfile>('api/auth/profile/');
