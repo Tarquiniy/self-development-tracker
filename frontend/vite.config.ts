@@ -43,16 +43,7 @@ export default defineConfig({
     },
   },
   build: {
-    sourcemap: false,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-        }
-      }
-    }
-  },
-  define: {
-    'process.env': {}
-  },
+    outDir: '../backend/staticfiles',  // Путь куда собирается статика
+    emptyOutDir: true,
+  }
 })

@@ -1,14 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React + TS</title>
-    <script type="module" crossorigin src="/assets/index-Bo7S-4Bg.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/vendor-gH-7aFTg.js">
-    <link rel="modulepreload" crossorigin href="/assets/telegram-C9h1pTlt.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-CZ9rCWbo.css">
+    <title>Self Development Tracker</title>
+
+    <!-- CSP только для фронта: разрешаем fetch на backend -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self';
+                   connect-src 'self' https://self-development-tracker.onrender.com;
+                   img-src 'self' data:;
+                   style-src 'self' 'unsafe-inline';
+                   script-src 'self' 'unsafe-inline';
+                   frame-src 'none'">
+    <script type="module" crossorigin src="/assets/index-D-UuoDji.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BDX4oamg.css">
   <link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
   <body>
     <div id="root"></div>
