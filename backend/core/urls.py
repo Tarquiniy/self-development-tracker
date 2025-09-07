@@ -1,12 +1,16 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.views.generic import TemplateView
+from .views import ReactAppView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/auth/", include("users.urls")),  # Все пути аутентификации теперь здесь
+    path("api/auth/", include("users.urls")),
     path("api/tables/", include("tables.urls")),
     path("api/payments/", include("payments.urls")),
     path("api/analytics/", include("analytics.urls")),
     path("api/blog/", include("blog.urls")),
-    # Удаляем дублирующиеся пути для регистрации и входа
+    
+    # Serve React app for all other routes
+    re_path(r'^.*', ReactAppView.as_view(), name='react-app'),
 ]

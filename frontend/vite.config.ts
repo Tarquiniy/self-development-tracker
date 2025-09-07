@@ -35,12 +35,9 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'https://self-development-tracker-chi.vercel.app/',
+        target: 'https://sdtracker.onrender.com',
         changeOrigin: true,
-      },
-      '/auth': {
-        target: 'https://self-development-tracker-chi.vercel.app/',
-        changeOrigin: true,
+        secure: false,
       },
     },
   },
