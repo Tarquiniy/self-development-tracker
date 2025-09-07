@@ -22,6 +22,7 @@ ALLOWED_HOSTS = [
     "self-development-tracker.onrender.com",
     "localhost",
     "127.0.0.1",
+    "https://self-development-tracker-mu.vercel.app"
     "https://sdtracker.onrender.com"
 ]
 
@@ -35,6 +36,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://self-development-tracker-five.vercel.app",
     "https://self-development-tracker.onrender.com",
     "https://fjqbhcmsqypevfbpzcxj.supabase.co",
+    "https://self-development-tracker-mu.vercel.app"
     "https://sdtracker.onrender.com"
 ]
 
@@ -94,6 +96,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "https://self-development-tracker-mu.vercel.app"
 ]
 
 ROOT_URLCONF = "core.urls"
@@ -173,6 +176,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://self-development-tracker-five.vercel.app",
     "https://self-development-tracker.onrender.com",
     "https://sdtracker.onrender.com"
+    "https://self-development-tracker-mu.vercel.app"
 ]
 
 CORS_ALLOW_CREDENTIALS = True 
