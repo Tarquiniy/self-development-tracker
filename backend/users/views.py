@@ -8,8 +8,8 @@ from users.models import CustomUser
 from rest_framework_simplejwt.tokens import RefreshToken
 from supabase import create_client, Client
 
-supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
-
+# Убрали глобальную инициализацию Supabase
+# supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 
 class RegisterView(APIView):
     def post(self, request):
@@ -30,15 +30,25 @@ class RegisterView(APIView):
             password=make_password(password),
         )
 
+        # Инициализируем Supabase здесь, внутри метода
+        supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+
         # Создаём пользователя в Supabase
         try:
             result = supabase.auth.sign_up({
                 "email": email,
                 "password": password
             })
-            if result.get("error"):
-                return Response({"error": str(result["error"])}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Проверяем наличие ошибки в ответе
+            if hasattr(result, 'error') and result.error:
+                # Удаляем пользователя из Django если ошибка в Supabase
+                user.delete()
+                return Response({"error": str(result.error)}, status=status.HTTP_400_BAD_REQUEST)
+                
         except Exception as e:
+            # Удаляем пользователя из Django если исключение
+            user.delete()
             return Response({"error": f"Supabase error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # JWT токены
@@ -71,14 +81,19 @@ class LoginView(APIView):
         if not user:
             return Response({"error": "Неверный email или пароль"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Проверим в Supabase (на всякий случай синхронизируем)
+        # Инициализируем Supabase здесь
+        supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+
+        # Проверим в Supabase
         try:
             result = supabase.auth.sign_in_with_password({
                 "email": email,
                 "password": password
             })
-            if result.get("error"):
+            
+            if hasattr(result, 'error') and result.error:
                 return Response({"error": "Ошибка входа в Supabase"}, status=status.HTTP_400_BAD_REQUEST)
+                
         except Exception as e:
             return Response({"error": f"Supabase error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
