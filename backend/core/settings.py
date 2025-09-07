@@ -8,22 +8,24 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key")
+SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key-2025-change-in-production")
 
 DEBUG = os.getenv("DEBUG", "False") == "True"
-
-RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
-
 
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") + [
     "localhost",
     "127.0.0.1",
+    "self-development-tracker.onrender.com",
+    "sdtracker.vercel.app",
+    ".vercel.app",
+    ".onrender.com"
 ]
 
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
+# CSRF и CORS настройки
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -40,30 +42,23 @@ CORS_ALLOWED_ORIGINS = [
     "https://*.supabase.co",
 ]
 
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = False
 
 # Static files
 STATIC_URL = "/static/"
-STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # Database
-if "DATABASE_URL" in os.environ:
-    DATABASES = {
-        "default": dj_database_url.config(
-            default=os.getenv("DATABASE_URL"),
-            conn_max_age=600,
-            conn_health_checks=True,
-            ssl_require=True,
-        )
-    }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
+DATABASES = {
+    "default": dj_database_url.config(
+        default=os.getenv("DATABASE_URL", "sqlite:///db.sqlite3"),
+        conn_max_age=600,
+        conn_health_checks=True,
+        ssl_require=not DEBUG,
+    )
+}
 
 # Installed apps
 INSTALLED_APPS = [
@@ -166,42 +161,6 @@ SIMPLE_JWT = {
 
 # Custom User
 AUTH_USER_MODEL = "users.CustomUser"
-
-# CORS
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://fjqbhcmsqypevfbpzcxj.supabase.co",
-    "https://self-development-tracker-chi.vercel.app",
-    "https://self-development-tracker-five.vercel.app",
-    "https://self-development-tracker.onrender.com",
-    "https://sdtracker.onrender.com",
-    "https://self-development-tracker-mu.vercel.app"
-]
-
-CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = False
-
-CORS_ALLOW_METHODS = [
-    "DELETE",
-    "GET",
-    "OPTIONS",
-    "PATCH",
-    "POST",
-    "PUT",
-]
-
-CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-]
 
 # Production security
 if not DEBUG:

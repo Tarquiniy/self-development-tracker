@@ -1,7 +1,6 @@
 from django.contrib import admin
-from django.urls import path, include, re_path
+from django.urls import path, include
 from django.views.generic import TemplateView
-from .views import ReactAppView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -12,5 +11,5 @@ urlpatterns = [
     path("api/blog/", include("blog.urls")),
     
     # Serve React app for all other routes
-    re_path(r'^.*', ReactAppView.as_view(), name='react-app'),
+    path('', TemplateView.as_view(template_name='index.html')),
 ]

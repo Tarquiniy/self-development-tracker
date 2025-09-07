@@ -1,55 +1,37 @@
-// frontend/src/services/api.ts
 import type {UserProfile, ProgressTable, DailyProgress, Category, RadarChartData } from '../types';
 
 class ApiService {
   private baseUrl: string;
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || import.meta.env.VITE_API_BASE_URL || "https://sdtracker.onrender.com";
-    
-    // Нормализуем URL (убираем конечный слэш)
-    this.baseUrl = this.baseUrl.replace(/\/$/, "");
+    this.baseUrl = baseUrl || "https://sdtracker.onrender.com";
   }
 
   async request<T>(url: string, options: RequestInit = {}): Promise<T> {
     const token = localStorage.getItem("accessToken");
-    
-    // Создаем объект Headers для правильной работы с заголовками :cite[2]:cite[6]
-    const headers = new Headers(options.headers);
-    
-    if (token) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
-    
-    // Устанавливаем Content-Type по умолчанию
-    if (!headers.has("Content-Type")) {
-      headers.set("Content-Type", "application/json");
-    }
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
 
     const response = await fetch(`${this.baseUrl}${url}`, {
+      headers,
       ...options,
-      headers, // Используем объект Headers
     });
 
     if (!response.ok) {
-      // Обработка ошибок
+      const error = await response.text();
+      throw new Error(error || `HTTP error! status: ${response.status}`);
     }
 
     return response.json();
   }
 
   async login(email: string, password: string) {
-    const data = await this.request<any>('/api/auth/login/', {
+    return this.request<any>('/api/auth/login/', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-
-    if (data.access) {
-      localStorage.setItem('accessToken', data.access);
-      localStorage.setItem('refreshToken', data.refresh);
-    }
-
-    return data;
   }
 
   async register(userData: {
@@ -60,7 +42,7 @@ class ApiService {
     last_name?: string;
     phone?: string;
   }) {
-    const data = await this.request<any>('/api/auth/register/', {
+    return this.request<any>('/api/auth/register/', {
       method: 'POST',
       body: JSON.stringify({
         email: userData.email,
@@ -71,13 +53,6 @@ class ApiService {
         phone: userData.phone
       }),
     });
-
-    if (data.access) {
-      localStorage.setItem('accessToken', data.access);
-      localStorage.setItem('refreshToken', data.refresh);
-    }
-
-    return data;
   }
 
   async getProfile(): Promise<UserProfile> {
@@ -85,120 +60,69 @@ class ApiService {
   }
 
   async getTables(): Promise<ProgressTable[]> {
-    try {
-      const response = await this.request<any>('/api/tables/tables/');
-      return Array.isArray(response) ? response : [];
-    } catch (error) {
-      console.error('Failed to fetch tables:', error);
-      return [];
-    }
+    return this.request<ProgressTable[]>('/api/tables/tables/');
   }
 
-  async getTable(id: string): Promise<ProgressTable | null> {
-    try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${id}/`);
-    } catch (error) {
-      console.error('Failed to fetch table:', error);
-      return null;
-    }
+  async getTable(id: string): Promise<ProgressTable> {
+    return this.request<ProgressTable>(`/api/tables/tables/${id}/`);
   }
 
-  async createTable(tableData: { title: string; categories?: Category[]; }): Promise<ProgressTable | null> {
-    try {
-      return await this.request<ProgressTable>('/api/tables/tables/', {
-        method: 'POST',
-        body: JSON.stringify(tableData),
-      });
-    } catch (error) {
-      console.error('Failed to create table:', error);
-      return null;
-    }
+  async createTable(tableData: { title: string; categories?: Category[]; }): Promise<ProgressTable> {
+    return this.request<ProgressTable>('/api/tables/tables/', {
+      method: 'POST',
+      body: JSON.stringify(tableData),
+    });
   }
 
-  async updateTable(id: string, tableData: Partial<ProgressTable>): Promise<ProgressTable | null> {
-    try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${id}/`, {
-        method: 'PATCH',
-        body: JSON.stringify(tableData),
-      });
-    } catch (error) {
-      console.error('Failed to update table:', error);
-      return null;
-    }
+  async updateTable(id: string, tableData: Partial<ProgressTable>): Promise<ProgressTable> {
+    return this.request<ProgressTable>(`/api/tables/tables/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(tableData),
+    });
   }
 
-  async deleteTable(id: string): Promise<boolean> {
-    try {
-      await this.request(`/api/tables/tables/${id}/`, { method: 'DELETE' });
-      return true;
-    } catch (error) {
-      console.error('Failed to delete table:', error);
-      return false;
-    }
+  async deleteTable(id: string): Promise<void> {
+    await this.request(`/api/tables/tables/${id}/`, { method: 'DELETE' });
   }
 
-  async updateProgress(tableId: string, date: string, data: Record<string, number>): Promise<DailyProgress | null> {
-    try {
-      return await this.request<DailyProgress>(`/api/tables/tables/${tableId}/update_progress/`, {
-        method: 'POST',
-        body: JSON.stringify({ date, data }),
-      });
-    } catch (error) {
-      console.error('Failed to update progress:', error);
-      return null;
-    }
+  async updateProgress(tableId: string, date: string, data: Record<string, number>): Promise<DailyProgress> {
+    return this.request<DailyProgress>(`/api/tables/tables/${tableId}/update_progress/`, {
+      method: 'POST',
+      body: JSON.stringify({ date, data }),
+    });
   }
 
   async getChartData(tableId: string, startDate?: string, endDate?: string): Promise<RadarChartData> {
-    try {
-      let url = `/api/tables/tables/${tableId}/progress_chart_data/`;
-      const params = new URLSearchParams();
-      if (startDate) params.append('start_date', startDate);
-      if (endDate) params.append('end_date', endDate);
-      if (params.toString()) url += `?${params.toString()}`;
-      return await this.request<RadarChartData>(url);
-    } catch (error) {
-      console.error('Failed to fetch chart data:', error);
-      return { categories: [], progress_data: [] };
-    }
+    let url = `/api/tables/tables/${tableId}/progress_chart_data/`;
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    if (params.toString()) url += `?${params.toString()}`;
+    
+    return this.request<RadarChartData>(url);
   }
 
-  async addCategory(tableId: string, name: string): Promise<ProgressTable | null> {
-    try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${tableId}/add_category/`, {
-        method: 'POST',
-        body: JSON.stringify({ name }),
-      });
-    } catch (error) {
-      console.error('Failed to add category:', error);
-      return null;
-    }
+  async addCategory(tableId: string, name: string): Promise<ProgressTable> {
+    return this.request<ProgressTable>(`/api/tables/tables/${tableId}/add_category/`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
   }
 
-  async removeCategory(tableId: string, categoryId: string): Promise<ProgressTable | null> {
-    try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${tableId}/remove_category/`, {
-        method: 'POST',
-        body: JSON.stringify({ category_id: categoryId }),
-      });
-    } catch (error) {
-      console.error('Failed to remove category:', error);
-      return null;
-    }
+  async removeCategory(tableId: string, categoryId: string): Promise<ProgressTable> {
+    return this.request<ProgressTable>(`/api/tables/tables/${tableId}/remove_category/`, {
+      method: 'POST',
+      body: JSON.stringify({ category_id: categoryId }),
+    });
   }
 
-  async renameCategory(tableId: string, categoryId: string, newName: string): Promise<ProgressTable | null> {
-    try {
-      return await this.request<ProgressTable>(`/api/tables/tables/${tableId}/rename_category/`, {
-        method: 'POST',
-        body: JSON.stringify({ category_id: categoryId, new_name: newName }),
-      });
-    } catch (error) {
-      console.error('Failed to rename category:', error);
-      return null;
-    }
+  async renameCategory(tableId: string, categoryId: string, newName: string): Promise<ProgressTable> {
+    return this.request<ProgressTable>(`/api/tables/tables/${tableId}/rename_category/`, {
+      method: 'POST',
+      body: JSON.stringify({ category_id: categoryId, new_name: newName }),
+    });
   }
 }
 
-export const apiService = new ApiService();
+export const apiService = new ApiService(import.meta.env.VITE_API_BASE_URL);
 export default apiService;

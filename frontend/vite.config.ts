@@ -38,7 +38,6 @@ export default defineConfig({
         target: 'https://self-development-tracker.onrender.com',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, '')
       },
     },
   },
