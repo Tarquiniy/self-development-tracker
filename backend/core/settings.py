@@ -22,8 +22,8 @@ ALLOWED_HOSTS = [
     "self-development-tracker.onrender.com",
     "localhost",
     "127.0.0.1",
-    "https://self-development-tracker-mu.vercel.app"
-    "https://sdtracker.onrender.com"
+    "https://self-development-tracker-mu.vercel.app",
+    "https://sdtracker.onrender.com",
 ]
 
 if RENDER_EXTERNAL_HOSTNAME:
@@ -36,8 +36,8 @@ CSRF_TRUSTED_ORIGINS = [
     "https://self-development-tracker-five.vercel.app",
     "https://self-development-tracker.onrender.com",
     "https://fjqbhcmsqypevfbpzcxj.supabase.co",
-    "https://self-development-tracker-mu.vercel.app"
-    "https://sdtracker.onrender.com"
+    "https://self-development-tracker-mu.vercel.app",
+    "https://sdtracker.onrender.com",
 ]
 
 # Static files
