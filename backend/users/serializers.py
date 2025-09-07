@@ -1,5 +1,14 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from .models import UserProfile
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(source='user.email', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = ['email', 'username', 'subscription_active', 'subscription_expires', 'tables_limit']
 
 User = get_user_model()
 

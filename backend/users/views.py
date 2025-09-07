@@ -8,6 +8,15 @@ from users.models import CustomUser, UserProfile
 from rest_framework_simplejwt.tokens import RefreshToken
 from supabase import create_client, Client
 import logging
+from .serializers import UserProfileSerializer
+from rest_framework.permissions import IsAuthenticated
+
+class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserProfileSerializer(request.user.profile)
+        return Response(serializer.data)
 
 logger = logging.getLogger(__name__)
 
