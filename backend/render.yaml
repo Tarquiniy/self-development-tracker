@@ -21,4 +21,4 @@ services:
       - key: TELEGRAM_BOT_NAME
         value: "self_development_tracker_bot"
       - key: PYTHON_VERSION
-        value: "3.12.10"
+        value: "3.11.9"

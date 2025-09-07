@@ -29,7 +29,6 @@ CSRF_TRUSTED_ORIGINS = [
     "https://self-development-tracker-five.vercel.app",
     "https://self-development-tracker.onrender.com",
     "https://fjqbhcmsqypevfbpzcxj.supabase.co",
-    "https://self-development-tracker-*.vercel.app",  # Паттерн для всех Vercel доменов
 ]
 
 # Static files
@@ -166,11 +165,10 @@ CORS_ALLOWED_ORIGINS = [
     "https://self-development-tracker-chi.vercel.app",
     "https://self-development-tracker-five.vercel.app",
     "https://self-development-tracker.onrender.com",
-    "https://self-development-tracker-*.vercel.app",  # Паттерн для всех Vercel доменов
 ]
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False  # Изменено на False для безопасности
 
 CORS_ALLOW_METHODS = [
     "DELETE",
@@ -192,19 +190,6 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
 ]
-
-# CSP — только для API и фронта
-#SECURE_CSP = {
-#    "default-src": ["'self'"],
-#    "script-src": ["'self'", "'unsafe-inline'"],
-#    "style-src": ["'self'", "'unsafe-inline'"],
-#    "img-src": ["'self'", "data:"],
-#    "frame-src": ["'none'"],
-#    "connect-src": [
-#        "'self'",
-#       "https://self-development-tracker.onrender.com",
-#    ],
-#}
 
 # Production security
 if not DEBUG:
