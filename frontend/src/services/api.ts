@@ -9,7 +9,7 @@ class ApiService {
       import.meta.env.VITE_API_BASE_URL || 
       (window.location.hostname === 'localhost' 
         ? 'http://localhost:8000' 
-        : 'https://self-development-tracker.onrender.com');
+        : 'https://sdracker.onrender.com');
   }
 
   async request<T>(url: string, options: RequestInit = {}): Promise<T> {
