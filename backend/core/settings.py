@@ -44,7 +44,8 @@ CORS_ALLOWED_ORIGINS = [
     "https://sdtracker.vercel.app",
     "https://sdtracker-*.vercel.app",
     "https://*.vercel.app",
-    "https://sdtracker.onrender.com",
+    "https://sdracker.onrender.com",
+    "https://*.onrender.com"
 ]
 
 CORS_ALLOW_METHODS = [
