@@ -11,7 +11,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key-2025-change-in-production")
 
-DEBUG = os.getenv("DEBUG", "False") == "True"
+DEBUG = False
 
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") + [
     "localhost",
