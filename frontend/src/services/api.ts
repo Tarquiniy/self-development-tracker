@@ -4,48 +4,80 @@ class ApiService {
   private baseUrl: string;
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || "https://sdtracker.onrender.com";
+    // Определяем базовый URL в зависимости от среды выполнения
+    this.baseUrl = baseUrl || 
+      import.meta.env.VITE_API_BASE_URL || 
+      (window.location.hostname === 'localhost' 
+        ? 'http://localhost:8000' 
+        : 'https://self-development-tracker.onrender.com');
   }
 
   async request<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem("accessToken");
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+    const token = localStorage.getItem("accessToken");
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
 
-  try {
-    const response = await fetch(`${this.baseUrl}${url}`, {
-      headers,
-      ...options,
-      mode: 'cors', // Явно указываем режим CORS
-      credentials: 'include', // Включаем передачу куки
-    });
+    // Для кросс-доменных запросов
+    const credentials = this.baseUrl !== window.location.origin ? 'include' : 'same-origin';
 
-    if (!response.ok) {
-      // Проверяем, является ли ошибка CORS ошибкой
-      if (response.status === 0) {
-        throw new Error('CORS error: Unable to make request to server');
+    try {
+      const response = await fetch(`${this.baseUrl}${url}`, {
+        headers,
+        ...options,
+        mode: 'cors',
+        credentials,
+      });
+
+      // Обработка ошибок аутентификации
+      if (response.status === 401) {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        window.location.href = '/login';
+        throw new Error('Authentication required');
       }
-      
-      const error = await response.text();
-      throw new Error(error || `HTTP error! status: ${response.status}`);
-    }
 
-    return response.json();
-  } catch (error) {
-    if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      throw new Error('Network error: Unable to connect to server. Please check your internet connection and try again.');
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || `HTTP error! status: ${response.status}` };
+        }
+        
+        throw new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      // Для ответов без контента
+      if (response.status === 204) {
+        return {} as T;
+      }
+
+      return response.json();
+    } catch (error) {
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        throw new Error('Network error: Unable to connect to server. Please check your internet connection and try again.');
+      }
+      throw error;
     }
-    throw error;
   }
-}
 
+  // Остальные методы остаются без изменений, но используют обновленный request
   async login(email: string, password: string) {
-    return this.request<any>('/api/auth/login/', {
+    const response = await this.request<any>('/api/auth/login/', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
+
+    if (response.tokens?.access) {
+      localStorage.setItem('accessToken', response.tokens.access);
+      localStorage.setItem('refreshToken', response.tokens.refresh);
+    }
+
+    return response;
   }
 
   async register(userData: {
@@ -56,7 +88,7 @@ class ApiService {
     last_name?: string;
     phone?: string;
   }) {
-    return this.request<any>('/api/auth/register/', {
+    const response = await this.request<any>('/api/auth/register/', {
       method: 'POST',
       body: JSON.stringify({
         email: userData.email,
@@ -67,6 +99,13 @@ class ApiService {
         phone: userData.phone
       }),
     });
+
+    if (response.tokens?.access) {
+      localStorage.setItem('accessToken', response.tokens.access);
+      localStorage.setItem('refreshToken', response.tokens.refresh);
+    }
+
+    return response;
   }
 
   async getProfile(): Promise<UserProfile> {
@@ -96,8 +135,8 @@ class ApiService {
   }
 
   async deleteTable(id: string): Promise<void> {
-  await this.request(`/api/tables/tables/${id}/`, { method: 'DELETE' });
-}
+    await this.request(`/api/tables/tables/${id}/`, { method: 'DELETE' });
+  }
 
   async updateProgress(tableId: string, date: string, data: Record<string, number>): Promise<DailyProgress> {
     return this.request<DailyProgress>(`/api/tables/tables/${tableId}/update_progress/`, {
@@ -112,31 +151,30 @@ class ApiService {
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
     if (params.toString()) url += `?${params.toString()}`;
-    
+
     return this.request<RadarChartData>(url);
   }
 
-  async addCategory(tableId: string, name: string): Promise<ProgressTable> {
-    return this.request<ProgressTable>(`/api/tables/tables/${tableId}/add_category/`, {
-      method: 'POST',
-      body: JSON.stringify({ name }),
-    });
-  }
-
-  async removeCategory(tableId: string, categoryId: string): Promise<ProgressTable> {
-    return this.request<ProgressTable>(`/api/tables/tables/${tableId}/remove_category/`, {
-      method: 'POST',
-      body: JSON.stringify({ category_id: categoryId }),
-    });
-  }
-
-  async renameCategory(tableId: string, categoryId: string, newName: string): Promise<ProgressTable> {
-    return this.request<ProgressTable>(`/api/tables/tables/${tableId}/rename_category/`, {
-      method: 'POST',
-      body: JSON.stringify({ category_id: categoryId, new_name: newName }),
-    });
-  }
+async addCategory(tableId: string, name: string): Promise<ProgressTable> {
+  return this.request<ProgressTable>(`/api/tables/tables/${tableId}/add_category/`, {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
 }
 
-export const apiService = new ApiService(import.meta.env.VITE_API_BASE_URL);
+async removeCategory(tableId: string, categoryId: string): Promise<ProgressTable> {
+  return this.request<ProgressTable>(`/api/tables/tables/${tableId}/remove_category/`, {
+    method: 'POST',
+    body: JSON.stringify({ category_id: categoryId }),
+  });
+}
+
+async renameCategory(tableId: string, categoryId: string, newName: string): Promise<ProgressTable> {
+  return this.request<ProgressTable>(`/api/tables/tables/${tableId}/rename_category/`, {
+    method: 'POST',
+    body: JSON.stringify({ category_id: categoryId, new_name: newName }),
+  });
+}}
+
+export const apiService = new ApiService();
 export default apiService;
