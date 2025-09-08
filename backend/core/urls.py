@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 from django.urls import path, include
-
-from analytics import admin
+from django.contrib.admin import site as admin_site
+from django.contrib.admin.views.decorators import staff_member_required
 from users.views import LoginView, RegisterView, ProfileView
 from users.telegram_callback import telegram_callback
 
@@ -10,7 +10,7 @@ def healthcheck(request):
 
 urlpatterns = [
     path("", healthcheck),  # ✅ теперь / отдаёт JSON
-    path("admin/", admin.site.urls),
+    path("admin/", admin_site.urls),
     path("api/auth/register/", RegisterView.as_view(), name="register"),
     path("api/auth/login/", LoginView.as_view(), name="login"),
     path("api/auth/profile/", ProfileView.as_view(), name="profile"),
