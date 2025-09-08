@@ -43,7 +43,14 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../backend/staticfiles',  // Путь куда собирается статика
+    outDir: '../backend/static',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        assetFileNames: 'assets/[name][extname]',
+        chunkFileNames: 'assets/[name].js',
+        entryFileNames: 'assets/[name].js'
+      }
+    }
   }
 })
