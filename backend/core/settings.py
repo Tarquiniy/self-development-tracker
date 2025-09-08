@@ -18,7 +18,8 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") + [
     "self-development-tracker.onrender.com",
     "sdtracker.vercel.app",
     ".vercel.app",
-    ".onrender.com"
+    ".onrender.com",
+    "https://sdracker.onrender.com/",
 ]
 
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
@@ -32,6 +33,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.vercel.app",
     "https://*.onrender.com",
     "https://*.supabase.co",
+    "https://sdracker.onrender.com/",
 ]
 
 
@@ -113,7 +115,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",  # должно быть первым!
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
