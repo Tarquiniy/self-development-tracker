@@ -43,7 +43,6 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
-#CORS_ALLOW_ALL_ORIGINS = True
 
 # Разрешенные методы
 CORS_ALLOW_METHODS = [
@@ -88,14 +87,25 @@ if os.path.exists(os.path.join(FRONTEND_DIR, 'dist')):
 
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-# Database
+# Database - обновленная конфигурация для Supabase
 DATABASES = {
-    'default': dj_database_url.config(
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('SUPABASE_DB_NAME', 'postgres'),
+        'USER': os.environ.get('SUPABASE_DB_USER', 'postgres'),
+        'PASSWORD': os.environ.get('SUPABASE_DB_PASSWORD', ''),
+        'HOST': os.environ.get('SUPABASE_DB_HOST', 'db.fjqbhcmsqypevfbpzcxj.supabase.co'),
+        'PORT': os.environ.get('SUPABASE_DB_PORT', '5432'),
+    }
+}
+
+# Альтернативная конфигурация через DATABASE_URL
+if os.environ.get('DATABASE_URL'):
+    DATABASES['default'] = dj_database_url.config(
         default=os.environ.get('DATABASE_URL'),
         conn_max_age=600,
         conn_health_checks=True,
     )
-}
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
@@ -230,3 +240,15 @@ if not DEBUG:
     DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Supabase настройки
+SUPABASE_DB_CONFIG = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('SUPABASE_DB_NAME', 'postgres'),
+        'USER': os.environ.get('SUPABASE_DB_USER', 'postgres'),
+        'PASSWORD': os.environ.get('SUPABASE_DB_PASSWORD', ''),
+        'HOST': os.environ.get('SUPABASE_DB_HOST', 'db.fjqbhcmsqypevfbpzcxj.supabase.co'),
+        'PORT': os.environ.get('SUPABASE_DB_PORT', '5432'),
+    }
+}

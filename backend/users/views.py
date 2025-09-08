@@ -13,6 +13,8 @@ from .serializers import UserProfileSerializer
 from rest_framework.permissions import IsAuthenticated
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.contrib.auth.hashers import make_password
+from django.db import IntegrityError
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +33,7 @@ class RegisterView(APIView):
                 data = request.data
             else:
                 data = json.loads(request.body.decode('utf-8'))
-                
+
             email = data.get("email")
             password = data.get("password")
             username = data.get("username", email.split("@")[0] if email else "")
@@ -39,43 +41,33 @@ class RegisterView(APIView):
             if not email or not password:
                 return Response({"error": "Email и пароль обязательны"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Проверяем существование пользователя в Supabase
-            existing_users = supabase.table('users').select('*').eq('email', email).execute()
-            if existing_users.data:
+            # Проверяем существование пользователя в Django
+            if CustomUser.objects.filter(email=email).exists():
                 return Response({"error": "Пользователь с таким email уже существует"}, status=status.HTTP_400_BAD_REQUEST)
 
             # 1. Регистрируем пользователя в Supabase Auth
-            auth_response = supabase.auth.sign_up({
-                "email": email,
-                "password": password,
-            })
-
-            if auth_response.user:
-                # 2. Создаем запись в таблице users Supabase
-                user_data = {
-                    "id": auth_response.user.id,
+            try:
+                auth_response = supabase.auth.sign_up({
                     "email": email,
-                    "username": username,
-                    "created_at": "now()"
-                }
-                
-                # Вставляем данные в таблицу users
-                supabase_response = supabase.table("users").insert(user_data).execute()
-                
-                # 3. Создаем пользователя в Django (для админки и внутренней логики)
+                    "password": password,
+                })
+
+                if not auth_response.user:
+                    return Response({"error": "Ошибка регистрации в Supabase"}, status=status.HTTP_400_BAD_REQUEST)
+
+                # 2. Создаем пользователя в Django
                 user = CustomUser.objects.create(
                     email=email,
                     username=username,
+                    password=make_password(password),  # Хэшируем пароль
                     registration_method="email",
                     supabase_uid=auth_response.user.id
                 )
-                user.set_unusable_password()
-                user.save()
 
-                # 4. Создаем профиль пользователя
+                # 3. Создаем профиль пользователя
                 UserProfile.objects.create(user=user)
 
-                # 5. Генерируем JWT токены
+                # 4. Генерируем JWT токены
                 refresh = RefreshToken.for_user(user)
 
                 return Response({
@@ -91,8 +83,12 @@ class RegisterView(APIView):
                     }
                 }, status=status.HTTP_201_CREATED)
 
-            return Response({"error": "Ошибка регистрации в Supabase"}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                logger.error(f"Supabase registration error: {str(e)}")
+                return Response({"error": "Ошибка регистрации в Supabase"}, status=status.HTTP_400_BAD_REQUEST)
 
+        except IntegrityError:
+            return Response({"error": "Пользователь с таким email уже существует"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Registration error: {str(e)}")
             return Response({"error": f"Ошибка регистрации: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -107,41 +103,22 @@ class LoginView(APIView):
                 data = request.data
             else:
                 data = json.loads(request.body.decode('utf-8'))
-                
+
             email = data.get("email")
             password = data.get("password")
 
             if not email or not password:
                 return Response({"error": "Email и пароль обязательны"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Аутентифицируем пользователя в Supabase
-            auth_response = supabase.auth.sign_in_with_password({
-                "email": email,
-                "password": password
-            })
+            # 1. Пытаемся найти пользователя в Django
+            try:
+                user = CustomUser.objects.get(email=email)
+                
+                # 2. Проверяем пароль через Django
+                if not user.check_password(password):
+                    return Response({"error": "Неверный email или пароль"}, status=status.HTTP_400_BAD_REQUEST)
 
-            if auth_response.user:
-                # Ищем или создаем пользователя в Django
-                try:
-                    user = CustomUser.objects.get(email=email)
-                    # Обновляем supabase_uid если необходимо
-                    if not user.supabase_uid:
-                        user.supabase_uid = auth_response.user.id
-                        user.save()
-                except CustomUser.DoesNotExist:
-                    # Создаем нового пользователя в Django
-                    user = CustomUser.objects.create(
-                        email=email,
-                        username=email.split("@")[0],
-                        registration_method="email",
-                        supabase_uid=auth_response.user.id
-                    )
-                    user.set_unusable_password()
-                    user.save()
-                    # Создаем профиль
-                    UserProfile.objects.create(user=user)
-
-                # Генерируем JWT токены
+                # 3. Генерируем JWT токены
                 refresh = RefreshToken.for_user(user)
 
                 return Response({
@@ -157,7 +134,8 @@ class LoginView(APIView):
                     }
                 }, status=status.HTTP_200_OK)
 
-            return Response({"error": "Неверный email или пароль"}, status=status.HTTP_400_BAD_REQUEST)
+            except CustomUser.DoesNotExist:
+                return Response({"error": "Неверный email или пароль"}, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
             logger.error(f"Login error: {str(e)}")
