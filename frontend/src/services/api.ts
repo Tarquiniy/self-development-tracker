@@ -3,13 +3,19 @@ import type {UserProfile, ProgressTable, DailyProgress, Category, RadarChartData
 class ApiService {
   private baseUrl: string;
 
-  constructor(baseUrl?: string) {
-    // Определяем базовый URL в зависимости от среды выполнения
-    this.baseUrl = baseUrl || 
-      import.meta.env.VITE_API_BASE_URL || 
-      (window.location.hostname === 'localhost' 
-        ? 'http://localhost:8000' 
-        : 'https://sdracker.onrender.com');
+  constructor() {
+    // Всегда используем VITE_API_BASE_URL из окружения
+    this.baseUrl = import.meta.env.VITE_API_BASE_URL;
+    
+    // Fallback только для разработки
+    if (!this.baseUrl && window.location.hostname === 'localhost') {
+      this.baseUrl = 'http://localhost:8000';
+    }
+    
+    // Final fallback
+    if (!this.baseUrl) {
+      this.baseUrl = 'https://sdracker.onrender.com';
+    }
   }
 
   async request<T>(url: string, options: RequestInit = {}): Promise<T> {

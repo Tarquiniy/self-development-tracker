@@ -35,12 +35,12 @@ export default defineConfig(({ mode }) => {
       })
     ],
     server: {
-      port: 3000,
-      proxy: {
-        '/api': {
-          target: env.VITE_API_URL || 'http://localhost:8000',
-          changeOrigin: true,
-          secure: false,
+  port: 3000,
+  proxy: {
+    '/api': {
+      target: env.VITE_API_BASE_URL || 'http://localhost:8000',
+      changeOrigin: true,
+      secure: false,
           configure: (proxy, _options) => {
             proxy.on('error', (err, _req, _res) => {
               console.log('Proxy error:', err);
