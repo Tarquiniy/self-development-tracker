@@ -29,10 +29,14 @@ export type PostFull = {
 };
 
 export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]> {
-  const url = `${WP_API_BASE}/wp/v2/posts?per_page=${perPage}&page=${page}&_embed`;
-  const res = await fetch(url);
+  // теперь прокси эндпоинт бэкенда
+  const url = `/api/wordpress/posts/?page=${page}&perPage=${perPage}`;
+  const res = await fetch(url, {
+    mode: 'cors',
+    // если нужны заголовки и токены к backend, добавить
+  });
   if (!res.ok) {
-    throw new Error(`WordPress fetchPosts error: ${res.status}`);
+    throw new Error(`Proxy fetchPosts error: ${res.status}`);
   }
   const data = await res.json() as any[];
   return data.map(p => ({
@@ -46,16 +50,12 @@ export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]>
 }
 
 export async function fetchPostBySlug(slug: string): Promise<PostFull> {
-  const url = `${WP_API_BASE}/wp/v2/posts?slug=${encodeURIComponent(slug)}&_embed`;
-  const res = await fetch(url);
+  const url = `/api/wordpress/posts/${encodeURIComponent(slug)}/`;
+  const res = await fetch(url, { mode: 'cors' });
   if (!res.ok) {
-    throw new Error(`WordPress fetchPostBySlug error: ${res.status}`);
+    throw new Error(`Proxy fetchPostBySlug error: ${res.status}`);
   }
-  const arr = await res.json() as any[];
-  if (arr.length === 0) {
-    throw new Error('Post not found');
-  }
-  const p = arr[0];
+  const p = await res.json() as any;
   return {
     id: p.id,
     title: p.title?.rendered ?? '',

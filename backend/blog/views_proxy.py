@@ -1,16 +1,10 @@
 import requests
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_GET
-from django.views.decorators.csrf import csrf_exempt
 
 @require_GET
-def wordpress_posts(request):
-    # получаем параметры page и per_page из запроса фронтенда
-    page = request.GET.get('page', '1')
-    per_page = request.GET.get('perPage', '10')
-    # формируем URL WordPress API
-    wp_url = f"https://sdtracker.wordpress.com/wp-json/wp/v2/posts?per_page={per_page}&page={page}&_embed"
-
+def wordpress_post_by_slug(request, slug):
+    wp_url = f"https://sdtracker.wordpress.com/wp-json/wp/v2/posts?slug={slug}&_embed"
     try:
         resp = requests.get(wp_url, timeout=10)
     except requests.RequestException as e:
@@ -19,5 +13,7 @@ def wordpress_posts(request):
     if resp.status_code != 200:
         return JsonResponse({'error': 'WordPress returned error', 'status': resp.status_code, 'body': resp.text}, status=resp.status_code)
 
-    data = resp.json()
-    return JsonResponse(data, safe=False)
+    arr = resp.json()
+    if not isinstance(arr, list) or len(arr) == 0:
+        return JsonResponse({'error': 'Post not found'}, status=404)
+    return JsonResponse(arr[0], safe=False)
