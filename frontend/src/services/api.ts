@@ -1,11 +1,77 @@
-import type {UserProfile, ProgressTable, DailyProgress, Category, RadarChartData } from '../types';
+// frontend/src/services/api.ts
+
+import type {
+  UserProfile,
+  ProgressTable,
+  DailyProgress,
+  Category,
+  RadarChartData
+} from '../types';
+
+const WP_API_BASE = (import.meta.env.VITE_WP_API as string) || 'https://sdtracker.wordpress.com/wp-json';
+
+export type PostSummary = {
+  id: number;
+  title: string;
+  excerpt: string;
+  date: string;
+  slug: string;
+  featured_image_url?: string | null;
+};
+
+export type PostFull = {
+  id: number;
+  title: string;
+  content: string;
+  date: string;
+  slug: string;
+  featured_image_url?: string | null;
+};
+
+export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]> {
+  const url = `${WP_API_BASE}/wp/v2/posts?per_page=${perPage}&page=${page}&_embed`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`WordPress fetchPosts error: ${res.status}`);
+  }
+  const data = await res.json() as any[];
+  return data.map(p => ({
+    id: p.id,
+    title: p.title?.rendered ?? '',
+    excerpt: p.excerpt?.rendered ?? '',
+    date: p.date,
+    slug: p.slug,
+    featured_image_url: p._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null
+  }));
+}
+
+export async function fetchPostBySlug(slug: string): Promise<PostFull> {
+  const url = `${WP_API_BASE}/wp/v2/posts?slug=${encodeURIComponent(slug)}&_embed`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`WordPress fetchPostBySlug error: ${res.status}`);
+  }
+  const arr = await res.json() as any[];
+  if (arr.length === 0) {
+    throw new Error('Post not found');
+  }
+  const p = arr[0];
+  return {
+    id: p.id,
+    title: p.title?.rendered ?? '',
+    content: p.content?.rendered ?? '',
+    date: p.date,
+    slug: p.slug,
+    featured_image_url: p._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null
+  };
+}
 
 class ApiService {
   private baseUrl: string;
 
   constructor() {
     // Всегда используем VITE_API_BASE_URL из окружения
-    this.baseUrl = import.meta.env.VITE_API_BASE_URL;
+    this.baseUrl = import.meta.env.VITE_API_BASE_URL as string;
     
     // Fallback только для разработки
     if (!this.baseUrl && window.location.hostname === 'localhost') {
@@ -25,7 +91,6 @@ class ApiService {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
 
-    // Для кросс-доменных запросов
     const credentials = this.baseUrl !== window.location.origin ? 'include' : 'same-origin';
 
     try {
@@ -36,7 +101,6 @@ class ApiService {
         credentials,
       });
 
-      // Обработка ошибок аутентификации
       if (response.status === 401) {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
@@ -47,17 +111,14 @@ class ApiService {
       if (!response.ok) {
         const errorText = await response.text();
         let errorData;
-        
         try {
           errorData = JSON.parse(errorText);
         } catch {
           errorData = { error: errorText || `HTTP error! status: ${response.status}` };
         }
-        
         throw new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
       }
 
-      // Для ответов без контента
       if (response.status === 204) {
         return {} as T;
       }
@@ -71,7 +132,10 @@ class ApiService {
     }
   }
 
-  // Остальные методы остаются без изменений, но используют обновленный request
+  
+
+  // ===== твои существующие методы =====
+
   async login(email: string, password: string) {
     const response = await this.request<any>('/api/auth/login/', {
       method: 'POST',
@@ -141,7 +205,7 @@ class ApiService {
   }
 
   async deleteTable(id: string): Promise<void> {
-    await this.request(`/api/tables/tables/${id}/`, { method: 'DELETE' });
+    await this.request<void>(`/api/tables/tables/${id}/`, { method: 'DELETE' });
   }
 
   async updateProgress(tableId: string, date: string, data: Record<string, number>): Promise<DailyProgress> {
@@ -157,30 +221,30 @@ class ApiService {
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
     if (params.toString()) url += `?${params.toString()}`;
-
     return this.request<RadarChartData>(url);
   }
 
-async addCategory(tableId: string, name: string): Promise<ProgressTable> {
-  return this.request<ProgressTable>(`/api/tables/tables/${tableId}/add_category/`, {
-    method: 'POST',
-    body: JSON.stringify({ name }),
-  });
-}
+  async addCategory(tableId: string, name: string): Promise<ProgressTable> {
+    return this.request<ProgressTable>(`/api/tables/tables/${tableId}/add_category/`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  }
 
-async removeCategory(tableId: string, categoryId: string): Promise<ProgressTable> {
-  return this.request<ProgressTable>(`/api/tables/tables/${tableId}/remove_category/`, {
-    method: 'POST',
-    body: JSON.stringify({ category_id: categoryId }),
-  });
-}
+  async removeCategory(tableId: string, categoryId: string): Promise<ProgressTable> {
+    return this.request<ProgressTable>(`/api/tables/tables/${tableId}/remove_category/`, {
+      method: 'POST',
+      body: JSON.stringify({ category_id: categoryId }),
+    });
+  }
 
-async renameCategory(tableId: string, categoryId: string, newName: string): Promise<ProgressTable> {
-  return this.request<ProgressTable>(`/api/tables/tables/${tableId}/rename_category/`, {
-    method: 'POST',
-    body: JSON.stringify({ category_id: categoryId, new_name: newName }),
-  });
-}}
+  async renameCategory(tableId: string, categoryId: string, newName: string): Promise<ProgressTable> {
+    return this.request<ProgressTable>(`/api/tables/tables/${tableId}/rename_category/`, {
+      method: 'POST',
+      body: JSON.stringify({ category_id: categoryId, new_name: newName }),
+    });
+  }
+}
 
 export const apiService = new ApiService();
 export default apiService;

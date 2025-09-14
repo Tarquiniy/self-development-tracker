@@ -1,49 +1,67 @@
+// frontend/src/App.tsx
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './contexts/AuthContext';
-import LandingPage from './components/landing/LandingPage';
+import { Routes, Route, Navigate, Link } from 'react-router-dom';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Dashboard from './components/Dashboard';
-import Blog from './components/blog/Blog';
-import './App.css';
+import Home from './components/Home';
+import BlogList from './components/BlogList';
+import BlogPost from './components/BlogPost';
+
+const isAuthed = () => !!localStorage.getItem('accessToken');
+
+const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return isAuthed() ? <>{children}</> : <Navigate to="/login" replace />;
+};
 
 const App: React.FC = () => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="app">
-      <Routes>
-        <Route 
-          path="/" 
-          element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} 
-        />
-        <Route 
-          path="/login" 
-          element={user ? <Navigate to="/dashboard" replace /> : <Login />} 
-        />
-        <Route 
-          path="/register" 
-          element={user ? <Navigate to="/dashboard" replace /> : <Register />} 
-        />
-        <Route 
-          path="/dashboard" 
-          element={user ? <Dashboard /> : <Navigate to="/login" replace />} 
-        />
-        <Route 
-          path="/blog" 
-          element={<Blog />} 
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <header className="container header flex justify-between items-center py-4">
+        <Link to="/" className="logo text-2xl font-bold text-indigo-600">SDT</Link>
+        <nav className="nav flex gap-4">
+          <Link to="/blog">Блог</Link>
+          {isAuthed() ? (
+            <>
+              <Link to="/dashboard">Дэшборд</Link>
+              <button
+                className="linklike text-red-600"
+                onClick={() => {
+                  localStorage.removeItem('accessToken');
+                  localStorage.removeItem('refreshToken');
+                  window.location.href = '/login';
+                }}
+              >
+                Выйти
+              </button>
+            </>
+          ) : (
+            <>
+              <Link to="/login">Войти</Link>
+              <Link to="/register">Регистрация</Link>
+            </>
+          )}
+        </nav>
+      </header>
+
+      <main className="container py-6">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/blog" element={<BlogList />} />
+          <Route path="/blog/:slug" element={<BlogPost />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route
+            path="/dashboard"
+            element={
+              <PrivateRoute>
+                <Dashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
     </div>
   );
 };
