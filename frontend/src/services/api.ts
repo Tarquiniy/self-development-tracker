@@ -11,7 +11,7 @@ const WP_API_BASE = 'https://public-api.wordpress.com/wp/v2/sites/sdtracker.word
 export type PostSummary = {
   id: number;
   title: string;
-  excerpt: string;
+  excerpt: string; // обязательное поле
   date: string;
   slug: string;
   featured_image_url?: string | null;
@@ -27,10 +27,10 @@ export type PostFull = {
 };
 
 const WP_BASE = (import.meta.env.VITE_WP_BASE as string) || 'https://sdblog.infinityfreeapp.com';
+const BACKEND_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://sdracker.onrender.com';
 
 export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]> {
-  // Убедись, что URL корректный, не через фронтенд домен
-  const url = `${WP_BASE}/wp-json/wp/v2/posts?per_page=${perPage}&page=${page}&_embed`;
+  const url = `${BACKEND_BASE}/api/wordpress/posts/?page=${page}&perPage=${perPage}`;
   const res = await fetch(url, {
     method: 'GET',
     headers: {
@@ -38,45 +38,57 @@ export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]>
     }
   });
   if (!res.ok) {
-    throw new Error(`WordPress API error: ${res.status}`);
+    throw new Error(`Backend proxy error: ${res.status}`);
   }
   const text = await res.text();
-  // Проверка, что ответ — JSON
   let data: any;
   try {
     data = JSON.parse(text);
   } catch (err) {
     throw new Error(`Invalid JSON received: ${text}`);
   }
-  return (data as any[]).map(p => ({
+  // Проверяем, что это массив
+  if (!Array.isArray(data)) {
+    throw new Error(`Expected array of posts but got: ${typeof data}`);
+  }
+  return data.map((p: any) => ({
     id: p.id,
-    title: p.title.rendered,
-    excerpt: p.excerpt.rendered,
+    title: p.title?.rendered ?? '',
+    excerpt: p.excerpt?.rendered ?? '',
     date: p.date,
     slug: p.slug,
     featured_image_url: p._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null
   }));
 }
 
-export async function fetchPostBySlug(slug: string): Promise<PostFull> {
-  const url = `${WP_BASE}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&_embed`;
+export async function fetchPostBySlug(slug: string): Promise<PostSummary & { content: string }> {
+  const url = `${BACKEND_BASE}/api/wordpress/posts/?slug=${encodeURIComponent(slug)}`;
   const res = await fetch(url, { method: 'GET' });
   if (!res.ok) {
-    throw new Error(`WordPress API error: ${res.status}`);
+    throw new Error(`Backend proxy error: ${res.status}`);
   }
-  const arr = await res.json() as any[];
-  if (!arr.length) throw new Error('Post not found');
+  const text = await res.text();
+  let arr: any;
+  try {
+    arr = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`Invalid JSON received: ${text}`);
+  }
+  if (!Array.isArray(arr) || arr.length === 0) {
+    throw new Error('Post not found');
+  }
   const p = arr[0];
+
   return {
     id: p.id,
-    title: p.title.rendered,
-    content: p.content.rendered,
+    title: p.title?.rendered ?? '',
+    excerpt: p.excerpt?.rendered ?? '',       // <-- вот добавлено excerpt
+    content: p.content?.rendered ?? '',       // content, так как полный пост
     date: p.date,
     slug: p.slug,
     featured_image_url: p._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null
   };
 }
-
 class ApiService {
   private baseUrl: string;
 

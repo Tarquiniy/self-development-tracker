@@ -1,8 +1,6 @@
-
 from django.urls import path
-from .views_proxy import wordpress_posts, wordpress_post_by_slug
+from .views_proxy import wordpress_posts_proxy
 
 urlpatterns = [
-    path('/api/wordpress/posts/', wordpress_posts, name='wordpress_posts'),
-    path('/api/wordpress/posts/<slug:slug>/', wordpress_post_by_slug, name='wordpress_post_by_slug'),
+    path('wordpress/posts/', wordpress_posts_proxy, name='wordpress_posts_proxy'),
 ]
