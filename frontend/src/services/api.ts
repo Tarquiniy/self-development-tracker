@@ -1,5 +1,3 @@
-// frontend/src/services/api.ts
-
 import type {
   UserProfile,
   ProgressTable,
@@ -8,7 +6,7 @@ import type {
   RadarChartData
 } from '../types';
 
-const WP_API_BASE = (import.meta.env.VITE_WP_API as string) || 'https://sdtracker.wordpress.com/wp-json';
+const WP_API_BASE = 'https://public-api.wordpress.com/wp/v2/sites/sdtracker.wordpress.com';
 
 export type PostSummary = {
   id: number;
@@ -28,21 +26,32 @@ export type PostFull = {
   featured_image_url?: string | null;
 };
 
+const WP_BASE = (import.meta.env.VITE_WP_BASE as string) || 'https://sdblog.infinityfreeapp.com';
+
 export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]> {
-  // теперь прокси эндпоинт бэкенда
-  const url = `/api/wordpress/posts/?page=${page}&perPage=${perPage}`;
+  // Убедись, что URL корректный, не через фронтенд домен
+  const url = `${WP_BASE}/wp-json/wp/v2/posts?per_page=${perPage}&page=${page}&_embed`;
   const res = await fetch(url, {
-    mode: 'cors',
-    // если нужны заголовки и токены к backend, добавить
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json'
+    }
   });
   if (!res.ok) {
-    throw new Error(`Proxy fetchPosts error: ${res.status}`);
+    throw new Error(`WordPress API error: ${res.status}`);
   }
-  const data = await res.json() as any[];
-  return data.map(p => ({
+  const text = await res.text();
+  // Проверка, что ответ — JSON
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`Invalid JSON received: ${text}`);
+  }
+  return (data as any[]).map(p => ({
     id: p.id,
-    title: p.title?.rendered ?? '',
-    excerpt: p.excerpt?.rendered ?? '',
+    title: p.title.rendered,
+    excerpt: p.excerpt.rendered,
     date: p.date,
     slug: p.slug,
     featured_image_url: p._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null
@@ -50,16 +59,18 @@ export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]>
 }
 
 export async function fetchPostBySlug(slug: string): Promise<PostFull> {
-  const url = `/api/wordpress/posts/${encodeURIComponent(slug)}/`;
-  const res = await fetch(url, { mode: 'cors' });
+  const url = `${WP_BASE}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&_embed`;
+  const res = await fetch(url, { method: 'GET' });
   if (!res.ok) {
-    throw new Error(`Proxy fetchPostBySlug error: ${res.status}`);
+    throw new Error(`WordPress API error: ${res.status}`);
   }
-  const p = await res.json() as any;
+  const arr = await res.json() as any[];
+  if (!arr.length) throw new Error('Post not found');
+  const p = arr[0];
   return {
     id: p.id,
-    title: p.title?.rendered ?? '',
-    content: p.content?.rendered ?? '',
+    title: p.title.rendered,
+    content: p.content.rendered,
     date: p.date,
     slug: p.slug,
     featured_image_url: p._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null

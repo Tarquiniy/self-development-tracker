@@ -5,7 +5,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; connect-src 'self' https://sdtracker.wordpress.com https://sdtracker.wordpress.com/wp-json https://*.onrender.com https://*.vercel.app; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https://sdtracker.wordpress.com https://*.vercel.app; frame-src 'self';"
+          "value": "default-src 'self'; connect-src 'self' https://public-api.wordpress.com https://sdtracker.wordpress.com https://sdtracker.wordpress.com/wp-json https://*.onrender.com https://*.vercel.app; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https://public-api.wordpress.com https://sdtracker.wordpress.com https://*.vercel.app; frame-src 'self';"
         },
         {
           "key": "X-Frame-Options",
@@ -14,7 +14,11 @@
       ]
     }
   ],
-  "rewrites": [
+   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
