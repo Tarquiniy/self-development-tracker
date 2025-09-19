@@ -30,7 +30,7 @@ const WP_BASE = (import.meta.env.VITE_WP_BASE as string) || 'https://sdblog.infi
 const BACKEND_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://sdracker.onrender.com';
 
 export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]> {
-  const url = `${BACKEND_BASE}/api/wordpress/posts/?page=${page}&perPage=${perPage}`;
+  const url = `${BACKEND_BASE}api/wordpress/posts/?page=${page}&perPage=${perPage}`;
   const res = await fetch(url, {
     method: 'GET',
     headers: {
@@ -62,7 +62,7 @@ export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]>
 }
 
 export async function fetchPostBySlug(slug: string): Promise<PostSummary & { content: string }> {
-  const url = `${BACKEND_BASE}/api/wordpress/posts/?slug=${encodeURIComponent(slug)}`;
+  const url = `${BACKEND_BASE}api/wordpress/posts/?slug=${encodeURIComponent(slug)}`;
   const res = await fetch(url, { method: 'GET' });
   if (!res.ok) {
     throw new Error(`Backend proxy error: ${res.status}`);

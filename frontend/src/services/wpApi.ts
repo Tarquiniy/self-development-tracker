@@ -12,7 +12,7 @@ export type PostSummary = {
 const BACKEND_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://sdracker.onrender.com';
 
 export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]> {
-  const url = `${BACKEND_BASE}/api/wordpress/posts/?page=${page}&perPage=${perPage}`;
+  const url = `${BACKEND_BASE}api/wordpress/posts/?page=${page}&perPage=${perPage}`;
   const res = await fetch(url, {
     method: 'GET',
     headers: {

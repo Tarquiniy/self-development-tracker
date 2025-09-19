@@ -19,7 +19,7 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") + [
     "sdtracker.vercel.app",
     ".vercel.app",
     ".onrender.com",
-    "https://sdracker.onrender.com",
+    "https://sdracker.onrender.com/",
 ]
 
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
@@ -33,7 +33,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.vercel.app",
     "https://*.onrender.com",
     "https://*.supabase.co",
-    "https://sdracker.onrender.com",
+    "https://sdracker.onrender.com/",
 ]
 
 CORS_ALLOWED_ORIGINS = [
