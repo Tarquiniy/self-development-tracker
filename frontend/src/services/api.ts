@@ -98,7 +98,7 @@ class ApiService {
     
     // Fallback только для разработки
     if (!this.baseUrl && window.location.hostname === 'localhost') {
-      this.baseUrl = 'http://localhost:8000';
+      this.baseUrl = 'https://sdracker.onrender.com';
     }
     
     // Final fallback
