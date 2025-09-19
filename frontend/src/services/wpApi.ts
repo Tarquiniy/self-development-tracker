@@ -9,7 +9,7 @@ export type PostSummary = {
   featured_image_url?: string | null;
 };
 
-const BACKEND_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://sdracker.onrender.com';
+const BACKEND_BASE = (import.meta.env.VITE_API_BASE_URL as string)?.replace(/\/+$/, '') || 'https://sdracker.onrender.com';
 
 export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]> {
   const url = `${BACKEND_BASE}api/wordpress/posts/?page=${page}&perPage=${perPage}`;
