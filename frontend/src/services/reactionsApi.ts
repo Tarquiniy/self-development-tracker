@@ -5,7 +5,12 @@
 // POST /api/blog/reactions/toggle/    body: { post_identifier: string } (slug или id)
 // Передаём Authorization если пользователь залогинен (accessToken)
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://sdracker.onrender.com';
+function trimSlash(s: string) {
+  return s.replace(/\/+$/, '');
+}
+
+const rawApiBase = import.meta.env.VITE_API_BASE_URL as string;
+const API_BASE = trimSlash(rawApiBase || 'https://sdracker.onrender.com');
 
 export type ReactionInfo = {
   post_identifier: string;

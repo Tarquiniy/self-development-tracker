@@ -8,4 +8,5 @@ urlpatterns = [
     path('api/wordpress/', include('blog.urls')),
     path('admin/', admin.site.urls),
     path('api/blog/', include('blog.urls')),
+    path('api/blog/reactions/', include('blog.urls'))
 ]

@@ -34,7 +34,7 @@ def wordpress_posts(request):
 @permission_classes([AllowAny])
 def reaction_detail(request):
     """
-    GET /api/blog/reactions/?post_identifier=<slug_or_id>
+    GET api/blog/reactions/?post_identifier=<slug_or_id>
     Возвращает obj с likes_count и liked_by_current_user.
     """
     identifier = request.query_params.get('post_identifier')
@@ -53,7 +53,7 @@ def reaction_detail(request):
 @permission_classes([AllowAny])
 def reaction_toggle(request):
     """
-    POST /api/blog/reactions/toggle/
+    POST api/blog/reactions/toggle/
     body: { post_identifier: "slug-or-id" }
     Логика:
       - Если авторизован: переключаем связь в M2M users (т.е. ставим/снимаем лайк).
