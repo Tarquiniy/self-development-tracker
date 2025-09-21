@@ -8,7 +8,7 @@ from django.views.decorators.http import require_GET
 def wordpress_posts_proxy(request):
     page = request.GET.get('page', '1')
     per_page = request.GET.get('perPage', '10')
-    wp_url = f"http://cs88500-wordpress-o0a99.tw1.ru/wp-json/wp/v2/posts?per_page={per_page}&page={page}&_embed"
+    wp_url = f"https://cs88500-wordpress-o0a99.tw1.ru/wp-json/wp/v2/posts?per_page={per_page}&page={page}&_embed"
     try:
         resp = requests.get(wp_url, timeout=10)
     except requests.RequestException as e:
