@@ -7,4 +7,5 @@ urlpatterns = [
     path('api/auth/login/', LoginView.as_view(), name='login'),
     path('api/wordpress/', include('blog.urls')),
     path('admin/', admin.site.urls),
+    path('api/blog/', include('blog.urls')),
 ]

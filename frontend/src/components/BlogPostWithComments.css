@@ -1,0 +1,21 @@
+/* frontend/src/components/BlogPostWithComments.css */
+.blog-post .btn-like {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  background: white;
+  cursor: pointer;
+}
+
+.blog-post .btn-like.liked {
+  background: #e0f7ff;
+  border-color: #5bc0de;
+}
+
+.comments-list {
+  margin-top: 16px;
+}
+
+.comment-form {
+  margin-top: 24px;
+}
