@@ -12,20 +12,30 @@ export type PostSummary = {
 export type PostFull = PostSummary & { content: string };
 
 const BACKEND_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://sdracker.onrender.com';
-const WP_BASE = (import.meta.env.VITE_WP_BASE as string) || 'https://cs88500-wordpress-o0a99.tw1.ru';
+let WP_BASE = (import.meta.env.VITE_WP_BASE as string) || '';
+// Убираем завершающие слэши
+WP_BASE = WP_BASE.replace(/\/+$/, '');
 
 async function safeParseJson(res: Response) {
   const text = await res.text();
   try {
     return JSON.parse(text);
   } catch (e) {
-    throw new Error(`Invalid JSON received from WP: ${text.slice(0,200)}`);
+    throw new Error(`Invalid JSON received from WP: ${text.slice(0, 200)}`);
   }
 }
 
 export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]> {
-  const url = `${WP_BASE.replace(/\/+$/,'')}/wp-json/wp/v2/posts?per_page=${perPage}&page=${page}&_embed`;
-  const res = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+  if (!WP_BASE) {
+    throw new Error('WP_BASE is not set. Set VITE_WP_BASE to your WordPress site URL');
+  }
+  const url = `${WP_BASE}/wp-json/wp/v2/posts?per_page=${perPage}&page=${page}&_embed`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json'
+    }
+  });
   if (!res.ok) {
     throw new Error(`WP fetchPosts error: ${res.status}`);
   }
@@ -44,14 +54,22 @@ export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]>
 }
 
 export async function fetchPostBySlug(slug: string): Promise<PostFull> {
-  const url = `${WP_BASE.replace(/\/+$/,'')}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&_embed`;
-  const res = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+  if (!WP_BASE) {
+    throw new Error('WP_BASE is not set. Set VITE_WP_BASE to your WordPress site URL');
+  }
+  const url = `${WP_BASE}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&_embed`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json'
+    }
+  });
   if (!res.ok) {
     throw new Error(`WP fetchPostBySlug error: ${res.status}`);
   }
   const data = await safeParseJson(res);
   const arr = Array.isArray(data) ? data : [];
-  if (!arr.length) {
+  if (arr.length === 0) {
     throw new Error('Post not found');
   }
   const p = arr[0];
