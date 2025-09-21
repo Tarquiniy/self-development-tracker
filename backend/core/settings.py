@@ -20,6 +20,7 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") + [
     ".vercel.app",
     ".onrender.com",
     "https://sdracker.onrender.com/",
+    "https://cs88500-wordpress-o0a99.tw1.ru"
 ]
 
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
@@ -34,6 +35,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.onrender.com",
     "https://*.supabase.co",
     "https://sdracker.onrender.com/",
+    "https://cs88500-wordpress-o0a99.tw1.ru",
 ]
 
 CORS_ALLOWED_ORIGINS = [
