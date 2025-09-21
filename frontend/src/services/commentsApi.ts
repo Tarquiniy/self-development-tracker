@@ -1,7 +1,4 @@
 // frontend/src/services/commentsApi.ts
-import { PostSummary } from './wpApi';
-
-const WP_BASE = (import.meta.env.VITE_WP_BASE as string || '').replace(/\/+$/, '');
 
 export type WPComment = {
   id: number;
@@ -13,6 +10,8 @@ export type WPComment = {
   parent: number;
   author_avatar_urls?: Record<string, string>;
 };
+
+const WP_BASE = (import.meta.env.VITE_WP_BASE as string || '').replace(/\/+$/, '');
 
 async function ensureJson(res: Response) {
   const text = await res.text();
@@ -28,7 +27,13 @@ async function ensureJson(res: Response) {
  */
 export async function getPostIdBySlug(slug: string): Promise<number> {
   if (!WP_BASE) throw new Error('VITE_WP_BASE is not set');
-  const r = await fetch(`${WP_BASE}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}`);
+  const url = `${WP_BASE}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}`;
+  const r = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json'
+    }
+  });
   if (!r.ok) {
     const body = await r.text();
     throw new Error(`Can't fetch post by slug: ${r.status} / ${body}`);
@@ -39,17 +44,20 @@ export async function getPostIdBySlug(slug: string): Promise<number> {
 }
 
 /**
- * Получить комментарии для поста (по postId)
+ * Получить комментарии для поста по ID
  */
 export async function fetchCommentsForPostId(postId: number, page = 1, perPage = 50): Promise<WPComment[]> {
   if (!WP_BASE) throw new Error('VITE_WP_BASE is not set');
   const url = `${WP_BASE}/wp-json/wp/v2/comments?post=${postId}&per_page=${perPage}&page=${page}&orderby=date&order=asc&_embed`;
-  const res = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { 'Accept': 'application/json' }
+  });
   if (!res.ok) {
     const txt = await res.text();
     throw new Error(`WP fetchComments error: ${res.status} / ${txt}`);
   }
-  const data = await res.json();
+  const data = await ensureJson(res);
   if (!Array.isArray(data)) return [];
   return data as WPComment[];
 }
@@ -76,35 +84,45 @@ export async function postCommentForPostSlug(params: {
   if (!WP_BASE) throw new Error('VITE_WP_BASE is not set');
   const postId = await getPostIdBySlug(params.postSlug);
 
-  const body = {
+  const bodyData: Record<string, any> = {
     post: postId,
     content: params.content,
-    parent: params.parent || 0,
-    ...(params.author_name ? { author_name: params.author_name } : {}),
-    ...(params.author_email ? { author_email: params.author_email } : {}),
+    parent: params.parent ?? 0,
   };
+
+  if (params.author_name) {
+    bodyData.author_name = params.author_name;
+  }
+  if (params.author_email) {
+    bodyData.author_email = params.author_email;
+  }
 
   const res = await fetch(`${WP_BASE}/wp-json/wp/v2/comments`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      // Если WP требует авторизацию — нужно передавать JWT/Basic. По умолчанию для анонимных комментариев
-      // необходимо включить rest_allow_anonymous_comments на WP.
+      'Accept': 'application/json'
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(bodyData),
+    credentials: 'include' // если WP требует куки / авторизацию по кукам
   });
 
   if (!res.ok) {
-    // WP часто возвращает JSON с ошибкой — пытаемся её распарсить
     const maybe = await res.text();
     let errText = maybe;
     try {
       const parsed = JSON.parse(maybe);
-      errText = parsed.message || JSON.stringify(parsed);
-    } catch (e) { /* оставляем текст */ }
+      if (parsed.message) {
+        errText = parsed.message;
+      } else {
+        errText = JSON.stringify(parsed);
+      }
+    } catch {
+      // use raw text
+    }
     throw new Error(`Can't post comment: ${res.status} / ${errText}`);
   }
 
-  const json = await res.json();
+  const json = await ensureJson(res);
   return json as WPComment;
 }

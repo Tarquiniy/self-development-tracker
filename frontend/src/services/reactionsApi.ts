@@ -13,6 +13,7 @@ const rawApiBase = import.meta.env.VITE_API_BASE_URL as string;
 const API_BASE = trimSlash(rawApiBase || 'https://sdracker.onrender.com');
 
 export type ReactionInfo = {
+  user_has_liked: boolean;
   post_identifier: string;
   likes_count: number;
   liked_by_current_user: boolean;

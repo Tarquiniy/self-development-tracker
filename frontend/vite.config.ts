@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
         },
         manifest: {
           name: 'Positive Theta',
-          short_name: 'SelfDev Tracker',
+          short_name: 'Positive Theta',
           description: 'Приложение для отслеживания прогресса саморазвития',
           theme_color: '#3b82f6',
           icons: [
