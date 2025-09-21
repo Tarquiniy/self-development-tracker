@@ -42,6 +42,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://sdtracker.vercel.app",  # Ваш фронтенд
     "http://localhost:3000",         # Для локальной разработки
     "http://127.0.0.1:3000",         # Для локальной разработки
+    "https://cs88500-wordpress-o0a99.tw1.ru",
 ]
 
 CORS_ALLOW_CREDENTIALS = True

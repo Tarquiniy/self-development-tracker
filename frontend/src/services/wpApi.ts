@@ -12,7 +12,7 @@ export type PostSummary = {
 export type PostFull = PostSummary & { content: string };
 
 const BACKEND_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://sdracker.onrender.com';
-const WP_BASE = (import.meta.env.VITE_WP_BASE as string) || 'http://cs88500-wordpress-o0a99.tw1.ru';
+const WP_BASE = (import.meta.env.VITE_WP_BASE as string) || 'https://cs88500-wordpress-o0a99.tw1.ru';
 
 async function safeParseJson(res: Response) {
   const text = await res.text();

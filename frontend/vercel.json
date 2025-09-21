@@ -5,7 +5,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://cs88500-wordpress-o0a99.tw1.ru; connect-src 'self' http://cs88500-wordpress-o0a99.tw1.ru https://cs88500-wordpress-o0a99.tw1.ru https://*.vercel.app; font-src 'self' https://fonts.gstatic.com; frame-src 'self';"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://cs88500-wordpress-o0a99.tw1.ru; connect-src 'self' https://cs88500-wordpress-o0a99.tw1.ru https://cs88500-wordpress-o0a99.tw1.ru https://*.vercel.app; font-src 'self' https://fonts.gstatic.com; frame-src 'self';"
         },
         {
           "key": "X-Frame-Options",
