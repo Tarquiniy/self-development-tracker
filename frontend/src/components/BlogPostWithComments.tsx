@@ -37,6 +37,8 @@ export default function BlogPostWithComments({ slug }: Props) {
   const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://sdracker.onrender.com';
   const WP_BASE = import.meta.env.VITE_WP_BASE || 'https://cs88500-wordpress-o0a99.tw1.ru';
 
+  const cleanApiBase = API_BASE.replace(/\/+$/, ''); // Убираем trailing slashes
+
   useEffect(() => {
   let isMounted = true;
   setLoading(true);
@@ -49,7 +51,7 @@ export default function BlogPostWithComments({ slug }: Props) {
       setPost(p);
 
       // Исправленный URL без двойного слеша
-      setIframeUrl(`${API_BASE}api/wordpress/posts/html/${p.slug}/`);;
+      setIframeUrl(`${cleanApiBase}/api/wordpress/posts/html/${p.slug}/`);
 
         const c = await fetchCommentsForPost(slug);
         if (!isMounted) return;

@@ -78,7 +78,7 @@ if not DEBUG:
 
 ALLOWED_HOSTS = []
 
-
+X_FRAME_OPTIONS = 'ALLOW-FROM https://sdtracker.vercel.app'
 # Application definition
 
 INSTALLED_APPS = [
