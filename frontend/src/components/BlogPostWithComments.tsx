@@ -17,6 +17,7 @@ function formatDate(d: string) {
   }
 }
 
+
 export default function BlogPostWithComments({ slug }: Props) {
   const [post, setPost] = useState<PostFull | null>(null);
   const [comments, setComments] = useState<WPComment[]>([]);
@@ -25,6 +26,8 @@ export default function BlogPostWithComments({ slug }: Props) {
   const [iframeHeight, setIframeHeight] = useState('600px');
   const [iframeUrl, setIframeUrl] = useState<string>('');
   const [iframeError, setIframeError] = useState(false);
+
+
 
   const [commentContent, setCommentContent] = useState('');
   const [authorName, setAuthorName] = useState('');
@@ -37,6 +40,8 @@ export default function BlogPostWithComments({ slug }: Props) {
   // Используем переменные окружения для URL
   const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://sdracker.onrender.com';
   const WP_BASE = import.meta.env.VITE_WP_BASE || 'https://cs88500-wordpress-o0a99.tw1.ru';
+
+  
 
   useEffect(() => {
     let isMounted = true;
@@ -97,8 +102,8 @@ export default function BlogPostWithComments({ slug }: Props) {
   };
 
   const handleIframeError = () => {
-    setIframeError(true);
-  };
+  setIframeError(true);
+};
 
   async function submitComment() {
     if (!commentContent.trim()) {
@@ -159,25 +164,25 @@ export default function BlogPostWithComments({ slug }: Props) {
         
         {/* Встраиваем пост через iframe с обработкой ошибок */}
         {iframeError ? (
-          <div className="error-message">
-            Не удалось загрузить содержимое. Пожалуйста, проверьте доступность WordPress.
-          </div>
-        ) : (
-          <iframe
-            src={iframeUrl}
-            style={{ 
-              width: '100%', 
-              height: iframeHeight, 
-              border: 'none',
-              borderRadius: '8px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}
-            onLoad={handleIframeLoad}
-            onError={handleIframeError}
-            title={post.title}
-            loading="lazy"
-          />
-        )}
+  <div className="error-message">
+    Не удалось загрузить содержимое. Пожалуйста, проверьте доступность WordPress.
+  </div>
+) : (
+  <iframe
+    src={iframeUrl}
+    style={{ 
+      width: '100%', 
+      height: iframeHeight, 
+      border: 'none',
+      borderRadius: '8px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+    }}
+    onLoad={handleIframeLoad}
+    onError={handleIframeError}
+    title={post.title}
+    loading="lazy"
+  />
+)}
         
         <div style={{ marginTop: 16 }}>
           <button
@@ -298,3 +303,4 @@ function CommentItem({
     </div>
   );
 }
+

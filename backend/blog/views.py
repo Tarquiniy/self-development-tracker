@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 @require_GET
 @csrf_exempt
 def wordpress_post_html(request, slug):
-    # Добавляем правильные CORS заголовки
+    # Правильные CORS заголовки
     response = HttpResponse()
     response["Access-Control-Allow-Origin"] = "https://sdtracker.vercel.app"
     response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
@@ -27,19 +27,32 @@ def wordpress_post_html(request, slug):
     if request.method == "OPTIONS":
         return response
 
+    # Декодируем slug (может приходить в двойном кодировании)
+    try:
+        from urllib.parse import unquote
+        decoded_slug = unquote(slug)
+        # Если все еще кодировано, декодируем еще раз
+        if '%' in decoded_slug:
+            decoded_slug = unquote(decoded_slug)
+    except:
+        decoded_slug = slug
+
     # Получаем данные поста из WordPress API
-    wp_url = f"https://cs88500-wordpress-o0a99.tw1.ru/wp-json/wp/v2/posts?slug={slug}&_embed"
+    wp_url = f"https://cs88500-wordpress-o0a99.tw1.ru/wp-json/wp/v2/posts?slug={decoded_slug}&_embed"
     try:
         resp = requests.get(wp_url, timeout=10)
     except requests.RequestException as e:
-        return HttpResponse(f"Failed to fetch from WordPress: {str(e)}", status=502)
+        response.status_code = 502
+        response.content = f"Failed to fetch from WordPress: {str(e)}"
+        return response
 
     if resp.status_code != 200:
-        return HttpResponse(f"WordPress returned error: {resp.status_code}", status=resp.status_code)
+        response.status_code = resp.status_code
+        response.content = f"WordPress returned error: {resp.status_code}"
+        return response
 
     data = resp.json()
     if not data:
-        # Возвращаем правильный 404 с заголовками
         response.status_code = 404
         response.content = "Post not found"
         return response
@@ -48,7 +61,7 @@ def wordpress_post_html(request, slug):
     content = post.get('content', {}).get('rendered', '')
     title = post.get('title', {}).get('rendered', '')
 
-    # Получаем CSS стили из заголовка WordPress
+    # Получаем CSS стили
     wp_home_url = "https://cs88500-wordpress-o0a99.tw1.ru"
     try:
         home_resp = requests.get(wp_home_url, timeout=10)
@@ -61,7 +74,6 @@ def wordpress_post_html(request, slug):
                 if href and 'wp-content' in href:
                     stylesheets.append(href)
     except:
-        # Fallback: используем стандартные стили темы
         stylesheets = [
             "https://cs88500-wordpress-o0a99.tw1.ru/wp-content/themes/twentytwentyfive/style.css",
             "https://cs88500-wordpress-o0a99.tw1.ru/wp-content/themes/twentytwentyfive/assets/css/print.css",
@@ -104,16 +116,16 @@ def wordpress_post_html(request, slug):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def reaction_detail(request):
-    """
-    GET /api/blog/reactions/?post_identifier=<slug_or_id>
-    """
+    """GET /api/blog/reactions/?post_identifier=<slug_or_id>"""
+    response = Response()
+    response["Access-Control-Allow-Origin"] = "https://sdtracker.vercel.app"
+    response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    
     try:
         identifier = request.query_params.get('post_identifier')
         if not identifier:
             return Response({'detail': 'Missing post_identifier'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Логируем запрос
-        logger.info(f"Reaction detail request for: {identifier}")
         
         obj, created = PostReaction.objects.get_or_create(post_identifier=identifier)
         serializer = PostReactionSerializer(obj, context={'request': request})
@@ -124,19 +136,19 @@ def reaction_detail(request):
         logger.error(f"Error in reaction_detail: {str(e)}")
         return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([AllowAny]) 
 def reaction_toggle(request):
-    """
-    POST /api/blog/reactions/toggle/
-    """
+    """POST /api/blog/reactions/toggle/"""
+    response = Response()
+    response["Access-Control-Allow-Origin"] = "https://sdtracker.vercel.app"
+    response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    
     try:
         identifier = request.data.get('post_identifier')
         if not identifier:
             return Response({'detail': 'Missing post_identifier'}, status=status.HTTP_400_BAD_REQUEST)
-
-        logger.info(f"Reaction toggle request for: {identifier}")
 
         with transaction.atomic():
             obj, created = PostReaction.objects.get_or_create(post_identifier=identifier)
@@ -145,21 +157,16 @@ def reaction_toggle(request):
             if user:
                 if obj.users.filter(pk=user.pk).exists():
                     obj.users.remove(user)
-                    action = "removed"
                 else:
                     obj.users.add(user)
-                    action = "added"
                 obj.save()
             else:
                 if obj.anon_count > 0:
                     obj.anon_count = max(0, obj.anon_count - 1)
-                    action = "decremented"
                 else:
                     obj.anon_count = obj.anon_count + 1
-                    action = "incremented"
                 obj.save()
 
-        logger.info(f"Reaction {action} for {identifier}")
         serializer = PostReactionSerializer(obj, context={'request': request})
         return Response(serializer.data)
         
