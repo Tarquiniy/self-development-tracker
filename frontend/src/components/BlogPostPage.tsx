@@ -1,3 +1,4 @@
+// frontend/src/components/BlogPostPage.tsx
 import React from 'react';
 import { useParams } from 'react-router-dom';
 import BlogPostWithComments from './BlogPostWithComments';
