@@ -27,8 +27,6 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
-X_FRAME_OPTIONS = 'ALLOW-FROM https://sdtracker.vercel.app'
-
 # CSRF и CORS настройки
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",

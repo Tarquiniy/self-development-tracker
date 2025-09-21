@@ -1,18 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { fetchPostBySlug, PostFull } from '../services/wpApi';
 import { fetchCommentsForPost, postCommentForPostSlug, WPComment } from '../services/commentsApi';
 import { getReactions, toggleReaction } from '../services/reactionsApi';
 import './BlogPostWithComments.css';
 
 type Props = {
   slug: string;
-};
-
-type PostContent = {
-  title: string;
-  content: string;
-  date: string;
-  featured_image?: number;
 };
 
 function formatDate(d: string) {
@@ -24,10 +18,12 @@ function formatDate(d: string) {
 }
 
 export default function BlogPostWithComments({ slug }: Props) {
-  const [post, setPost] = useState<PostContent | null>(null);
+  const [post, setPost] = useState<PostFull | null>(null);
   const [comments, setComments] = useState<WPComment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [iframeHeight, setIframeHeight] = useState('600px');
+  const [iframeUrl, setIframeUrl] = useState<string>('');
 
   const [commentContent, setCommentContent] = useState('');
   const [authorName, setAuthorName] = useState('');
@@ -37,42 +33,37 @@ export default function BlogPostWithComments({ slug }: Props) {
   const [likesCount, setLikesCount] = useState(0);
   const [liked, setLiked] = useState(false);
 
+  // Используем переменные окружения для URL
   const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://sdracker.onrender.com';
+  const WP_BASE = import.meta.env.VITE_WP_BASE || 'https://cs88500-wordpress-o0a99.tw1.ru';
 
   useEffect(() => {
-    let isMounted = true;
-    setLoading(true);
-    setError(null);
+  let isMounted = true;
+  setLoading(true);
+  setError(null);
 
-    (async () => {
-      try {
-        // Загружаем контент поста
-        const response = await fetch(`${API_BASE}/api/wordpress/posts/content/${slug}/`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const postData: PostContent = await response.json();
-        if (!isMounted) return;
-        setPost(postData);
+  (async () => {
+    try {
+      const p = await fetchPostBySlug(slug);
+      if (!isMounted) return;
+      setPost(p);
 
-        // Загружаем комментарии
+      // Исправленный URL без двойного слеша
+      setIframeUrl(`${API_BASE}/api/wordpress/posts/html/${p.slug}/`);;
+
         const c = await fetchCommentsForPost(slug);
         if (!isMounted) return;
         setComments(c);
 
-        // Загружаем реакции
         try {
-          // Используем ID поста для реакций
-          const postId = await getPostIdFromSlug(slug);
-          if (postId) {
-            const r = await getReactions(String(postId));
-            if (!isMounted) return;
-            setLikesCount(r.likes_count);
-            setLiked(r.liked_by_current_user);
-          }
+          // Используем post.id вместо post.slug для реакций
+          const r = await getReactions(String(p.id));
+          if (!isMounted) return;
+          setLikesCount(r.likes_count);
+          setLiked(r.liked_by_current_user);
         } catch (e) {
           console.warn('Reactions fetch failed', e);
+          // Устанавливаем значения по умолчанию при ошибке
           setLikesCount(0);
           setLiked(false);
         }
@@ -89,19 +80,17 @@ export default function BlogPostWithComments({ slug }: Props) {
     };
   }, [slug, API_BASE]);
 
-  // Функция для получения ID поста по slug
-  async function getPostIdFromSlug(slug: string): Promise<number | null> {
+  const handleIframeLoad = (event: React.SyntheticEvent<HTMLIFrameElement>) => {
     try {
-      const response = await fetch(
-        `https://cs88500-wordpress-o0a99.tw1.ru/wp-json/wp/v2/posts?slug=${slug}`
-      );
-      const data = await response.json();
-      return data[0]?.id || null;
+      const iframe = event.currentTarget;
+      const height = iframe.contentWindow?.document.body.scrollHeight;
+      if (height) {
+        setIframeHeight(`${height + 50}px`);
+      }
     } catch (e) {
-      console.error('Failed to get post ID:', e);
-      return null;
+      console.warn('Could not adjust iframe height:', e);
     }
-  }
+  };
 
   async function submitComment() {
     if (!commentContent.trim()) {
@@ -132,11 +121,10 @@ export default function BlogPostWithComments({ slug }: Props) {
   }
 
   async function onToggleLike() {
+    if (!post) return;
     try {
-      const postId = await getPostIdFromSlug(slug);
-      if (!postId) return;
-      
-      const res = await toggleReaction(String(postId));
+      // Используем post.id вместо post.slug для реакций
+      const res = await toggleReaction(String(post.id));
       setLikesCount(res.likes_count);
       setLiked(res.liked_by_current_user);
     } catch (e) {
@@ -161,11 +149,22 @@ export default function BlogPostWithComments({ slug }: Props) {
         <h1 dangerouslySetInnerHTML={{ __html: post.title }} />
         <div className="meta">{formatDate(post.date)}</div>
         
-        {/* Отображаем контент напрямую */}
-        <div 
-          className="wp-content"
-          dangerouslySetInnerHTML={{ __html: post.content }}
-        />
+        {/* Встраиваем пост через iframe */}
+        {iframeUrl && (
+          <iframe
+            src={iframeUrl}
+            style={{ 
+              width: '100%', 
+              height: iframeHeight, 
+              border: 'none',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            }}
+            onLoad={handleIframeLoad}
+            title={post.title}
+            loading="lazy"
+          />
+        )}
         
         <div style={{ marginTop: 16 }}>
           <button
