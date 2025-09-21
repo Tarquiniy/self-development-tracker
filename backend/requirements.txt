@@ -59,3 +59,4 @@ typing_extensions==4.15.0
 urllib3==2.5.0
 websockets>=10.0
 whitenoise==6.9.0
+beautifulsoup4==4.12.3

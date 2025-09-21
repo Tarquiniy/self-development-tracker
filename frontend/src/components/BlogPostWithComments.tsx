@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { fetchPostBySlug, PostFull } from '../services/wpApi';
 import { fetchCommentsForPost, postCommentForPostSlug, WPComment } from '../services/commentsApi';
 import { getReactions, toggleReaction } from '../services/reactionsApi';
@@ -21,6 +22,7 @@ export default function BlogPostWithComments({ slug }: Props) {
   const [comments, setComments] = useState<WPComment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [iframeHeight, setIframeHeight] = useState('600px');
 
   const [commentContent, setCommentContent] = useState('');
   const [authorName, setAuthorName] = useState('');
@@ -40,6 +42,7 @@ export default function BlogPostWithComments({ slug }: Props) {
         const p = await fetchPostBySlug(slug);
         if (!isMounted) return;
         setPost(p);
+
         const c = await fetchCommentsForPost(slug);
         if (!isMounted) return;
         setComments(c);
@@ -64,6 +67,18 @@ export default function BlogPostWithComments({ slug }: Props) {
       isMounted = false;
     };
   }, [slug]);
+
+  const handleIframeLoad = (event: React.SyntheticEvent<HTMLIFrameElement>) => {
+    try {
+      const iframe = event.currentTarget;
+      const height = iframe.contentWindow?.document.body.scrollHeight;
+      if (height) {
+        setIframeHeight(`${height + 50}px`);
+      }
+    } catch (e) {
+      console.warn('Could not adjust iframe height:', e);
+    }
+  };
 
   async function submitComment() {
     if (!commentContent.trim()) {
@@ -120,10 +135,21 @@ export default function BlogPostWithComments({ slug }: Props) {
       <article>
         <h1 dangerouslySetInnerHTML={{ __html: post.title }} />
         <div className="meta">{formatDate(post.date)}</div>
-        {post.featured_image_url && (
-          <img src={post.featured_image_url} alt="featured" />
-        )}
-        <section dangerouslySetInnerHTML={{ __html: post.content }} />
+        
+        {/* Встраиваем пост через iframe */}
+        <iframe
+          src={`https://sdracker.onrender.com/api/wordpress/posts/html/${slug}/`}
+          style={{ 
+            width: '100%', 
+            height: iframeHeight, 
+            border: 'none',
+            borderRadius: '8px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+          }}
+          onLoad={handleIframeLoad}
+          title={post.title}
+        />
+        
         <div style={{ marginTop: 16 }}>
           <button
             className={`btn-like ${liked ? 'liked' : ''}`}
