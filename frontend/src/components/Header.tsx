@@ -8,7 +8,7 @@ const Header: React.FC = () => {
   return (
     <header className="app-header">
       <div className="container" style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-        <Link to="/" className="logo">SDT</Link>
+        <Link to="/" className="logo">Positive Theta</Link>
         <nav className="nav">
           <Link to="/blog">Блог</Link>
           {isAuthed ? (

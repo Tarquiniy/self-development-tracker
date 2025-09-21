@@ -1,9 +1,10 @@
-// src/App.tsx
+// frontend/src/App.tsx
+
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/Header';
 import BlogList from './components/BlogList';
-import BlogPost from './components/BlogPost';
+import BlogPostPage from './components/BlogPostPage';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Dashboard from './components/Dashboard';
@@ -22,10 +23,17 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<Navigate to="/blog" replace />} />
           <Route path="/blog" element={<BlogList />} />
-          <Route path="/blog/:slug" element={<BlogPost />} />
+          <Route path="/blog/:slug" element={<BlogPostPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/dashboard" element={<PrivateRoute><Dashboard/></PrivateRoute>} />
+          <Route
+            path="/dashboard"
+            element={
+              <PrivateRoute>
+                <Dashboard />
+              </PrivateRoute>
+            }
+          />
           <Route path="*" element={<Navigate to="/blog" replace />} />
         </Routes>
       </main>
