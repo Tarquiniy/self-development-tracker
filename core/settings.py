@@ -79,6 +79,8 @@ if not DEBUG:
 ALLOWED_HOSTS = []
 
 X_FRAME_OPTIONS = 'ALLOW-FROM https://sdtracker.vercel.app'
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
 # Application definition
 
 INSTALLED_APPS = [

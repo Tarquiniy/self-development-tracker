@@ -24,6 +24,7 @@ export default function BlogPostWithComments({ slug }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [iframeHeight, setIframeHeight] = useState('600px');
   const [iframeUrl, setIframeUrl] = useState<string>('');
+  const [iframeError, setIframeError] = useState(false);
 
   const [commentContent, setCommentContent] = useState('');
   const [authorName, setAuthorName] = useState('');
@@ -37,21 +38,22 @@ export default function BlogPostWithComments({ slug }: Props) {
   const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://sdracker.onrender.com';
   const WP_BASE = import.meta.env.VITE_WP_BASE || 'https://cs88500-wordpress-o0a99.tw1.ru';
 
-  const cleanApiBase = API_BASE.replace(/\/+$/, ''); // Убираем trailing slashes
-
   useEffect(() => {
-  let isMounted = true;
-  setLoading(true);
-  setError(null);
+    let isMounted = true;
+    setLoading(true);
+    setError(null);
+    setIframeError(false);
 
-  (async () => {
-    try {
-      const p = await fetchPostBySlug(slug);
-      if (!isMounted) return;
-      setPost(p);
+    (async () => {
+      try {
+        const p = await fetchPostBySlug(slug);
+        if (!isMounted) return;
+        setPost(p);
 
-      // Исправленный URL без двойного слеша
-      setIframeUrl(`${cleanApiBase}/api/wordpress/posts/html/${p.slug}/`);
+        // Устанавливаем URL для iframe с правильным кодированием
+        const cleanApiBase = API_BASE.replace(/\/+$/, '');
+        const encodedSlug = encodeURIComponent(p.slug);
+        setIframeUrl(`${cleanApiBase}/api/wordpress/posts/html/${encodedSlug}/`);
 
         const c = await fetchCommentsForPost(slug);
         if (!isMounted) return;
@@ -92,6 +94,10 @@ export default function BlogPostWithComments({ slug }: Props) {
     } catch (e) {
       console.warn('Could not adjust iframe height:', e);
     }
+  };
+
+  const handleIframeError = () => {
+    setIframeError(true);
   };
 
   async function submitComment() {
@@ -151,8 +157,12 @@ export default function BlogPostWithComments({ slug }: Props) {
         <h1 dangerouslySetInnerHTML={{ __html: post.title }} />
         <div className="meta">{formatDate(post.date)}</div>
         
-        {/* Встраиваем пост через iframe */}
-        {iframeUrl && (
+        {/* Встраиваем пост через iframe с обработкой ошибок */}
+        {iframeError ? (
+          <div className="error-message">
+            Не удалось загрузить содержимое. Пожалуйста, проверьте доступность WordPress.
+          </div>
+        ) : (
           <iframe
             src={iframeUrl}
             style={{ 
@@ -163,6 +173,7 @@ export default function BlogPostWithComments({ slug }: Props) {
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
             }}
             onLoad={handleIframeLoad}
+            onError={handleIframeError}
             title={post.title}
             loading="lazy"
           />

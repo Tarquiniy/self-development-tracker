@@ -17,13 +17,12 @@ logger = logging.getLogger(__name__)
 @require_GET
 @csrf_exempt
 def wordpress_post_html(request, slug):
-    # Добавляем правильные CORS и X-Frame-Options заголовки
+    # Добавляем правильные CORS заголовки
     response = HttpResponse()
     response["Access-Control-Allow-Origin"] = "https://sdtracker.vercel.app"
     response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
     response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response["X-Frame-Options"] = "ALLOW-FROM https://sdtracker.vercel.app"
-    response["Content-Security-Policy"] = "frame-ancestors 'self' https://sdtracker.vercel.app"
     
     if request.method == "OPTIONS":
         return response
@@ -40,7 +39,10 @@ def wordpress_post_html(request, slug):
 
     data = resp.json()
     if not data:
-        return HttpResponse("Post not found", status=404)
+        # Возвращаем правильный 404 с заголовками
+        response.status_code = 404
+        response.content = "Post not found"
+        return response
 
     post = data[0]
     content = post.get('content', {}).get('rendered', '')
