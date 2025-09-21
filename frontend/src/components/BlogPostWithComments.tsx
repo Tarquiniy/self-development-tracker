@@ -49,7 +49,7 @@ export default function BlogPostWithComments({ slug }: Props) {
       setPost(p);
 
       // Исправленный URL без двойного слеша
-      setIframeUrl(`${API_BASE}/api/wordpress/posts/html/${p.slug}/`);;
+      setIframeUrl(`${API_BASE}api/wordpress/posts/html/${p.slug}/`);;
 
         const c = await fetchCommentsForPost(slug);
         if (!isMounted) return;

@@ -17,11 +17,13 @@ logger = logging.getLogger(__name__)
 @require_GET
 @csrf_exempt
 def wordpress_post_html(request, slug):
-    # Добавляем CORS заголовки
+    # Добавляем правильные CORS и X-Frame-Options заголовки
     response = HttpResponse()
     response["Access-Control-Allow-Origin"] = "https://sdtracker.vercel.app"
     response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
     response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response["X-Frame-Options"] = "ALLOW-FROM https://sdtracker.vercel.app"
+    response["Content-Security-Policy"] = "frame-ancestors 'self' https://sdtracker.vercel.app"
     
     if request.method == "OPTIONS":
         return response
@@ -97,80 +99,71 @@ def wordpress_post_html(request, slug):
     response.content = html
     return response
 
-@require_http_methods(["GET", "OPTIONS"])
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def reaction_detail(request):
     """
     GET /api/blog/reactions/?post_identifier=<slug_or_id>
-    Возвращает obj с likes_count и liked_by_current_user.
     """
-    # Добавляем CORS заголовки для OPTIONS запросов
-    if request.method == "OPTIONS":
-        response = HttpResponse()
-        response["Access-Control-Allow-Origin"] = "https://sdtracker.vercel.app"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        return response
-
-    # Добавляем CORS заголовки для основного ответа
-    response = Response()
-    response["Access-Control-Allow-Origin"] = "https://sdtracker.vercel.app"
-    
-    identifier = request.query_params.get('post_identifier')
-    if not identifier:
-        return Response({'detail': 'Missing post_identifier'}, status=status.HTTP_400_BAD_REQUEST)
     try:
-        obj = PostReaction.objects.get(post_identifier=identifier)
-    except PostReaction.DoesNotExist:
-        # пустая запись — ноль лайков
-        obj = PostReaction(post_identifier=identifier)
-        obj.save()
-    serializer = PostReactionSerializer(obj, context={'request': request})
-    return Response(serializer.data)
+        identifier = request.query_params.get('post_identifier')
+        if not identifier:
+            return Response({'detail': 'Missing post_identifier'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Логируем запрос
+        logger.info(f"Reaction detail request for: {identifier}")
+        
+        obj, created = PostReaction.objects.get_or_create(post_identifier=identifier)
+        serializer = PostReactionSerializer(obj, context={'request': request})
+        
+        return Response(serializer.data)
+        
+    except Exception as e:
+        logger.error(f"Error in reaction_detail: {str(e)}")
+        return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@require_http_methods(["POST", "OPTIONS"])
-@csrf_exempt
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def reaction_toggle(request):
     """
     POST /api/blog/reactions/toggle/
-    body: { post_identifier: "slug-or-id" }
     """
-    # Добавляем CORS заголовки для OPTIONS запросов
-    if request.method == "OPTIONS":
-        response = HttpResponse()
-        response["Access-Control-Allow-Origin"] = "https://sdtracker.vercel.app"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        return response
+    try:
+        identifier = request.data.get('post_identifier')
+        if not identifier:
+            return Response({'detail': 'Missing post_identifier'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Добавляем CORS заголовки для основного ответа
-    response = Response()
-    response["Access-Control-Allow-Origin"] = "https://sdtracker.vercel.app"
-    
-    identifier = request.data.get('post_identifier')
-    if not identifier:
-        return Response({'detail': 'Missing post_identifier'}, status=status.HTTP_400_BAD_REQUEST)
+        logger.info(f"Reaction toggle request for: {identifier}")
 
-    with transaction.atomic():
-        obj, created = PostReaction.objects.get_or_create(post_identifier=identifier)
-        user = request.user if request.user and request.user.is_authenticated else None
+        with transaction.atomic():
+            obj, created = PostReaction.objects.get_or_create(post_identifier=identifier)
+            user = request.user if request.user and request.user.is_authenticated else None
 
-        if user:
-            if obj.users.filter(pk=user.pk).exists():
-                obj.users.remove(user)
+            if user:
+                if obj.users.filter(pk=user.pk).exists():
+                    obj.users.remove(user)
+                    action = "removed"
+                else:
+                    obj.users.add(user)
+                    action = "added"
+                obj.save()
             else:
-                obj.users.add(user)
-            obj.save()
-        else:
-            # простая логика: если anon_count == 0 -> увеличиваем; if >0 -> уменьшаем
-            if obj.anon_count > 0:
-                obj.anon_count = max(0, obj.anon_count - 1)
-            else:
-                obj.anon_count = obj.anon_count + 1
-            obj.save()
+                if obj.anon_count > 0:
+                    obj.anon_count = max(0, obj.anon_count - 1)
+                    action = "decremented"
+                else:
+                    obj.anon_count = obj.anon_count + 1
+                    action = "incremented"
+                obj.save()
 
-    serializer = PostReactionSerializer(obj, context={'request': request})
-    return Response(serializer.data)
+        logger.info(f"Reaction {action} for {identifier}")
+        serializer = PostReactionSerializer(obj, context={'request': request})
+        return Response(serializer.data)
+        
+    except Exception as e:
+        logger.error(f"Error in reaction_toggle: {str(e)}")
+        return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Добавляем обработку OPTIONS для остальных views
 @require_http_methods(["GET", "OPTIONS"])
