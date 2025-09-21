@@ -9,7 +9,6 @@ import BlogPostWithComments from './components/BlogPostWithComments';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Dashboard from './components/Dashboard';
-import BlogPostPage from 'components/BlogPostPage';
 
 const isAuthed = () => !!localStorage.getItem('accessToken');
 
@@ -27,7 +26,6 @@ const App: React.FC = () => {
           <Route path="/blog" element={<BlogList />} />
           {/* Маршрут к посту по slug, теперь с комментариями и лайками */}
           <Route path="/blog/:slug" element={<BlogPostWithComments slug={/** получим slug из URL */ ''} />} />
-          <Route path="/blog/:slug" element={<BlogPostPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route
