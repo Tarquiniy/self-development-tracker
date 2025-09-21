@@ -39,11 +39,14 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    "https://sdtracker.vercel.app",  # Ваш фронтенд
-    "http://localhost:3000",         # Для локальной разработки
-    "http://127.0.0.1:3000",         # Для локальной разработки
+    "https://sdtracker.vercel.app",
+    "http://localhost:3000", 
+    "http://127.0.0.1:3000",
     "https://cs88500-wordpress-o0a99.tw1.ru",
+    "https://sdracker.onrender.com",
 ]
+
+CORS_ALLOW_ALL_ORIGINS = not DEBUG
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -51,7 +54,7 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
-    'OPTIONS',
+    'OPTIONS', 
     'PATCH',
     'POST',
     'PUT',

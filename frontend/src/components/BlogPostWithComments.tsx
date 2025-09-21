@@ -23,6 +23,7 @@ export default function BlogPostWithComments({ slug }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [iframeHeight, setIframeHeight] = useState('600px');
+  const [iframeUrl, setIframeUrl] = useState<string>('');
 
   const [commentContent, setCommentContent] = useState('');
   const [authorName, setAuthorName] = useState('');
@@ -31,6 +32,10 @@ export default function BlogPostWithComments({ slug }: Props) {
 
   const [likesCount, setLikesCount] = useState(0);
   const [liked, setLiked] = useState(false);
+
+  // Используем переменные окружения для URL
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://sdracker.onrender.com';
+  const WP_BASE = import.meta.env.VITE_WP_BASE || 'https://cs88500-wordpress-o0a99.tw1.ru';
 
   useEffect(() => {
     let isMounted = true;
@@ -43,17 +48,24 @@ export default function BlogPostWithComments({ slug }: Props) {
         if (!isMounted) return;
         setPost(p);
 
+        // Устанавливаем URL для iframe
+        setIframeUrl(`${API_BASE}/api/wordpress/posts/html/${p.slug}/`);
+
         const c = await fetchCommentsForPost(slug);
         if (!isMounted) return;
         setComments(c);
 
         try {
-          const r = await getReactions(String(p.id || p.slug));
+          // Используем post.id вместо post.slug для реакций
+          const r = await getReactions(String(p.id));
           if (!isMounted) return;
           setLikesCount(r.likes_count);
           setLiked(r.liked_by_current_user);
         } catch (e) {
           console.warn('Reactions fetch failed', e);
+          // Устанавливаем значения по умолчанию при ошибке
+          setLikesCount(0);
+          setLiked(false);
         }
       } catch (e) {
         if (!isMounted) return;
@@ -66,7 +78,7 @@ export default function BlogPostWithComments({ slug }: Props) {
     return () => {
       isMounted = false;
     };
-  }, [slug]);
+  }, [slug, API_BASE]);
 
   const handleIframeLoad = (event: React.SyntheticEvent<HTMLIFrameElement>) => {
     try {
@@ -111,7 +123,8 @@ export default function BlogPostWithComments({ slug }: Props) {
   async function onToggleLike() {
     if (!post) return;
     try {
-      const res = await toggleReaction(String(post.id || post.slug));
+      // Используем post.id вместо post.slug для реакций
+      const res = await toggleReaction(String(post.id));
       setLikesCount(res.likes_count);
       setLiked(res.liked_by_current_user);
     } catch (e) {
@@ -137,18 +150,21 @@ export default function BlogPostWithComments({ slug }: Props) {
         <div className="meta">{formatDate(post.date)}</div>
         
         {/* Встраиваем пост через iframe */}
-        <iframe
-          src={`https://sdracker.onrender.com/api/wordpress/posts/html/${slug}/`}
-          style={{ 
-            width: '100%', 
-            height: iframeHeight, 
-            border: 'none',
-            borderRadius: '8px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-          }}
-          onLoad={handleIframeLoad}
-          title={post.title}
-        />
+        {iframeUrl && (
+          <iframe
+            src={iframeUrl}
+            style={{ 
+              width: '100%', 
+              height: iframeHeight, 
+              border: 'none',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            }}
+            onLoad={handleIframeLoad}
+            title={post.title}
+            loading="lazy"
+          />
+        )}
         
         <div style={{ marginTop: 16 }}>
           <button
