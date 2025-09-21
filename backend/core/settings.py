@@ -46,8 +46,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://sdracker.onrender.com",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = not DEBUG
-
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 
 # Разрешенные методы

@@ -38,18 +38,18 @@ export default function BlogPostWithComments({ slug }: Props) {
   const WP_BASE = import.meta.env.VITE_WP_BASE || 'https://cs88500-wordpress-o0a99.tw1.ru';
 
   useEffect(() => {
-    let isMounted = true;
-    setLoading(true);
-    setError(null);
+  let isMounted = true;
+  setLoading(true);
+  setError(null);
 
-    (async () => {
-      try {
-        const p = await fetchPostBySlug(slug);
-        if (!isMounted) return;
-        setPost(p);
+  (async () => {
+    try {
+      const p = await fetchPostBySlug(slug);
+      if (!isMounted) return;
+      setPost(p);
 
-        // Устанавливаем URL для iframe
-        setIframeUrl(`${API_BASE}/api/wordpress/posts/html/${p.slug}/`);
+      // Исправленный URL без двойного слеша
+      setIframeUrl(`${API_BASE}/api/wordpress/posts/html/${p.slug}/`);;
 
         const c = await fetchCommentsForPost(slug);
         if (!isMounted) return;
