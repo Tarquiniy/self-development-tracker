@@ -9,7 +9,7 @@ const Home: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center px-6">
       <div className="max-w-3xl bg-white/90 rounded-2xl shadow-2xl p-10 text-center backdrop-blur-sm">
         <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-6">
-          Self Development Tracker
+          Positive Theta
         </h1>
         <p className="text-lg md:text-xl text-gray-700 leading-relaxed mb-10">
           Саморазвитие — это ключ к личному росту и успеху. 

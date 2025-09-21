@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
           globPatterns: ['**/*.{js,css,html,ico,png,svg}']
         },
         manifest: {
-          name: 'Self Development Tracker',
+          name: 'Positive Theta',
           short_name: 'SelfDev Tracker',
           description: 'Приложение для отслеживания прогресса саморазвития',
           theme_color: '#3b82f6',
