@@ -63,3 +63,4 @@ django-import-export==3.3.4
 django-admin-interface==0.30.1
 django-colorfield==0.9.0
 django-summernote==0.8.20.0
+django-grappelli==4.0.2
