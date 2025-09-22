@@ -18,7 +18,7 @@ const WordPressPost: React.FC = () => {
         setError(null);
         
         const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL || 'https://sdracker.onrender.com'}/api/blog/wordpress/post/${slug}/html/`
+          `${import.meta.env.VITE_API_BASE_URL || 'https://sdracker.onrender.com'}api/blog/wordpress/post/${slug}/html/`
         );
         
         if (!response.ok) {

@@ -44,7 +44,7 @@ async function reqJson(url: string, options: RequestInit = {}) {
  * query: /api/blog/reactions/?post_identifier=<slug_or_id>
  */
 export async function getReactions(post_identifier: string): Promise<ReactionInfo> {
-  const url = `${API_BASE}/api/blog/reactions/?post_identifier=${encodeURIComponent(post_identifier)}`;
+  const url = `${API_BASE}api/blog/reactions/?post_identifier=${encodeURIComponent(post_identifier)}`;
   return reqJson(url, { method: 'GET' });
 }
 
@@ -53,7 +53,7 @@ export async function getReactions(post_identifier: string): Promise<ReactionInf
  * Возвращает актуальную сущность ReactionInfo
  */
 export async function toggleReaction(post_identifier: string): Promise<ReactionInfo> {
-  const url = `${API_BASE}/api/blog/reactions/toggle/`;
+  const url = `${API_BASE}api/blog/reactions/toggle/`;
   return reqJson(url, {
     method: 'POST',
     body: JSON.stringify({ post_identifier }),
