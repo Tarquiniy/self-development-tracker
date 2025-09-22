@@ -9,6 +9,7 @@ import BlogPostWithComments from './components/BlogPostWithComments';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Dashboard from './components/Dashboard';
+import WordPressPost from './components/WordPressPost';
 
 const isAuthed = () => !!localStorage.getItem('accessToken');
 
@@ -24,8 +25,10 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<Navigate to="/blog" replace />} />
           <Route path="/blog" element={<BlogList />} />
-          {/* Маршрут к посту по slug, теперь с комментариями и лайками */}
-          <Route path="/blog/:slug" element={<BlogPostWithComments slug={/** получим slug из URL */ ''} />} />
+          {/* Old post view - keep for backup */}
+          <Route path="/blog/:slug" element={<BlogPostWithComments slug={''} />} />
+          {/* New WordPress post view with full styling */}
+          <Route path="/post/:slug" element={<WordPressPost />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route

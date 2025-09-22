@@ -9,7 +9,8 @@ const PostCard: React.FC<{post: PostSummary}> = ({post}) => {
     <article className="post-card">
       {post.featured_image_url && <img className="media" src={post.featured_image_url} alt={post.title} />}
       <div className="body">
-        <h2><Link to={`/blog/${post.slug}`}>{post.title}</Link></h2>
+        {/* Change this line to use the new route */}
+        <h2><Link to={`/post/${post.slug}`}>{post.title}</Link></h2>
         <p className="excerpt" dangerouslySetInnerHTML={{__html: post.excerpt}} />
         <div className="kv">{new Date(post.date).toLocaleDateString()}</div>
       </div>

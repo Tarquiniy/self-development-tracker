@@ -1,11 +1,9 @@
 from django.urls import path
-from .views_proxy import wordpress_posts_proxy
-from .views import reaction_detail, reaction_toggle
-from .views import wordpress_post_with_styles
+from .views_proxy import wordpress_posts_proxy, wordpress_post_html_proxy
 
 urlpatterns = [
     path('wordpress/posts/', wordpress_posts_proxy, name='wordpress_posts_proxy'),
     path('posts/', wordpress_posts_proxy, name='wordpress_posts_proxy'),
-    path('reactions/', reaction_detail, name='reaction_detail'),
-    path('reactions/toggle/', reaction_toggle, name='reaction_toggle'),
+    # New endpoint for fully rendered HTML
+    path('wordpress/post/<str:post_identifier>/html/', wordpress_post_html_proxy, name='wordpress_post_html_proxy'),
 ]
