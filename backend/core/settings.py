@@ -11,13 +11,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# Улучшенная конфигурация Summernote для современного редактора
+# ========== НАСТРОЙКИ ADMIN И GRAPPELLI ==========
+GRAPPELLI_ADMIN_TITLE = 'Positive Theta Admin'
+GRAPPELLI_SWITCH_USER = True
+
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 SUMMERNOTE_CONFIG = {
     'iframe': True,
     'summernote': {
         'width': '100%',
-        'height': '500px',
+        'height': '480px',
         'toolbar': [
             ['style', ['style']],
             ['font', ['bold', 'italic', 'underline', 'clear']],
@@ -26,15 +29,11 @@ SUMMERNOTE_CONFIG = {
             ['para', ['ul', 'ol', 'paragraph']],
             ['height', ['height']],
             ['table', ['table']],
-            ['insert', ['link', 'picture', 'video', 'hr']],
-            ['view', ['fullscreen', 'codeview']],
-            ['help', ['help']]
+            ['insert', ['link', 'picture', 'video']],
+            ['view', ['fullscreen', 'codeview', 'help']],
         ],
-        'fontNames': ['Arial', 'Arial Black', 'Comic Sans MS', 'Courier New', 'Helvetica', 'Impact', 'Tahoma', 'Times New Roman', 'Verdana', 'Georgia'],
-        'fontSizes': ['8', '9', '10', '11', '12', '14', '18', '24', '36'],
     },
     'attachment_require_authentication': True,
-    'attachment_model': 'blog.PostAttachment',
 }
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'резервный-секретный-ключ-для-разработки')
@@ -78,7 +77,6 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 
-# Разрешенные методы
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -88,7 +86,6 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 
-# Разрешенные заголовки
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -101,15 +98,16 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# Session settings for cross-domain
 SESSION_COOKIE_SAMESITE = 'None'
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SAMESITE = 'None'
 CSRF_COOKIE_SECURE = True
 
-# Static files
+# ========== СТАТИЧЕСКИЕ ФАЙЛЫ ==========
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+
+# Важно: правильный порядок для статических файлов
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "static"),
 ]
@@ -121,7 +119,7 @@ if os.path.exists(os.path.join(FRONTEND_DIR, 'dist')):
 
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-# Database - обновленная конфигурация для Supabase
+# ========== БАЗА ДАННЫХ ==========
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -133,7 +131,6 @@ DATABASES = {
     }
 }
 
-# Альтернативная конфигурация через DATABASE_URL
 if os.environ.get('DATABASE_URL'):
     DATABASES['default'] = dj_database_url.config(
         default=os.environ.get('DATABASE_URL'),
@@ -141,9 +138,11 @@ if os.environ.get('DATABASE_URL'):
         conn_health_checks=True,
     )
 
+# ========== MIDDLEWARE ==========
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # Важно: после SecurityMiddleware
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -152,7 +151,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# Installed apps - добавляем необходимые приложения для улучшенной админки
+# ========== ПРИЛОЖЕНИЯ ==========
 INSTALLED_APPS = [
     'grappelli',
     "django.contrib.admin",
@@ -169,7 +168,6 @@ INSTALLED_APPS = [
     "whitenoise.runserver_nostatic",
     'django_filters',
     'django_summernote',
-    'import_export',
 
     # Local apps
     "users",
@@ -179,12 +177,9 @@ INSTALLED_APPS = [
     "blog",
 ]
 
-# Настройка Grappelli для современного интерфейса админки
-GRAPPELLI_ADMIN_TITLE = "Positive Theta Admin"
-GRAPPELLI_CLEAN_INPUT_TYPES = False
-
 ROOT_URLCONF = "core.urls"
 
+# ========== ШАБЛОНЫ ==========
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -193,9 +188,10 @@ TEMPLATES = [
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.debug",
-                "django.template.context_processors.request",
+                "django.template.context_processors.request",  # Важно для Grappelli
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "django.template.context_processors.static",
             ],
         },
     },
@@ -203,7 +199,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "core.wsgi.application"
 
-# Caching
+# ========== КЕШИРОВАНИЕ ==========
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
@@ -212,7 +208,7 @@ CACHES = {
     }
 }
 
-# Password validation
+# ========== ПАРОЛИ ==========
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -220,7 +216,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# Internationalization
+# ========== ЯЗЫК И ВРЕМЯ ==========
 LANGUAGE_CODE = "ru-ru"
 TIME_ZONE = "Europe/Moscow"
 USE_I18N = True
@@ -228,7 +224,7 @@ USE_TZ = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# REST Framework
+# ========== REST FRAMEWORK ==========
 REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -242,7 +238,7 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10,
 }
 
-# JWT
+# ========== JWT ==========
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
@@ -255,10 +251,10 @@ SIMPLE_JWT = {
     "AUTH_COOKIE_SAMESITE": "None",
 }
 
-# Custom User
+# ========== ПОЛЬЗОВАТЕЛИ ==========
 AUTH_USER_MODEL = "users.CustomUser"
 
-# Production security
+# ========== БЕЗОПАСНОСТЬ PRODUCTION ==========
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -270,11 +266,12 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
+# ========== ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ ==========
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-# Email backend для production
+# Email
 if not DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = os.getenv('EMAIL_HOST')
@@ -286,34 +283,21 @@ if not DEBUG:
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# Supabase настройки
-SUPABASE_DB_CONFIG = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('SUPABASE_DB_NAME', 'postgres'),
-        'USER': os.environ.get('SUPABASE_DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('SUPABASE_DB_PASSWORD', ''),
-        'HOST': os.environ.get('SUPABASE_DB_HOST', 'db.fjqbhcmsqypevfbpzcxj.supabase.co'),
-        'PORT': os.environ.get('SUPABASE_DB_PORT', '5432'),
-    }
-}
-
-# Логирование для админки
+# ========== НАСТРОЙКИ ЛОГГИРОВАНИЯ ==========
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
         'file': {
-            'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': os.path.join(BASE_DIR, 'admin.log'),
+            'filename': 'django.log',
         },
     },
-    'loggers': {
-        'django': {
-            'handlers': ['file'],
-            'level': 'INFO',
-            'propagate': True,
-        },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
     },
 }

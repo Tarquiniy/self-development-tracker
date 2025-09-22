@@ -1,0 +1,299 @@
+/* WordPress-like Modern Admin Styles */
+:root {
+    --wp-primary: #0073aa;
+    --wp-primary-dark: #005a87;
+    --wp-primary-light: #00a0d2;
+    --wp-success: #46b450;
+    --wp-warning: #ffb900;
+    --wp-danger: #dc3232;
+    --wp-gray-light: #f6f7f7;
+    --wp-gray-medium: #ccd0d4;
+    --wp-gray-dark: #50575e;
+    --wp-text-dark: #1d2327;
+    --wp-text-light: #f0f0f1;
+    --wp-border: #dcdcde;
+    --wp-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Основной layout */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    background: var(--wp-gray-light);
+}
+
+#header {
+    background: var(--wp-text-dark);
+    color: var(--wp-text-light);
+    border-bottom: 3px solid var(--wp-primary);
+}
+
+#branding h1 {
+    color: var(--wp-text-light);
+    font-weight: 600;
+    font-size: 1.5rem;
+}
+
+#branding h1 a {
+    color: var(--wp-text-light);
+    text-decoration: none;
+}
+
+#branding h1 a:hover {
+    color: var(--wp-primary-light);
+}
+
+/* Навигация */
+#user-tools {
+    color: var(--wp-text-light);
+}
+
+#user-tools a {
+    color: var(--wp-primary-light);
+    border-bottom: 1px solid transparent;
+    transition: all 0.2s ease;
+}
+
+#user-tools a:hover {
+    color: var(--wp-text-light);
+    border-bottom-color: var(--wp-primary-light);
+}
+
+/* Боковое меню */
+#content-related {
+    background: var(--wp-text-dark);
+}
+
+.module h2, .module caption {
+    background: var(--wp-primary);
+    color: var(--wp-text-light);
+    font-weight: 600;
+    padding: 12px 15px;
+    margin: 0;
+}
+
+/* Карточки для постов */
+.card {
+    background: white;
+    border: 1px solid var(--wp-border);
+    border-radius: 8px;
+    box-shadow: var(--wp-shadow);
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    background: var(--wp-gray-light);
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--wp-border);
+}
+
+.card-header strong {
+    font-size: 1.1rem;
+    color: var(--wp-text-dark);
+}
+
+.card-body {
+    padding: 20px;
+    display: flex;
+    gap: 15px;
+    align-items: flex-start;
+}
+
+.card-img {
+    width: 120px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.card-footer {
+    background: var(--wp-gray-light);
+    padding: 15px 20px;
+    border-top: 1px solid var(--wp-border);
+    display: flex;
+    gap: 10px;
+}
+
+/* Кнопки WordPress-style */
+.button, input[type=submit], input[type=button] {
+    background: var(--wp-primary);
+    color: white;
+    border: none;
+    border-radius: 3px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.button:hover, input[type=submit]:hover, input[type=button]:hover {
+    background: var(--wp-primary-dark);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.button-primary {
+    background: var(--wp-primary);
+}
+
+.button-secondary {
+    background: var(--wp-gray-medium);
+    color: var(--wp-text-dark);
+}
+
+.button-secondary:hover {
+    background: var(--wp-gray-dark);
+    color: white;
+}
+
+/* Бейджи для категорий и тегов */
+.category-badge, .tag-badge {
+    display: inline-block;
+    background: var(--wp-primary-light);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    margin: 2px;
+}
+
+.tag-badge {
+    background: var(--wp-gray-dark);
+}
+
+/* Формы */
+input[type=text], input[type=email], input[type=password], input[type=url], 
+textarea, select {
+    border: 1px solid var(--wp-border);
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+input[type=text]:focus, input[type=email]:focus, input[type=password]:focus, 
+input[type=url]:focus, textarea:focus, select:focus {
+    border-color: var(--wp-primary);
+    box-shadow: 0 0 0 2px rgba(0, 115, 170, 0.2);
+    outline: none;
+}
+
+/* Таблицы */
+thead th, thead td {
+    background: var(--wp-gray-light);
+    font-weight: 600;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .card-body {
+        flex-direction: column;
+    }
+    
+    .card-img {
+        width: 100%;
+        height: 200px;
+    }
+    
+    .card-footer {
+        flex-direction: column;
+    }
+}
+
+/* Иконки действий */
+.action-icons {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.action-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--wp-gray-light);
+    color: var(--wp-text-dark);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.action-icon:hover {
+    background: var(--wp-primary);
+    color: white;
+    transform: scale(1.1);
+}
+
+/* Статусы */
+.status-published {
+    color: var(--wp-success);
+    font-weight: 600;
+}
+
+.status-draft {
+    color: var(--wp-warning);
+    font-weight: 600;
+}
+
+/* Dashboard widgets */
+.dashboard-widget {
+    background: white;
+    border: 1px solid var(--wp-border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--wp-shadow);
+}
+
+.dashboard-widget h3 {
+    margin-top: 0;
+    color: var(--wp-text-dark);
+    border-bottom: 2px solid var(--wp-primary);
+    padding-bottom: 10px;
+}
+
+/* Quick actions */
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.quick-action {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+    text-decoration: none;
+    color: var(--wp-text-dark);
+    border: 1px solid var(--wp-border);
+    transition: all 0.3s ease;
+}
+
+.quick-action:hover {
+    border-color: var(--wp-primary);
+    transform: translateY(-2px);
+    color: var(--wp-primary);
+}
+
+.quick-action i {
+    font-size: 24px;
+    margin-bottom: 10px;
+    display: block;
+}
