@@ -13,6 +13,10 @@
   ],
   "rewrites": [
     {
+      "source": "/admin/(.*)",
+      "destination": "https://sdracker.onrender.com/admin/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

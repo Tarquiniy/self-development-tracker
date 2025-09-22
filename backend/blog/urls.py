@@ -11,6 +11,7 @@ router.register(r'tags', TagViewSet, basename='tag')
 router.register(r'comments', CommentViewSet, basename='comment')
 
 urlpatterns = [
+    path('grappelli/', include('grappelli.urls')),
     path('', include(router.urls)),
     path('reactions/detail/', reaction_detail, name='reaction-detail'),
     path('reactions/toggle/', reaction_toggle, name='reaction-toggle'),

@@ -1,0 +1,47 @@
+/* Общий стиль карточек */
+.card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 15px;
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.card-header {
+    font-size: 16px;
+    margin-bottom: 6px;
+}
+.card-body {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+.card-img {
+    max-height: 80px;
+    border-radius: 6px;
+    object-fit: cover;
+}
+.card-footer {
+    margin-top: 6px;
+}
+.button {
+    display: inline-block;
+    margin-right: 5px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: #1f73b7;
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+}
+.button:hover {
+    background-color: #155a8a;
+}
+.category-badge, .tag-badge {
+    display: inline-block;
+    margin-right: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background-color: #eee;
+    font-size: 11px;
+}
