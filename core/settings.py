@@ -65,7 +65,7 @@ if not DEBUG:
     CORS_ALLOWED_ORIGINS = [
         "https://sdtracker.vercel.app",  # Только production фронтенд
     ]
-
+    
     # Важные security настройки
     SECURE_SSL_REDIRECT = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -178,4 +178,3 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
