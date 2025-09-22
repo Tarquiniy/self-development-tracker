@@ -2,12 +2,21 @@ from django.contrib import admin
 from django.utils.html import format_html
 from .models import Post, Category, Tag, Comment, PostReaction
 from django_summernote.admin import SummernoteModelAdmin
+from django.contrib.auth import get_user_model
+
+CustomUser = get_user_model()
+
+
+# Регистрируем CustomUser для autocomplete_fields
+@admin.register(CustomUser)
+class CustomUserAdmin(admin.ModelAdmin):
+    search_fields = ['username', 'email']
 
 
 @admin.register(Post)
 class PostAdmin(SummernoteModelAdmin):
-    list_display = ('title', 'slug', 'published_at', 'is_published', 'preview_image')
-    list_filter = ('is_published', 'published_at', 'categories', 'tags')
+    list_display = ('title', 'slug', 'published_at', 'status', 'preview_image')
+    list_filter = ('status', 'published_at', 'categories', 'tags')
     search_fields = ('title', 'slug', 'excerpt', 'content')
     prepopulated_fields = {"slug": ("title",)}
     summernote_fields = ('content',)
@@ -16,7 +25,7 @@ class PostAdmin(SummernoteModelAdmin):
 
     fieldsets = (
         ("Основное", {
-            'fields': ('title', 'slug', 'excerpt', 'content', 'featured_image', 'is_published')
+            'fields': ('title', 'slug', 'excerpt', 'content', 'featured_image', 'status')
         }),
         ("Категории и теги", {
             'fields': ('categories', 'tags')
@@ -33,7 +42,7 @@ class PostAdmin(SummernoteModelAdmin):
 
     def preview_image(self, obj):
         if obj.featured_image:
-            return format_html('<img src="{}" style="max-height: 60px;" />', obj.featured_image.url)
+            return format_html('<img src="{}" style="max-height: 60px;" />', obj.featured_image)
         return "—"
     preview_image.short_description = "Обложка"
 
