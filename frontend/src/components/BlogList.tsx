@@ -13,21 +13,22 @@ const BlogList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const loadPosts = async (pageNum: number) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await fetchPosts(pageNum);
+  try {
+    setLoading(true);
+    setError(null);
+    const data = await fetchPosts(pageNum);
 
-      // ✅ добавил защиту от undefined
-      setPosts(data.results ?? []);
-      setCount(data.count ?? data.results?.length ?? 0);
-    } catch (err: any) {
-      setError(err.message || 'Ошибка загрузки постов');
-      console.error('Failed to load posts:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    console.log("✅ Загруженные посты:", data); // <<< добавлено для проверки
+
+    setPosts(data.results ?? []);
+    setCount(data.count ?? 0);
+  } catch (err: any) {
+    setError(err.message || 'Ошибка загрузки постов');
+    console.error('Failed to load posts:', err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     loadPosts(page);

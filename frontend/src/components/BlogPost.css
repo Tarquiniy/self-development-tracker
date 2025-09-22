@@ -1,4 +1,5 @@
 /* frontend/src/components/BlogPost.css */
+
 .blog-post-container {
   max-width: 800px;
   margin: 0 auto;
@@ -6,6 +7,7 @@
   min-height: 80vh;
 }
 
+/* кнопка назад */
 .back-button {
   background: none;
   border: 1px solid #d1d5db;
@@ -21,6 +23,7 @@
   background-color: #f9fafb;
 }
 
+/* заголовок статьи */
 .post-header {
   margin-bottom: 2rem;
 }
@@ -64,6 +67,7 @@
   font-style: italic;
 }
 
+/* контент статьи - ОСНОВНЫЕ ИЗМЕНЕНИЯ ЗДЕСЬ */
 .post-content {
   line-height: 1.8;
   font-size: 1.1rem;
@@ -75,55 +79,161 @@
   overflow-wrap: break-word;
 }
 
+/* --- УЛУЧШЕННЫЕ СТИЛИ ДЛЯ HTML-КОНТЕНТА --- */
+.post-html-content * {
+  max-width: 100%;
+}
+
+/* Сохраняем базовое форматирование заголовков */
 .post-html-content h1,
 .post-html-content h2,
-.post-html-content h3 {
+.post-html-content h3,
+.post-html-content h4,
+.post-html-content h5,
+.post-html-content h6 {
+  font-family: 'Inter', sans-serif;
   color: #1f2937;
+  line-height: 1.4;
   margin-top: 2rem;
   margin-bottom: 1rem;
+  font-weight: 600;
 }
 
-.post-html-content h1 {
-  font-size: 2rem;
+.post-html-content h1 { 
+  font-size: 2rem; 
+  text-align: center;
 }
+.post-html-content h2 { font-size: 1.75rem; }
+.post-html-content h3 { font-size: 1.5rem; }
 
-.post-html-content h2 {
-  font-size: 1.75rem;
-}
-
-.post-html-content h3 {
-  font-size: 1.5rem;
-}
-
+/* Параграфы и текст */
 .post-html-content p {
   margin-bottom: 1.5rem;
+  line-height: 1.7;
 }
 
+.post-html-content font,
+.post-html-content span {
+  font-family: inherit;
+  color: inherit;
+  line-height: inherit;
+}
+
+/* Сохраняем выравнивание и стили текста */
+.post-html-content .align-center {
+  text-align: center;
+}
+
+.post-html-content .align-left {
+  text-align: left;
+}
+
+.post-html-content .align-right {
+  text-align: right;
+}
+
+/* Стили для шрифтов и цветов */
+.post-html-content font[color] {
+  color: inherit;
+}
+
+.post-html-content font[style*="background-color"] {
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+/* Изображения */
 .post-html-content img {
   max-width: 100%;
   height: auto;
   border-radius: 8px;
-  margin: 1rem 0;
-}
-
-.post-html-content blockquote {
-  border-left: 4px solid #3b82f6;
-  padding-left: 1rem;
   margin: 1.5rem 0;
-  font-style: italic;
-  color: #6b7280;
 }
 
+/* Списки */
 .post-html-content ul,
 .post-html-content ol {
-  margin: 1rem 0;
+  margin: 1.5rem 0;
   padding-left: 2rem;
 }
 
 .post-html-content li {
   margin-bottom: 0.5rem;
+  line-height: 1.6;
 }
 
+/* Цитаты */
+.post-html-content blockquote {
+  border-left: 4px solid #3b82f6;
+  padding-left: 1.5rem;
+  margin: 2rem 0;
+  font-style: italic;
+  color: #6b7280;
+  background-color: #f8fafc;
+  padding: 1.5rem;
+  border-radius: 8px;
+}
+
+/* Таблицы */
+.post-html-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+}
+
+.post-html-content table th,
+.post-html-content table td {
+  border: 1px solid #e5e7eb;
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.post-html-content table th {
+  background-color: #f9fafb;
+  font-weight: 600;
+}
+
+/* Код */
+.post-html-content code {
+  background-color: #f3f4f6;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.9em;
+}
+
+.post-html-content pre {
+  background-color: #1f2937;
+  color: #f9fafb;
+  padding: 1.5rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+}
+
+.post-html-content pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+/* Ссылки */
+.post-html-content a {
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.post-html-content a:hover {
+  text-decoration: underline;
+}
+
+/* Убираем только действительно вредоносные стили */
+.post-html-content style,
+.post-html-content script {
+  display: none !important;
+}
+
+/* футер поста */
 .post-footer {
   margin-top: 3rem;
   padding-top: 2rem;
@@ -199,25 +309,39 @@
   100% { transform: rotate(360deg); }
 }
 
+/* адаптив */
 @media (max-width: 768px) {
   .blog-post-container {
     padding: 1rem 0.5rem;
   }
-  
+
   .post-title {
     font-size: 2rem;
   }
-  
+
   .post-image {
     height: 250px;
   }
-  
+
   .post-meta {
     flex-direction: column;
     gap: 0.5rem;
   }
-  
+
   .post-content {
     font-size: 1rem;
+  }
+
+  .post-html-content h1 {
+    font-size: 1.75rem;
+    text-align: left;
+  }
+  
+  .post-html-content h2 {
+    font-size: 1.5rem;
+  }
+  
+  .post-html-content h3 {
+    font-size: 1.25rem;
   }
 }
