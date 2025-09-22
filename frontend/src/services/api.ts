@@ -31,7 +31,7 @@ const BACKEND_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://s
 
 export const checkApiHealth = async (): Promise<boolean> => {
   try {
-    const response = await fetch(`${BACKEND_BASE}/api/blog/reactions/`, {
+    const response = await fetch(`${BACKEND_BASE}api/blog/reactions/`, {
       method: 'OPTIONS'
     });
     return response.ok;
