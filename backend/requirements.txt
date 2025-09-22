@@ -60,3 +60,4 @@ urllib3==2.5.0
 websockets>=10.0
 whitenoise==6.9.0
 beautifulsoup4==4.12.3
+django_filters
