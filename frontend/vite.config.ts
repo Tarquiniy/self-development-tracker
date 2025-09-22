@@ -66,6 +66,6 @@ export default defineConfig(({ mode }) => {
       },
     },
     // Добавлено для правильного определения базового пути
-    base: './',
+    base: '/blog/',
   }
 })
