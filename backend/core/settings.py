@@ -104,7 +104,7 @@ CSRF_COOKIE_SAMESITE = 'None'
 CSRF_COOKIE_SECURE = True
 
 # ========== СТАТИЧЕСКИЕ ФАЙЛЫ ==========
-STATIC_URL = "/static/"
+STATIC_URL = "/static/assets/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 # Важно: правильный порядок для статических файлов

@@ -53,6 +53,7 @@ export default defineConfig(({ mode }) => {
         }
       },
       outDir: 'dist',
+      assetsDir: 'assets',
     },
     define: {
       'process.env': {},
@@ -65,7 +66,6 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    // Добавлено для правильного определения базового пути
-    base: './',
+    base: '/blog/',
   }
 })
