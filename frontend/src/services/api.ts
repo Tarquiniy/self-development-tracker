@@ -26,20 +26,8 @@ export type PostFull = {
   featured_image_url?: string | null;
 };
 
-const WP_BASE = (import.meta.env.VITE_WP_BASE as string) || 'https://cs88500-wordpress-o0a99.tw1.ru';
+const WP_BASE = (import.meta.env.VITE_WP_BASE as string) || 'https://sdblog.infinityfreeapp.com';
 const BACKEND_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://sdracker.onrender.com';
-
-export const checkApiHealth = async (): Promise<boolean> => {
-  try {
-    const response = await fetch(`${BACKEND_BASE}/api/blog/reactions/`, {
-      method: 'OPTIONS'
-    });
-    return response.ok;
-  } catch (error) {
-    console.error('API health check failed:', error);
-    return false;
-  }
-};
 
 export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]> {
   const url = `${BACKEND_BASE}api/wordpress/posts/?page=${page}&perPage=${perPage}`;
@@ -107,12 +95,12 @@ class ApiService {
   constructor() {
     // Всегда используем VITE_API_BASE_URL из окружения
     this.baseUrl = import.meta.env.VITE_API_BASE_URL as string;
-    
+
     // Fallback только для разработки
     if (!this.baseUrl && window.location.hostname === 'localhost') {
       this.baseUrl = 'https://sdracker.onrender.com';
     }
-    
+
     // Final fallback
     if (!this.baseUrl) {
       this.baseUrl = 'https://sdracker.onrender.com';
@@ -167,7 +155,7 @@ class ApiService {
     }
   }
 
-  
+
 
   // ===== твои существующие методы =====
 

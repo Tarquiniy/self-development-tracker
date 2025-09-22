@@ -1,23 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
 import { fetchPostBySlug, PostFull } from '../services/wpApi';
 import { fetchCommentsForPost, postCommentForPostSlug, WPComment } from '../services/commentsApi';
 import { getReactions, toggleReaction } from '../services/reactionsApi';
 import './BlogPostWithComments.css';
-
-// Выносим константы наружу компонента
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://sdracker.onrender.com';
-const WP_BASE = import.meta.env.VITE_WP_BASE || 'https://cs88500-wordpress-o0a99.tw1.ru';
-
-interface StyledPost {
-  id: number;
-  title: string;
-  content: string;
-  styles: string;
-  featured_image: string;
-  date: string;
-  slug: string;
-}
 
 type Props = {
   slug: string;
@@ -33,12 +18,9 @@ function formatDate(d: string) {
 
 export default function BlogPostWithComments({ slug }: Props) {
   const [post, setPost] = useState<PostFull | null>(null);
-  const [styledPost, setStyledPost] = useState<StyledPost | null>(null);
   const [comments, setComments] = useState<WPComment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [iframeHeight, setIframeHeight] = useState('600px');
-  const [iframeUrl, setIframeUrl] = useState<string>('');
 
   const [commentContent, setCommentContent] = useState('');
   const [authorName, setAuthorName] = useState('');
@@ -55,42 +37,20 @@ export default function BlogPostWithComments({ slug }: Props) {
 
     (async () => {
       try {
-        // Получаем базовую информацию о посте
         const p = await fetchPostBySlug(slug);
         if (!isMounted) return;
         setPost(p);
-
-        // Получаем стилизованную версию поста через Django API
-        const styledResponse = await fetch(
-          `${API_BASE}/api/blog/wordpress/post-with-styles/${p.id}/`
-        );
-        
-        if (!styledResponse.ok) {
-          throw new Error('Failed to fetch styled post');
-        }
-
-        const styledData = await styledResponse.json();
-        if (!isMounted) return;
-        setStyledPost(styledData);
-
-        // Устанавливаем URL для iframe
-        setIframeUrl(`${WP_BASE}/?p=${p.id}&sdtracker_embed=true`);
-
-        // Загружаем комментарии
         const c = await fetchCommentsForPost(slug);
         if (!isMounted) return;
         setComments(c);
 
         try {
-          // Используем post.id для реакций
-          const r = await getReactions(String(p.id));
+          const r = await getReactions(String(p.id || p.slug));
           if (!isMounted) return;
           setLikesCount(r.likes_count);
           setLiked(r.liked_by_current_user);
         } catch (e) {
           console.warn('Reactions fetch failed', e);
-          setLikesCount(0);
-          setLiked(false);
         }
       } catch (e) {
         if (!isMounted) return;
@@ -104,18 +64,6 @@ export default function BlogPostWithComments({ slug }: Props) {
       isMounted = false;
     };
   }, [slug]);
-
-  const handleIframeLoad = (event: React.SyntheticEvent<HTMLIFrameElement>) => {
-    try {
-      const iframe = event.currentTarget;
-      const height = iframe.contentWindow?.document.body.scrollHeight;
-      if (height) {
-        setIframeHeight(`${height + 50}px`);
-      }
-    } catch (e) {
-      console.warn('Could not adjust iframe height:', e);
-    }
-  };
 
   async function submitComment() {
     if (!commentContent.trim()) {
@@ -148,8 +96,7 @@ export default function BlogPostWithComments({ slug }: Props) {
   async function onToggleLike() {
     if (!post) return;
     try {
-      // Используем post.id для реакций
-      const res = await toggleReaction(String(post.id));
+      const res = await toggleReaction(String(post.id || post.slug));
       setLikesCount(res.likes_count);
       setLiked(res.liked_by_current_user);
     } catch (e) {
@@ -173,25 +120,10 @@ export default function BlogPostWithComments({ slug }: Props) {
       <article>
         <h1 dangerouslySetInnerHTML={{ __html: post.title }} />
         <div className="meta">{formatDate(post.date)}</div>
-        
-        {/* Встраиваем пост через iframe */}
-        {iframeUrl && (
-          <iframe
-            src={iframeUrl}
-            style={{ 
-              width: '100%', 
-              height: iframeHeight, 
-              border: 'none',
-              borderRadius: '8px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}
-            onLoad={handleIframeLoad}
-            title={post.title}
-            loading="lazy"
-            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-          />
+        {post.featured_image_url && (
+          <img src={post.featured_image_url} alt="featured" />
         )}
-        
+        <section dangerouslySetInnerHTML={{ __html: post.content }} />
         <div style={{ marginTop: 16 }}>
           <button
             className={`btn-like ${liked ? 'liked' : ''}`}

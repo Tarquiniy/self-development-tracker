@@ -6,7 +6,6 @@ from .views import wordpress_post_with_styles
 urlpatterns = [
     path('wordpress/posts/', wordpress_posts_proxy, name='wordpress_posts_proxy'),
     path('posts/', wordpress_posts_proxy, name='wordpress_posts_proxy'),
-    path('wordpress/post-with-styles/<int:post_id>/', wordpress_post_with_styles, name='wordpress_post_with_styles'),
     path('reactions/', reaction_detail, name='reaction_detail'),
     path('reactions/toggle/', reaction_toggle, name='reaction_toggle'),
 ]
