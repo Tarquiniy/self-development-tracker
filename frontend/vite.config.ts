@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  
+
   return {
     plugins: [
       react(),
@@ -34,23 +34,12 @@ export default defineConfig(({ mode }) => {
       })
     ],
     server: {
-  port: 3000,
-  proxy: {
-    '/api': {
-      target: env.VITE_API_BASE_URL || 'https://sdracker.onrender.com',
-      changeOrigin: true,
-      secure: false,
-          configure: (proxy, _options) => {
-            proxy.on('error', (err, _req, _res) => {
-              console.log('Proxy error:', err);
-            });
-            proxy.on('proxyReq', (_proxyReq, req, _res) => {
-  console.log('Sending Request to the Target:', req.method, req.url);
-});
-proxy.on('proxyRes', (proxyRes, req, _res) => {
-  console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
-});
-          },
+      port: 3000,
+      proxy: {
+        '/api': {
+          target: env.VITE_API_BASE_URL || 'https://sdracker.onrender.com',
+          changeOrigin: true,
+          secure: false,
         },
       },
     },
@@ -66,12 +55,9 @@ proxy.on('proxyRes', (proxyRes, req, _res) => {
       outDir: 'dist',
     },
     define: {
-  'process.env': {
-    VITE_API_BASE_URL: JSON.stringify(process.env.VITE_API_BASE_URL),
-    VITE_WP_BASE: JSON.stringify(process.env.VITE_WP_BASE)
-  },
-  'global': 'globalThis',
-},
+      'process.env': {},
+      'global': 'globalThis',
+    },
     optimizeDeps: {
       esbuildOptions: {
         define: {
@@ -79,5 +65,7 @@ proxy.on('proxyRes', (proxyRes, req, _res) => {
         },
       },
     },
+    // Добавлено для правильного определения базового пути
+    base: './',
   }
 })

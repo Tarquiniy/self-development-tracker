@@ -1,8 +1,9 @@
+// frontend/src/App.tsx
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/Header';
 import BlogList from './components/BlogList';
-import BlogPostWithComments from './components/BlogPost';
+import BlogPost from './components/BlogPost';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Dashboard from './components/Dashboard';
@@ -21,8 +22,7 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<Navigate to="/blog" replace />} />
           <Route path="/blog" element={<BlogList />} />
-          {/* slug теперь автоматически берётся из URL в BlogPostWithComments */}
-          <Route path="/blog/:slug" element={<BlogPostWithComments />} />
+          <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route

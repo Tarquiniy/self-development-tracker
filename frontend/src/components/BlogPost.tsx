@@ -1,228 +1,178 @@
+// frontend/src/components/BlogPost.tsx
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import {
-  fetchPost,
-  fetchReaction,
-  toggleReaction,
-  Post,
-} from '../services/blogApi';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import { fetchPost, fetchReaction, toggleReaction, Post } from '../services/blogApi';
+import './BlogPost.css';
 
-// === Типы комментариев ===
-interface Comment {
-  id: number;
-  post: number;
-  parent: number | null;
-  name: string;
-  email?: string;
-  user?: string;
-  content: string;
-  created_at: string;
-  replies: Comment[];
-}
-
-// === Форма комментариев ===
-const CommentForm: React.FC<{
-  postId: number;
-  parentId?: number | null;
-  onSubmitted: () => void;
-}> = ({ postId, parentId = null, onSubmitted }) => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [content, setContent] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!content.trim() || !name.trim()) return;
-
-    setLoading(true);
-    const res = await fetch(`/api/blog/comments/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        post: postId,
-        parent: parentId,
-        name,
-        email,
-        content,
-      }),
-    });
-
-    setLoading(false);
-    if (res.ok) {
-      setContent('');
-      onSubmitted();
-    } else {
-      alert('Ошибка при отправке комментария');
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="comment-form">
-      <input
-        type="text"
-        placeholder="Имя*"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        required
-      />
-      <input
-        type="email"
-        placeholder="Email (необязательно)"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <textarea
-        placeholder="Ваш комментарий..."
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        required
-      />
-      <button type="submit" disabled={loading}>
-        {loading ? 'Отправка...' : 'Отправить'}
-      </button>
-    </form>
-  );
-};
-
-// === Один комментарий с вложенными ===
-const CommentItem: React.FC<{
-  comment: Comment;
-  postId: number;
-  onRefresh: () => void;
-}> = ({ comment, postId, onRefresh }) => {
-  const [replying, setReplying] = useState(false);
-
-  return (
-    <div className="comment">
-      <p>
-        <strong>{comment.user || comment.name}</strong>:{' '}
-        <span dangerouslySetInnerHTML={{ __html: comment.content }} />
-      </p>
-      <small>{new Date(comment.created_at).toLocaleString()}</small>
-      <div>
-        <button onClick={() => setReplying(!replying)}>
-          {replying ? 'Отмена' : 'Ответить'}
-        </button>
-      </div>
-      {replying && (
-        <CommentForm
-          postId={postId}
-          parentId={comment.id}
-          onSubmitted={() => {
-            setReplying(false);
-            onRefresh();
-          }}
-        />
-      )}
-      {comment.replies?.length > 0 && (
-        <div className="replies">
-          {comment.replies.map((reply) => (
-            <CommentItem
-              key={reply.id}
-              comment={reply}
-              postId={postId}
-              onRefresh={onRefresh}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// === Список комментариев ===
-const CommentSection: React.FC<{ post: Post }> = ({ post }) => {
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const loadComments = async () => {
-    setLoading(true);
-    const res = await fetch(`/api/blog/comments/?post=${post.id}`);
-    if (res.ok) {
-      const data = await res.json();
-      setComments(data);
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    loadComments();
-  }, [post.id]);
-
-  return (
-    <section className="comments">
-      <h2>Комментарии</h2>
-      {loading && <p>Загрузка комментариев...</p>}
-      {!loading && comments.length === 0 && <p>Комментариев пока нет.</p>}
-
-      {comments.map((c) => (
-        <CommentItem
-          key={c.id}
-          comment={c}
-          postId={post.id}
-          onRefresh={loadComments}
-        />
-      ))}
-
-      <h3>Оставить комментарий</h3>
-      <CommentForm postId={post.id} onSubmitted={loadComments} />
-    </section>
-  );
-};
-
-// === Главный компонент поста ===
 const BlogPost: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
   const [post, setPost] = useState<Post | null>(null);
   const [likes, setLikes] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [liking, setLiking] = useState(false);
 
   useEffect(() => {
-    if (slug) {
-      setLoading(true);
-      fetchPost(slug)
-        .then((p) => {
-          setPost(p);
-          setLoading(false);
-          return fetchReaction(p.slug);
-        })
-        .then((r) => setLikes(r.likes_count))
-        .catch(() => setLoading(false));
+    if (!slug) {
+      setError('Неверная ссылка на статью');
+      setLoading(false);
+      return;
     }
+
+    const loadPost = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const postData = await fetchPost(slug);
+        setPost(postData);
+        
+        // Загружаем лайки
+        try {
+          const reactionData = await fetchReaction(slug);
+          setLikes(reactionData.likes_count);
+        } catch (reactionError) {
+          console.warn('Could not load reactions:', reactionError);
+          setLikes(0);
+        }
+      } catch (err: any) {
+        setError(err.message || 'Ошибка загрузки статьи');
+        console.error('Failed to load post:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPost();
   }, [slug]);
 
-  if (loading) return <p>Загрузка...</p>;
-  if (!post) return <p>Пост не найден</p>;
+  const handleLike = async () => {
+    if (!slug || liking) return;
+    
+    try {
+      setLiking(true);
+      const reactionData = await toggleReaction(slug);
+      setLikes(reactionData.likes_count);
+    } catch (err) {
+      console.error('Failed to toggle like:', err);
+    } finally {
+      setLiking(false);
+    }
+  };
+
+  const handleBack = () => {
+    navigate('/blog');
+  };
+
+  if (loading) {
+    return (
+      <div className="blog-post-container">
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Загрузка статьи...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !post) {
+    return (
+      <div className="blog-post-container">
+        <div className="error-message">
+          <h2>Ошибка</h2>
+          <p>{error || 'Статья не найдена'}</p>
+          <button onClick={handleBack} className="back-button">
+            Вернуться к списку статей
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <article className="blog-post">
+    <article className="blog-post-container">
       <Helmet>
-        <title>{post.meta_title}</title>
-        <meta name="description" content={post.meta_description} />
+        <title>{post.meta_title || post.title} | Positive Theta</title>
+        <meta name="description" content={post.meta_description || post.excerpt} />
         {post.og_image && <meta property="og:image" content={post.og_image} />}
       </Helmet>
 
-      {post.featured_image && (
-        <img src={post.featured_image} alt={post.title} className="post-image" />
-      )}
-      <h1>{post.title}</h1>
-      <time>{new Date(post.published_at).toLocaleDateString()}</time>
-      <div dangerouslySetInnerHTML={{ __html: post.content }} />
+      <button onClick={handleBack} className="back-button">
+        ← Назад к статьям
+      </button>
 
-      <div className="likes">
-        <button
-          onClick={async () => {
-            const r = await toggleReaction(post.slug);
-            setLikes(r.likes_count);
-          }}
-        >
-          ❤️ {likes}
-        </button>
+      <header className="post-header">
+        {post.featured_image && (
+          <img 
+            src={post.featured_image} 
+            alt={post.title} 
+            className="post-image"
+            onError={(e) => {
+              // Fallback если изображение не загружается
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        )}
+        
+        <div className="post-meta">
+          <time className="post-date">
+            {new Date(post.published_at).toLocaleDateString('ru-RU', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}
+          </time>
+          
+          {post.author && (
+            <span className="post-author">Автор: {post.author}</span>
+          )}
+        </div>
+
+        <h1 className="post-title">{post.title}</h1>
+        
+        {post.excerpt && (
+          <p className="post-excerpt">{post.excerpt}</p>
+        )}
+      </header>
+
+      <div className="post-content">
+        <div 
+          dangerouslySetInnerHTML={{ __html: post.content || '' }} 
+          className="post-html-content"
+        />
       </div>
 
-      <CommentSection post={post} />
+      <footer className="post-footer">
+        <div className="post-actions">
+          <button 
+            onClick={handleLike} 
+            disabled={liking}
+            className={`like-button ${liking ? 'liking' : ''}`}
+          >
+            ❤️ {likes}
+          </button>
+        </div>
+
+        {(post.categories?.length > 0 || post.tags?.length > 0) && (
+          <div className="post-taxonomies">
+            {post.categories?.length > 0 && (
+              <div className="categories">
+                <strong>Категории:</strong>{' '}
+                {post.categories.map(cat => cat.title).join(', ')}
+              </div>
+            )}
+            
+            {post.tags?.length > 0 && (
+              <div className="tags">
+                <strong>Теги:</strong>{' '}
+                {post.tags.map(tag => tag.title).join(', ')}
+              </div>
+            )}
+          </div>
+        )}
+      </footer>
     </article>
   );
 };
