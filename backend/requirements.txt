@@ -62,3 +62,4 @@ whitenoise==6.9.0
 beautifulsoup4==4.12.3
 django_filter==25.1
 django-summernote==0.8.20.0
+django-grappelli==4.0.2
