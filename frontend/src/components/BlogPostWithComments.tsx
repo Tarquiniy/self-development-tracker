@@ -5,6 +5,20 @@ import { fetchCommentsForPost, postCommentForPostSlug, WPComment } from '../serv
 import { getReactions, toggleReaction } from '../services/reactionsApi';
 import './BlogPostWithComments.css';
 
+// Выносим константы наружу компонента
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://sdracker.onrender.com';
+const WP_BASE = import.meta.env.VITE_WP_BASE || 'https://cs88500-wordpress-o0a99.tw1.ru';
+
+interface StyledPost {
+  id: number;
+  title: string;
+  content: string;
+  styles: string;
+  featured_image: string;
+  date: string;
+  slug: string;
+}
+
 type Props = {
   slug: string;
 };
@@ -19,6 +33,7 @@ function formatDate(d: string) {
 
 export default function BlogPostWithComments({ slug }: Props) {
   const [post, setPost] = useState<PostFull | null>(null);
+  const [styledPost, setStyledPost] = useState<StyledPost | null>(null);
   const [comments, setComments] = useState<WPComment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,37 +48,47 @@ export default function BlogPostWithComments({ slug }: Props) {
   const [likesCount, setLikesCount] = useState(0);
   const [liked, setLiked] = useState(false);
 
-  // Используем переменные окружения для URL
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://sdracker.onrender.com';
-  const WP_BASE = import.meta.env.VITE_WP_BASE || 'https://cs88500-wordpress-o0a99.tw1.ru';
-
   useEffect(() => {
-  let isMounted = true;
-  setLoading(true);
-  setError(null);
+    let isMounted = true;
+    setLoading(true);
+    setError(null);
 
-  (async () => {
-    try {
-      const p = await fetchPostBySlug(slug);
-      if (!isMounted) return;
-      setPost(p);
+    (async () => {
+      try {
+        // Получаем базовую информацию о посте
+        const p = await fetchPostBySlug(slug);
+        if (!isMounted) return;
+        setPost(p);
 
-      // Исправленный URL без двойного слеша
-      setIframeUrl(`${API_BASE}/api/wordpress/posts/html/${p.slug}/`);;
+        // Получаем стилизованную версию поста через Django API
+        const styledResponse = await fetch(
+          `${API_BASE}/api/blog/wordpress/post-with-styles/${p.id}/`
+        );
+        
+        if (!styledResponse.ok) {
+          throw new Error('Failed to fetch styled post');
+        }
 
+        const styledData = await styledResponse.json();
+        if (!isMounted) return;
+        setStyledPost(styledData);
+
+        // Устанавливаем URL для iframe
+        setIframeUrl(`${WP_BASE}/?p=${p.id}&sdtracker_embed=true`);
+
+        // Загружаем комментарии
         const c = await fetchCommentsForPost(slug);
         if (!isMounted) return;
         setComments(c);
 
         try {
-          // Используем post.id вместо post.slug для реакций
+          // Используем post.id для реакций
           const r = await getReactions(String(p.id));
           if (!isMounted) return;
           setLikesCount(r.likes_count);
           setLiked(r.liked_by_current_user);
         } catch (e) {
           console.warn('Reactions fetch failed', e);
-          // Устанавливаем значения по умолчанию при ошибке
           setLikesCount(0);
           setLiked(false);
         }
@@ -78,7 +103,7 @@ export default function BlogPostWithComments({ slug }: Props) {
     return () => {
       isMounted = false;
     };
-  }, [slug, API_BASE]);
+  }, [slug]);
 
   const handleIframeLoad = (event: React.SyntheticEvent<HTMLIFrameElement>) => {
     try {
@@ -123,7 +148,7 @@ export default function BlogPostWithComments({ slug }: Props) {
   async function onToggleLike() {
     if (!post) return;
     try {
-      // Используем post.id вместо post.slug для реакций
+      // Используем post.id для реакций
       const res = await toggleReaction(String(post.id));
       setLikesCount(res.likes_count);
       setLiked(res.liked_by_current_user);
@@ -163,6 +188,7 @@ export default function BlogPostWithComments({ slug }: Props) {
             onLoad={handleIframeLoad}
             title={post.title}
             loading="lazy"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
           />
         )}
         
