@@ -113,7 +113,7 @@ STATICFILES_DIRS = [
 ]
 
 # Для React build
-FRONTEND_DIR = os.path.join(BASE_DIR.parent, 'frontend')
+FRONTEND_DIR = os.path.join(BASE_DIR.parent, "frontend")
 DIST_DIR = os.path.join(FRONTEND_DIR, "dist")
 if os.path.exists(DIST_DIR):
     STATICFILES_DIRS.append(DIST_DIR)
