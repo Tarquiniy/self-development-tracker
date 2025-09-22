@@ -65,8 +65,8 @@ export async function fetchPosts(page = 1, perPage = 10): Promise<PostSummary[]>
   }
   return data.map((p: any) => ({
     id: p.id,
-    title: p.title?.rendered ?? '',
-    excerpt: p.excerpt?.rendered ?? '',
+    title: p.title,
+    excerpt: p.excerpt,
     date: p.date,
     slug: p.slug,
     featured_image_url: p._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null
@@ -93,9 +93,9 @@ export async function fetchPostBySlug(slug: string): Promise<PostSummary & { con
 
   return {
     id: p.id,
-    title: p.title?.rendered ?? '',
-    excerpt: p.excerpt?.rendered ?? '',       // <-- вот добавлено excerpt
-    content: p.content?.rendered ?? '',       // content, так как полный пост
+    title: p.title,
+    excerpt: p.excerpt,       
+    content: p.content,       
     date: p.date,
     slug: p.slug,
     featured_image_url: p._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null

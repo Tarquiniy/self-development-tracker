@@ -8,6 +8,19 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+SUMMERNOTE_CONFIG = {
+    'iframe': True,
+    'summernote': {
+        'width': '100%',
+        'height': '480px',
+    },
+    'attachment_require_authentication': True,  # 👈 только авторизованные могут загружать
+}
+
 SECRET_KEY = os.environ.get('SECRET_KEY', 'резервный-секретный-ключ-для-разработки')
 
 DEBUG = os.getenv("DEBUG", "False") == "True"
@@ -137,12 +150,14 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "corsheaders",
     "whitenoise.runserver_nostatic",
+    'django_filters',
 
     # Local apps
     "users",
     "tables",
     "payments",
     "analytics",
+    'django_summernote',
     "blog",
 ]
 
@@ -193,13 +208,17 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # REST Framework
 REST_FRAMEWORK = {
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',  # Для регистрации/входа
+        'rest_framework.permissions.AllowAny',
     ],
+    # при необходимости добавь пагинацию
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
 }
 
 # JWT

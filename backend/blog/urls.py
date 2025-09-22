@@ -1,11 +1,18 @@
-from django.urls import path
-from .views_proxy import wordpress_posts_proxy
-from .views import wordpress_post_html, reaction_detail, reaction_toggle
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import PostViewSet, CategoryViewSet, TagViewSet, CommentViewSet, reaction_detail, reaction_toggle
+
+app_name = 'blog'
+
+router = DefaultRouter()
+router.register(r'posts', PostViewSet, basename='post')
+router.register(r'categories', CategoryViewSet, basename='category')
+router.register(r'tags', TagViewSet, basename='tag')
+router.register(r'comments', CommentViewSet, basename='comment')
 
 urlpatterns = [
-    path('wordpress/posts/', wordpress_posts_proxy, name='wordpress_posts_proxy'),
-    path('posts/', wordpress_posts_proxy, name='wordpress_posts_proxy'),
-    path('wordpress/posts/html/<slug:slug>/', wordpress_post_html, name='wordpress_post_html'),
-    path('reactions/', reaction_detail, name='reaction_detail'),
-    path('reactions/toggle/', reaction_toggle, name='reaction_toggle'),
+    path('', include(router.urls)),
+    path('reactions/detail/', reaction_detail, name='reaction-detail'),
+    path('reactions/toggle/', reaction_toggle, name='reaction-toggle'),
+    path('summernote/', include('django_summernote.urls')),
 ]

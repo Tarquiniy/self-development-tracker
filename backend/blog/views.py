@@ -1,87 +1,130 @@
-import requests
-from django.http import JsonResponse, HttpResponse
-from django.views.decorators.http import require_GET
-from django.views.decorators.csrf import csrf_exempt
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework import viewsets, status, filters
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.response import Response
-from rest_framework import status
 from django.shortcuts import get_object_or_404
-from .models import PostReaction
-from .serializers import PostReactionSerializer
+from django.utils import timezone
 from django.db import transaction
+from django_filters.rest_framework import DjangoFilterBackend
+from django.db import models as dj_models
 
-@require_GET
-def wordpress_posts(request):
-    # получаем параметры page и per_page из запроса фронтенда
-    page = request.GET.get('page', '1')
-    per_page = request.GET.get('perPage', '10')
-    # формируем URL WordPress API
-    wp_url = f"https://sdtracker.wordpress.com/wp-json/wp/v2/posts?per_page={per_page}&page={page}&_embed"
+from .models import Post, Category, Tag, Comment, PostReaction
+from .serializers import (
+    PostListSerializer, PostDetailSerializer, PostCreateUpdateSerializer,
+    CategorySerializer, TagSerializer, CommentSerializer
+)
 
-    try:
-        resp = requests.get(wp_url, timeout=10)
-    except requests.RequestException as e:
-        return JsonResponse({'error': 'Failed to fetch from WordPress', 'details': str(e)}, status=502)
 
-    if resp.status_code != 200:
-        return JsonResponse({'error': 'WordPress returned error', 'status': resp.status_code, 'body': resp.text}, status=resp.status_code)
+class PostViewSet(viewsets.ModelViewSet):
+    """
+    /api/blog/posts/
+    Public list shows only published posts.
+    Admins/authors can create/update/draft posts.
+    """
+    queryset = Post.objects.all()
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status', 'categories__slug', 'tags__slug']
+    search_fields = ['title', 'excerpt', 'content', 'meta_description']
+    ordering_fields = ['published_at', 'created_at']
+    ordering = ['-published_at']
+    lookup_field = 'slug'  # enable /posts/<slug>/
 
-    data = resp.json()
-    return JsonResponse(data, safe=False)
+    def get_serializer_class(self):
+        if self.action in ('list',):
+            return PostListSerializer
+        if self.action in ('retrieve',):
+            return PostDetailSerializer
+        return PostCreateUpdateSerializer
 
+    def get_queryset(self):
+        qs = Post.objects.select_related('author').prefetch_related('categories', 'tags')
+        # public endpoint: only published for non-staff
+        if not self.request.user.is_authenticated or not self.request.user.is_staff:
+            qs = qs.filter(dj_models.Q(status='published', published_at__lte=timezone.now()))
+        else:
+            # staff/authenticated can see all
+            pass
+        return qs
+
+    def perform_create(self, serializer):
+        # set author automatically if authenticated
+        user = self.request.user if self.request.user.is_authenticated else None
+        serializer.save(author=user)
+
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    def add_comment(self, request, slug=None):
+        post = self.get_object()
+        data = request.data.copy()
+        data['post'] = post.pk
+        serializer = CommentSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CategoryViewSet(viewsets.ModelViewSet):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    lookup_field = 'slug'
+
+
+class TagViewSet(viewsets.ModelViewSet):
+    queryset = Tag.objects.all()
+    serializer_class = TagSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    lookup_field = 'slug'
+
+
+class CommentViewSet(viewsets.ModelViewSet):
+    queryset = Comment.objects.filter(is_public=True)
+    serializer_class = CommentSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def perform_create(self, serializer):
+        # attach authenticated user if available
+        user = self.request.user if self.request.user.is_authenticated else None
+        serializer.save(user=user)
+
+
+# Simple reaction endpoints (toggle)
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def reaction_detail(request):
-    """
-    GET /api/blog/reactions/?post_identifier=<slug_or_id>
-    Возвращает obj с likes_count и liked_by_current_user.
-    """
-    identifier = request.query_params.get('post_identifier')
-    if not identifier:
-        return Response({'detail': 'Missing post_identifier'}, status=status.HTTP_400_BAD_REQUEST)
+    post_slug = request.query_params.get('post_slug')
+    if not post_slug:
+        return Response({'detail': 'Missing post_slug'}, status=status.HTTP_400_BAD_REQUEST)
+    post = get_object_or_404(Post, slug=post_slug)
     try:
-        obj = PostReaction.objects.get(post_identifier=identifier)
+        reaction = post.reactions.get()
     except PostReaction.DoesNotExist:
-        # пустая запись — ноль лайков
-        obj = PostReaction(post_identifier=identifier)
-        obj.save()
-    serializer = PostReactionSerializer(obj, context={'request': request})
-    return Response(serializer.data)
+        reaction = PostReaction.objects.create(post=post)
+    return Response({'post_slug': post.slug, 'likes_count': reaction.likes_count()})
+
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def reaction_toggle(request):
-    """
-    POST /api/blog/reactions/toggle/
-    body: { post_identifier: "slug-or-id" }
-    Логика:
-      - Если авторизован: переключаем связь в M2M users (т.е. ставим/снимаем лайк).
-      - Если неавторизован: для простоты — инкрементируем anon_count при лайке, декремент при снятии.
-    Для анонимов мы не делаем строгой защиты — можно улучшить через cookie+uuid или IP throttling.
-    """
-    identifier = request.data.get('post_identifier')
-    if not identifier:
-        return Response({'detail': 'Missing post_identifier'}, status=status.HTTP_400_BAD_REQUEST)
+    post_slug = request.data.get('post_slug')
+    if not post_slug:
+        return Response({'detail': 'Missing post_slug'}, status=status.HTTP_400_BAD_REQUEST)
+    post = get_object_or_404(Post, slug=post_slug)
 
     with transaction.atomic():
-        obj, created = PostReaction.objects.get_or_create(post_identifier=identifier)
-        user = request.user if request.user and request.user.is_authenticated else None
-
+        reaction, created = PostReaction.objects.get_or_create(post=post)
+        user = request.user if request.user.is_authenticated else None
         if user:
-            if obj.users.filter(pk=user.pk).exists():
-                obj.users.remove(user)
+            if reaction.users.filter(pk=user.pk).exists():
+                reaction.users.remove(user)
             else:
-                obj.users.add(user)
-            obj.save()
+                reaction.users.add(user)
         else:
-            # простая логика: если anon_count == 0 -> увеличиваем; if >0 -> уменьшаем
-            # Это простейшая toggle; можно заменить на проверку cookie/uuid для уникальности.
-            if obj.anon_count > 0:
-                obj.anon_count = max(0, obj.anon_count - 1)
+            # simplistic anon toggle
+            if reaction.anon_count > 0:
+                reaction.anon_count = max(0, reaction.anon_count - 1)
             else:
-                obj.anon_count = obj.anon_count + 1
-            obj.save()
-
-    serializer = PostReactionSerializer(obj, context={'request': request})
-    return Response(serializer.data)
+                reaction.anon_count += 1
+        reaction.save()
+    return Response({'post_slug': post.slug, 'likes_count': reaction.likes_count()})
