@@ -11,14 +11,28 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# Улучшенные настройки Summernote для современного редактора
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 SUMMERNOTE_CONFIG = {
     'iframe': True,
     'summernote': {
         'width': '100%',
         'height': '480px',
+        'toolbar': [
+            ['style', ['style']],
+            ['font', ['bold', 'underline', 'clear']],
+            ['fontname', ['fontname']],
+            ['color', ['color']],
+            ['para', ['ul', 'ol', 'paragraph']],
+            ['table', ['table']],
+            ['insert', ['link', 'picture', 'video']],
+            ['view', ['fullscreen', 'codeview', 'help']],
+        ],
+        'fontNames': ['Arial', 'Arial Black', 'Comic Sans MS', 'Courier New', 'Helvetica', 'Inter', 'Georgia', 'Times New Roman', 'Verdana'],
+        'fontSizes': ['8', '9', '10', '11', '12', '14', '16', '18', '20', '24', '36'],
     },
-    'attachment_require_authentication': True,  # 👈 только авторизованные могут загружать
+    'attachment_require_authentication': True,
+    'attachment_model': 'blog.PostAttachment',  # Новая модель для вложений
 }
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'резервный-секретный-ключ-для-разработки')
@@ -53,7 +67,7 @@ CSRF_TRUSTED_ORIGINS = [
 
 CORS_ALLOWED_ORIGINS = [
     "https://sdtracker.vercel.app",
-    "http://localhost:3000", 
+    "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://cs88500-wordpress-o0a99.tw1.ru",
     "https://sdracker.onrender.com",
@@ -66,7 +80,7 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
-    'OPTIONS', 
+    'OPTIONS',
     'PATCH',
     'POST',
     'PUT',
@@ -136,7 +150,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# Installed apps
+# Installed apps - добавлены новые приложения для улучшения админки
 INSTALLED_APPS = [
     'grappelli',
     "django.contrib.admin",
@@ -152,6 +166,9 @@ INSTALLED_APPS = [
     "corsheaders",
     "whitenoise.runserver_nostatic",
     'django_filters',
+    'import_export',  # Для импорта/экспорта данных
+    'admin_interface',  # Современный интерфейс админки
+    'colorfield',  # Для admin_interface
 
     # Local apps
     "users",
@@ -161,6 +178,10 @@ INSTALLED_APPS = [
     'django_summernote',
     "blog",
 ]
+
+# Настройки для admin_interface
+X_FRAME_OPTIONS = "SAMEORIGIN"
+SILENCED_SYSTEM_CHECKS = ["security.W019"]
 
 ROOT_URLCONF = "core.urls"
 
@@ -217,7 +238,6 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],
-    # при необходимости добавь пагинацию
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
 }
@@ -277,3 +297,7 @@ SUPABASE_DB_CONFIG = {
         'PORT': os.environ.get('SUPABASE_DB_PORT', '5432'),
     }
 }
+
+# Настройки Grappelli для современного вида
+GRAPPELLI_ADMIN_TITLE = "Positive Theta Admin"
+GRAPPELLI_CLEAN_INPUT_TYPES = False

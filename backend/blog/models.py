@@ -1,8 +1,11 @@
+import os
+import uuid
 from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
 from django.urls import reverse
 from django.utils import timezone
+from django_summernote.models import AbstractAttachment
 
 
 class Category(models.Model):
@@ -158,3 +161,34 @@ class PostReaction(models.Model):
 
     def __str__(self):
         return f"{self.post.slug} likes={self.likes_count()}"
+    
+class PostAttachment(AbstractAttachment):
+    """Модель для вложений постов (изображения, файлы)"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='post_attachments/%Y/%m/%d/')
+    file_name = models.CharField(max_length=255)
+    file_size = models.PositiveIntegerField()
+    file_type = models.CharField(max_length=100)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Вложение поста"
+        verbose_name_plural = "Вложения постов"
+        ordering = ['-uploaded_at']
+    
+    def save(self, *args, **kwargs):
+        if self.file:
+            self.file_name = os.path.basename(self.file.name)
+            self.file_size = self.file.size
+            self.file_type = self.file.name.split('.')[-1].lower()
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.file_name} ({self.post.title})"
+    
+    def get_absolute_url(self):
+        return self.file.url
+    
+pass

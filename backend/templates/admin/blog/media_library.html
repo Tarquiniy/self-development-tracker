@@ -1,0 +1,43 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/admin-custom.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-card">
+    <h1>📁 Медиатека</h1>
+    <p>Здесь будут отображаться все загруженные медиафайлы. Функциональность в разработке.</p>
+    
+    <div class="quick-actions">
+        <button type="button" class="quick-action-btn" onclick="uploadMedia()">
+            📤 Загрузить файлы
+        </button>
+        <button type="button" class="quick-action-btn" onclick="createFolder()">
+            📂 Создать папку
+        </button>
+    </div>
+    
+    <div style="margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+        <p>🚧 Медиатека находится в разработке</p>
+        <p>Скоро здесь появится возможность управлять всеми медиафайлами вашего блога</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extrajs %}
+<script>
+function uploadMedia() {
+    alert('Функция загрузки файлов будет доступна в следующем обновлении!');
+}
+
+function createFolder() {
+    const folderName = prompt('Введите название папки:');
+    if (folderName) {
+        alert(`Папка "${folderName}" будет создана в следующем обновлении!`);
+    }
+}
+</script>
+{% endblock %}
