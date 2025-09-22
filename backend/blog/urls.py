@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import PostViewSet, CategoryViewSet, TagViewSet, CommentViewSet, reaction_detail, reaction_toggle
+from .views import PostViewSet, CategoryViewSet, TagViewSet, CommentViewSet, reaction_detail, reaction_toggle, quick_action_view, dashboard_stats
 
 app_name = 'blog'
 
@@ -16,4 +16,8 @@ urlpatterns = [
     path('reactions/detail/', reaction_detail, name='reaction-detail'),
     path('reactions/toggle/', reaction_toggle, name='reaction-toggle'),
     path('summernote/', include('django_summernote.urls')),
+    
+    # Новые URL для админки
+    path('admin/quick-action/', quick_action_view, name='quick-action'),
+    path('admin/dashboard-stats/', dashboard_stats, name='dashboard-stats'),
 ]

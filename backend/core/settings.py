@@ -11,28 +11,30 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# Улучшенные настройки Summernote для современного редактора
+# Улучшенная конфигурация Summernote для современного редактора
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 SUMMERNOTE_CONFIG = {
     'iframe': True,
     'summernote': {
         'width': '100%',
-        'height': '480px',
+        'height': '500px',
         'toolbar': [
             ['style', ['style']],
-            ['font', ['bold', 'underline', 'clear']],
+            ['font', ['bold', 'italic', 'underline', 'clear']],
             ['fontname', ['fontname']],
             ['color', ['color']],
             ['para', ['ul', 'ol', 'paragraph']],
+            ['height', ['height']],
             ['table', ['table']],
-            ['insert', ['link', 'picture', 'video']],
-            ['view', ['fullscreen', 'codeview', 'help']],
+            ['insert', ['link', 'picture', 'video', 'hr']],
+            ['view', ['fullscreen', 'codeview']],
+            ['help', ['help']]
         ],
-        'fontNames': ['Arial', 'Arial Black', 'Comic Sans MS', 'Courier New', 'Helvetica', 'Inter', 'Georgia', 'Times New Roman', 'Verdana'],
-        'fontSizes': ['8', '9', '10', '11', '12', '14', '16', '18', '20', '24', '36'],
+        'fontNames': ['Arial', 'Arial Black', 'Comic Sans MS', 'Courier New', 'Helvetica', 'Impact', 'Tahoma', 'Times New Roman', 'Verdana', 'Georgia'],
+        'fontSizes': ['8', '9', '10', '11', '12', '14', '18', '24', '36'],
     },
     'attachment_require_authentication': True,
-    'attachment_model': 'blog.PostAttachment',  # Новая модель для вложений
+    'attachment_model': 'blog.PostAttachment',
 }
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'резервный-секретный-ключ-для-разработки')
@@ -150,7 +152,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# Installed apps - добавлены новые приложения для улучшения админки
+# Installed apps - добавляем необходимые приложения для улучшенной админки
 INSTALLED_APPS = [
     'grappelli',
     "django.contrib.admin",
@@ -166,22 +168,20 @@ INSTALLED_APPS = [
     "corsheaders",
     "whitenoise.runserver_nostatic",
     'django_filters',
-    'import_export',  # Для импорта/экспорта данных
-    'admin_interface',  # Современный интерфейс админки
-    'colorfield',  # Для admin_interface
+    'django_summernote',
+    'import_export',
 
     # Local apps
     "users",
     "tables",
     "payments",
     "analytics",
-    'django_summernote',
     "blog",
 ]
 
-# Настройки для admin_interface
-X_FRAME_OPTIONS = "SAMEORIGIN"
-SILENCED_SYSTEM_CHECKS = ["security.W019"]
+# Настройка Grappelli для современного интерфейса админки
+GRAPPELLI_ADMIN_TITLE = "Positive Theta Admin"
+GRAPPELLI_CLEAN_INPUT_TYPES = False
 
 ROOT_URLCONF = "core.urls"
 
@@ -298,6 +298,22 @@ SUPABASE_DB_CONFIG = {
     }
 }
 
-# Настройки Grappelli для современного вида
-GRAPPELLI_ADMIN_TITLE = "Positive Theta Admin"
-GRAPPELLI_CLEAN_INPUT_TYPES = False
+# Логирование для админки
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'admin.log'),
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}

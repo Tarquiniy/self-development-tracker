@@ -1,11 +1,8 @@
-import os
-import uuid
 from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
 from django.urls import reverse
 from django.utils import timezone
-from django_summernote.models import AbstractAttachment
 
 
 class Category(models.Model):
@@ -58,10 +55,26 @@ class Tag(models.Model):
         return self.title
 
 
+class PostAttachment(models.Model):
+    post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='post_attachments/%Y/%m/%d/')
+    title = models.CharField(max_length=255, blank=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title or self.file.name
+
+    class Meta:
+        verbose_name = "Вложение"
+        verbose_name_plural = "Вложения"
+
+
 class Post(models.Model):
     STATUS_CHOICES = (
-        ('draft', 'Draft'),
-        ('published', 'Published'),
+        ('draft', 'Черновик'),
+        ('published', 'Опубликован'),
+        ('archived', 'В архиве'),
     )
 
     author = models.ForeignKey(
@@ -71,24 +84,24 @@ class Post(models.Model):
         blank=True,
         related_name='posts'
     )
-    title = models.CharField(max_length=255)
-    slug = models.SlugField(max_length=300, unique=True, blank=True, db_index=True)
-    excerpt = models.TextField(blank=True)
-    content = models.TextField()  # html/markdown stored as text (frontend decides render)
-    featured_image = models.URLField(blank=True, null=True)  # simple approach: store image URL
-    categories = models.ManyToManyField(Category, related_name='posts', blank=True)
-    tags = models.ManyToManyField(Tag, related_name='posts', blank=True)
+    title = models.CharField(max_length=255, verbose_name="Заголовок")
+    slug = models.SlugField(max_length=300, unique=True, blank=True, db_index=True, verbose_name="URL")
+    excerpt = models.TextField(blank=True, verbose_name="Краткое описание")
+    content = models.TextField(verbose_name="Содержание")  # html/markdown stored as text (frontend decides render)
+    featured_image = models.URLField(blank=True, null=True, verbose_name="Главное изображение")  # simple approach: store image URL
+    categories = models.ManyToManyField(Category, related_name='posts', blank=True, verbose_name="Категории")
+    tags = models.ManyToManyField(Tag, related_name='posts', blank=True, verbose_name="Теги")
 
     # SEO / metadata
-    meta_title = models.CharField(max_length=255, blank=True)
-    meta_description = models.CharField(max_length=320, blank=True)
-    og_image = models.URLField(blank=True)
+    meta_title = models.CharField(max_length=255, blank=True, verbose_name="Мета-заголовок")
+    meta_description = models.CharField(max_length=320, blank=True, verbose_name="Мета-описание")
+    og_image = models.URLField(blank=True, verbose_name="Open Graph изображение")
 
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', db_index=True)
-    published_at = models.DateTimeField(default=timezone.now, db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', db_index=True, verbose_name="Статус")
+    published_at = models.DateTimeField(default=timezone.now, db_index=True, verbose_name="Дата публикации")
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлен")
 
     class Meta:
         ordering = ['-published_at']
@@ -96,6 +109,8 @@ class Post(models.Model):
             models.Index(fields=['slug']),
             models.Index(fields=['status', 'published_at']),
         ]
+        verbose_name = "Пост"
+        verbose_name_plural = "Посты"
 
     def save(self, *args, **kwargs):
         # Auto-generate slug if missing
@@ -115,28 +130,40 @@ class Post(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.title} ({self.status})"
+        return f"{self.title} ({self.get_status_display()})"
 
     def get_absolute_url(self):
         return reverse('blog:post-detail', kwargs={'slug': self.slug})
+
+    @property
+    def is_published(self):
+        return self.status == 'published' and self.published_at <= timezone.now()
+
+    @property
+    def reading_time(self):
+        # Примерная оценка времени чтения (200 слов в минуту)
+        word_count = len(self.content.split())
+        return max(1, round(word_count / 200))
 
 
 class Comment(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
-    name = models.CharField(max_length=120)   # for anonymous comments
-    email = models.EmailField(blank=True, null=True)
+    name = models.CharField(max_length=120, verbose_name="Имя")   # for anonymous comments
+    email = models.EmailField(blank=True, null=True, verbose_name="Email")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='comments')
-    content = models.TextField()
-    is_public = models.BooleanField(default=True, db_index=True)
-    is_moderated = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    content = models.TextField(verbose_name="Комментарий")
+    is_public = models.BooleanField(default=True, db_index=True, verbose_name="Публичный")
+    is_moderated = models.BooleanField(default=False, verbose_name="Промодерирован")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
 
     class Meta:
         ordering = ['created_at']
+        verbose_name = "Комментарий"
+        verbose_name_plural = "Комментарии"
 
     def __str__(self):
-        return f"Comment on {self.post.title} by {self.name[:20]}"
+        return f"Комментарий к {self.post.title} от {self.name[:20]}"
 
 
 # Optional: keep your reaction model (was present). This lets frontend show likes.
@@ -145,8 +172,8 @@ class PostReaction(models.Model):
         Post,
         on_delete=models.CASCADE,
         related_name='reactions',
-        null=True,  
-        blank=True  
+        null=True,
+        blank=True
     )
     users = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name='liked_posts')
     anon_count = models.PositiveIntegerField(default=0)
@@ -155,40 +182,28 @@ class PostReaction(models.Model):
 
     class Meta:
         unique_together = ('post',)
+        verbose_name = "Реакция"
+        verbose_name_plural = "Реакции"
 
     def likes_count(self):
         return self.anon_count + self.users.count()
 
     def __str__(self):
-        return f"{self.post.slug} likes={self.likes_count()}"
-    
-class PostAttachment(AbstractAttachment):
-    """Модель для вложений постов (изображения, файлы)"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='attachments')
-    file = models.FileField(upload_to='post_attachments/%Y/%m/%d/')
-    file_name = models.CharField(max_length=255)
-    file_size = models.PositiveIntegerField()
-    file_type = models.CharField(max_length=100)
-    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
-    uploaded_at = models.DateTimeField(auto_now_add=True)
-    
+        return f"{self.post.slug} лайков={self.likes_count()}"
+
+
+class PostView(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='views')
+    ip_address = models.GenericIPAddressField()
+    user_agent = models.TextField(blank=True)
+    viewed_at = models.DateTimeField(auto_now_add=True)
+
     class Meta:
-        verbose_name = "Вложение поста"
-        verbose_name_plural = "Вложения постов"
-        ordering = ['-uploaded_at']
-    
-    def save(self, *args, **kwargs):
-        if self.file:
-            self.file_name = os.path.basename(self.file.name)
-            self.file_size = self.file.size
-            self.file_type = self.file.name.split('.')[-1].lower()
-        super().save(*args, **kwargs)
-    
+        verbose_name = "Просмотр"
+        verbose_name_plural = "Просмотры"
+        indexes = [
+            models.Index(fields=['post', 'viewed_at']),
+        ]
+
     def __str__(self):
-        return f"{self.file_name} ({self.post.title})"
-    
-    def get_absolute_url(self):
-        return self.file.url
-    
-pass
+        return f"Просмотр {self.post.title}"

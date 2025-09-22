@@ -1,3 +1,4 @@
+import json
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
@@ -7,8 +8,13 @@ from django.utils import timezone
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import models as dj_models
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.db.models import Count
 
-from .models import Post, Category, Tag, Comment, PostReaction
+from .models import Post, Category, PostView, Tag, Comment, PostReaction
 from .serializers import (
     PostListSerializer, PostDetailSerializer, PostCreateUpdateSerializer,
     CategorySerializer, TagSerializer, CommentSerializer
@@ -128,3 +134,54 @@ def reaction_toggle(request):
                 reaction.anon_count += 1
         reaction.save()
     return Response({'post_slug': post.slug, 'likes_count': reaction.likes_count()})
+
+@require_POST
+@csrf_exempt
+@user_passes_test(lambda u: u.is_staff)
+def quick_action_view(request):
+    """Обработчик быстрых действий для постов"""
+    try:
+        data = json.loads(request.body)
+        action = data.get('action')
+        post_id = data.get('post_id')
+        
+        post = Post.objects.get(id=post_id)
+        
+        if action == 'publish':
+            post.status = 'published'
+            post.save()
+            return JsonResponse({'success': True, 'message': 'Пост опубликован'})
+        elif action == 'draft':
+            post.status = 'draft'
+            post.save()
+            return JsonResponse({'success': True, 'message': 'Пост перемещен в черновики'})
+        elif action == 'archive':
+            post.status = 'archived'
+            post.save()
+            return JsonResponse({'success': True, 'message': 'Пост перемещен в архив'})
+        else:
+            return JsonResponse({'success': False, 'message': 'Неизвестное действие'})
+            
+    except Post.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Пост не найден'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)})
+
+@login_required
+@user_passes_test(lambda u: u.is_staff)
+def dashboard_stats(request):
+    """Статистика для дашборда админки"""
+    today = timezone.now().date()
+    
+    stats = {
+        'total_posts': Post.objects.count(),
+        'published_posts': Post.objects.filter(status='published').count(),
+        'draft_posts': Post.objects.filter(status='draft').count(),
+        'today_posts': Post.objects.filter(created_at__date=today).count(),
+        'total_comments': Comment.objects.count(),
+        'pending_comments': Comment.objects.filter(is_moderated=False).count(),
+        'total_views': PostView.objects.count(),
+        'today_views': PostView.objects.filter(viewed_at__date=today).count(),
+    }
+    
+    return JsonResponse(stats)
