@@ -3,6 +3,7 @@ from django.conf import settings
 from django.utils.text import slugify
 from django.urls import reverse
 from django.utils import timezone
+from django_summernote.models import AbstractAttachment
 
 
 class Category(models.Model):
@@ -55,7 +56,7 @@ class Tag(models.Model):
         return self.title
 
 
-class PostAttachment(models.Model):
+class PostAttachment(AbstractAttachment):
     post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='attachments')
     file = models.FileField(upload_to='post_attachments/%Y/%m/%d/')
     title = models.CharField(max_length=255, blank=True)

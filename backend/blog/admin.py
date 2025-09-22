@@ -1,263 +1,162 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
-from django.utils import timezone
 from django.contrib import messages
+from django.utils import timezone
+from django.db.models import Count
 from django.http import HttpResponseRedirect
-from .models import Post, Category, Tag, Comment, PostReaction, PostAttachment, PostView
+from django.template.response import TemplateResponse
+from django.contrib.admin.views.decorators import staff_member_required
+from django.utils.decorators import method_decorator
+from django.views.generic import TemplateView
+
+from .models import Post, Category, Tag, Comment, PostReaction
 from django_summernote.admin import SummernoteModelAdmin
 from django.contrib.auth import get_user_model
-from import_export.admin import ImportExportModelAdmin
-from import_export import resources
 
 CustomUser = get_user_model()
 
 
-# ----------------------------------------
-# Ресурсы для импорта/экспорта
-# ----------------------------------------
-class PostResource(resources.ModelResource):
-    class Meta:
-        model = Post
-        fields = ('id', 'title', 'slug', 'status', 'published_at', 'author__username')
-        export_order = fields
+class WordPressStyleAdminSite(admin.AdminSite):
+    site_header = "Positive Theta Admin"
+    site_title = "Positive Theta Admin"
+    index_title = "Добро пожаловать в панель управления"
+    
+    def get_app_list(self, request):
+        app_list = super().get_app_list(request)
+        for app in app_list:
+            if app['app_label'] == 'blog':
+                model_order = ['post', 'category', 'tag', 'comment']
+                app['models'].sort(key=lambda x: model_order.index(x['object_name'].lower()) 
+                                 if x['object_name'].lower() in model_order else 999)
+        return app_list
 
 
-class CategoryResource(resources.ModelResource):
-    class Meta:
-        model = Category
-        fields = ('id', 'title', 'slug', 'description')
+@admin.register(CustomUser)
+class CustomUserAdmin(admin.ModelAdmin):
+    list_display = ('username', 'email', 'post_count', 'is_staff', 'is_active', 'last_login')
+    list_filter = ('is_staff', 'is_active', 'date_joined')
+    search_fields = ('username', 'email', 'first_name', 'last_name')
+    readonly_fields = ('date_joined', 'last_login')
+    
+    def post_count(self, obj):
+        return obj.posts.count()
+    post_count.short_description = 'Постов'
 
 
-# ----------------------------------------
-# Inline для вложений
-# ----------------------------------------
-class PostAttachmentInline(admin.TabularInline):
-    model = PostAttachment
-    extra = 1
-    fields = ('file', 'title', 'uploaded_by', 'uploaded_at')
-    readonly_fields = ('uploaded_by', 'uploaded_at')
-
-    def save_model(self, request, obj, form, change):
-        if not obj.uploaded_by:
-            obj.uploaded_by = request.user
-        super().save_model(request, obj, form, change)
+class MediaLibraryAdmin(admin.ModelAdmin):
+    list_display = ('preview', 'filename', 'file_type', 'uploaded_by', 'uploaded_at')
+    list_filter = ('file_type', 'uploaded_at')
+    search_fields = ('filename',)
+    
+    def preview(self, obj):
+        if obj.file_type.startswith('image'):
+            return format_html('<img src="{}" style="max-height: 50px;" />', obj.file.url)
+        return "📄"
+    preview.short_description = "Превью"
 
 
-# ----------------------------------------
-# Фильтры для админки
-# ----------------------------------------
-class StatusFilter(admin.SimpleListFilter):
-    title = 'Статус'
-    parameter_name = 'status'
-
-    def lookups(self, request, model_admin):
-        return (
-            ('published', 'Опубликованные'),
-            ('draft', 'Черновики'),
-            ('archived', 'В архиве'),
-            ('scheduled', 'Запланированные'),
-        )
-
-    def queryset(self, request, queryset):
-        if self.value() == 'published':
-            return queryset.filter(status='published', published_at__lte=timezone.now())
-        elif self.value() == 'draft':
-            return queryset.filter(status='draft')
-        elif self.value() == 'archived':
-            return queryset.filter(status='archived')
-        elif self.value() == 'scheduled':
-            return queryset.filter(status='published', published_at__gt=timezone.now())
-        return queryset
-
-
-class CategoryFilter(admin.SimpleListFilter):
-    title = 'Категория'
-    parameter_name = 'category'
-
-    def lookups(self, request, model_admin):
-        categories = Category.objects.all()
-        return [(c.id, c.title) for c in categories]
-
-    def queryset(self, request, queryset):
-        if self.value():
-            return queryset.filter(categories__id=self.value())
-        return queryset
-
-
-# ----------------------------------------
-# POST ADMIN - современный интерфейс как в WordPress
-# ----------------------------------------
 @admin.register(Post)
-class PostAdmin(SummernoteModelAdmin, ImportExportModelAdmin):
-    resource_class = PostResource
+class PostAdmin(SummernoteModelAdmin):
     summernote_fields = ('content', 'excerpt')
-    list_display = ('title_preview', 'author', 'status_badge', 'published_date', 'categories_list', 'view_count', 'actions')
-    list_display_links = ('title_preview',)
-    list_filter = (StatusFilter, CategoryFilter, 'tags', 'created_at')
-    search_fields = ('title', 'content', 'excerpt', 'slug')
+    list_display = ('title', 'author', 'status_badge', 'published_at', 'comment_count', 'view_count', 'action_buttons')
+    list_filter = ('status', 'categories', 'tags', 'published_at', 'created_at')
+    search_fields = ('title', 'content', 'excerpt')
     prepopulated_fields = {"slug": ("title",)}
     date_hierarchy = 'published_at'
-    ordering = ('-published_at',)
     filter_horizontal = ('categories', 'tags')
-    readonly_fields = ('created_at', 'updated_at', 'view_count_display')
-    actions = ['make_published', 'make_draft', 'make_archived', 'duplicate_posts']
-    inlines = [PostAttachmentInline]
+    readonly_fields = ('view_count', 'created_at', 'updated_at')
+    actions = ['make_published', 'make_draft', 'duplicate_posts']
     
-    # Поля для формы редактирования
     fieldsets = (
-        ('Основная информация', {
-            'fields': ('title', 'slug', 'author', 'status', 'published_at')
-        }),
-        ('Содержание', {
-            'fields': ('excerpt', 'content', 'featured_image')
-        }),
-        ('Таксономия', {
-            'fields': ('categories', 'tags')
-        }),
-        ('SEO', {
-            'classes': ('collapse',),
-            'fields': ('meta_title', 'meta_description', 'og_image')
-        }),
-        ('Статистика', {
-            'classes': ('collapse',),
-            'fields': ('view_count_display', 'created_at', 'updated_at')
-        }),
+        ('Основное', {'fields': ('title', 'slug', 'author', 'content')}),
+        ('Эксперт', {'fields': ('excerpt', 'featured_image', 'categories', 'tags'), 'classes': ('collapse',)}),
+        ('Настройки публикации', {'fields': ('status', 'published_at'), 'classes': ('collapse',)}),
+        ('SEO', {'fields': ('meta_title', 'meta_description', 'og_image'), 'classes': ('collapse',)}),
+        ('Статистика', {'fields': ('view_count', 'created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
-
-    def title_preview(self, obj):
-        return format_html(
-            '<strong>{}</strong><br><small style="color: #666;">{}</small>',
-            obj.title[:60] + '...' if len(obj.title) > 60 else obj.title,
-            obj.slug
-        )
-    title_preview.short_description = "Заголовок"
-    title_preview.admin_order_field = 'title'
-
+    
     def status_badge(self, obj):
-        status_colors = {
-            'published': 'green',
-            'draft': 'orange',
-            'archived': 'red'
-        }
-        color = status_colors.get(obj.status, 'gray')
+        color = 'green' if obj.status == 'published' else 'orange'
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;">{}</span>',
+            '<span style="background: {}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px;">{}</span>',
             color, obj.get_status_display()
         )
-    status_badge.short_description = "Статус"
-    status_badge.admin_order_field = 'status'
-
-    def published_date(self, obj):
-        if obj.status == 'published':
-            if obj.published_at > timezone.now():
-                return format_html(
-                    '<span style="color: orange;" title="Запланирован на {}">⏰ {}</span>',
-                    obj.published_at.strftime('%d.%m.%Y %H:%M'),
-                    obj.published_at.strftime('%d.%m.%Y')
-                )
-            else:
-                return format_html(
-                    '<span style="color: green;">✓ {}</span>',
-                    obj.published_at.strftime('%d.%m.%Y')
-                )
-        return format_html('<span style="color: gray;">—</span>')
-    published_date.short_description = "Дата публикации"
-    published_date.admin_order_field = 'published_at'
-
-    def categories_list(self, obj):
-        categories = obj.categories.all()[:3]
-        return format_html(
-            '{}'.format(', '.join([c.title for c in categories])) + 
-            ('...' if obj.categories.count() > 3 else '')
-        )
-    categories_list.short_description = "Категории"
-
+    status_badge.short_description = 'Статус'
+    
+    def comment_count(self, obj):
+        count = obj.comments.count()
+        url = reverse('admin:blog_comment_changelist') + f'?post__id__exact={obj.id}'
+        return format_html('<a href="{}">{} комментариев</a>', url, count)
+    comment_count.short_description = 'Комментарии'
+    
     def view_count(self, obj):
-        return obj.views.count()
-    view_count.short_description = "Просмотры"
-    view_count.admin_order_field = 'views_count'
-
-    def view_count_display(self, obj):
-        return obj.views.count()
-    view_count_display.short_description = "Количество просмотров"
-
-    def actions(self, obj):
-        return format_html(
-            '<div style="display: flex; gap: 5px;">'
-            '<a href="{}" class="button" style="padding: 2px 6px; background: #4CAF50; color: white; text-decoration: none; border-radius: 3px;">Просмотр</a>'
-            '<a href="{}" class="button" style="padding: 2px 6px; background: #2196F3; color: white; text-decoration: none; border-radius: 3px;">Изменить</a>'
-            '</div>',
-            obj.get_absolute_url(),
-            reverse('admin:blog_post_change', args=[obj.id])
-        )
-    actions.short_description = "Действия"
-
-    # Массовые действия
+        return getattr(obj, 'view_count', 0)
+    
+    # Переименовал конфликтную функцию actions
+    def action_buttons(self, obj):
+        edit_url = reverse('admin:blog_post_change', args=[obj.id])
+        view_url = obj.get_absolute_url()
+        duplicate_url = reverse('admin:blog_post_duplicate', args=[obj.id])
+        return format_html('''
+            <div class="action-buttons">
+                <a href="{}" class="button">Редактировать</a>
+                <a href="{}" target="_blank" class="button">Просмотр</a>
+                <a href="{}" class="button">Дублировать</a>
+            </div>
+        ''', edit_url, view_url, duplicate_url)
+    action_buttons.short_description = 'Действия'
+    
     def make_published(self, request, queryset):
-        updated = queryset.update(status='published')
+        updated = queryset.update(status='published', published_at=timezone.now())
         self.message_user(request, f"{updated} постов опубликовано.")
     make_published.short_description = "Опубликовать выбранные посты"
-
+    
     def make_draft(self, request, queryset):
         updated = queryset.update(status='draft')
         self.message_user(request, f"{updated} постов переведены в черновики.")
     make_draft.short_description = "Перевести в черновики"
-
-    def make_archived(self, request, queryset):
-        updated = queryset.update(status='archived')
-        self.message_user(request, f"{updated} постов перемещены в архив.")
-    make_archived.short_description = "Переместить в архив"
-
+    
     def duplicate_posts(self, request, queryset):
         for post in queryset:
-            post.pk = None
-            post.slug = f"{post.slug}-copy-{timezone.now().strftime('%Y%m%d%H%M%S')}"
-            post.title = f"{post.title} (Копия)"
-            post.status = 'draft'
-            post.save()
-            # Копируем категории и теги
-            post.categories.set(post.categories.all())
-            post.tags.set(post.tags.all())
-        self.message_user(request, f"Создано {queryset.count()} копий постов.")
-    duplicate_posts.short_description = "Создать копии постов"
-
-    # Сохранение автора по умолчанию
-    def save_model(self, request, obj, form, change):
-        if not obj.author:
-            obj.author = request.user
-        super().save_model(request, obj, form, change)
-
+            new_post = Post(
+                title=f"{post.title} (Копия)",
+                slug=f"{post.slug}-copy-{timezone.now().timestamp()}",
+                content=post.content,
+                excerpt=post.excerpt,
+                featured_image=post.featured_image,
+                status='draft',
+                author=post.author
+            )
+            new_post.save()
+            new_post.categories.set(post.categories.all())
+            new_post.tags.set(post.tags.all())
+        self.message_user(request, f"{queryset.count()} постов дублировано.")
+    duplicate_posts.short_description = "Дублировать посты"
+    
+    def get_list_display_links(self, request, list_display):
+        return ['title']
+    
     class Media:
-        css = {
-            'all': ('admin/css/custom_admin.css',)
-        }
-        js = ('admin/js/custom_admin.js',)
+        css = {'all': ('admin/wordpress-style.css',)}
+        js = ('admin/wordpress-admin.js',)
 
 
-# ----------------------------------------
-# CATEGORIES & TAGS с улучшенным интерфейсом
-# ----------------------------------------
 @admin.register(Category)
-class CategoryAdmin(ImportExportModelAdmin):
-    resource_class = CategoryResource
+class CategoryAdmin(admin.ModelAdmin):
     list_display = ('title', 'slug', 'post_count', 'description_preview')
     search_fields = ('title', 'description')
     prepopulated_fields = {"slug": ("title",)}
-    list_per_page = 20
-
+    
     def post_count(self, obj):
-        return obj.posts.count()
-    post_count.short_description = "Количество постов"
-
+        count = obj.posts.count()
+        url = reverse('admin:blog_post_changelist') + f'?categories__id__exact={obj.id}'
+        return format_html('<a href="{}">{} постов</a>', url, count)
+    post_count.short_description = 'Количество постов'
+    
     def description_preview(self, obj):
         return obj.description[:100] + '...' if len(obj.description) > 100 else obj.description
-    description_preview.short_description = "Описание"
-
-    class Media:
-        css = {
-            'all': ('admin/css/custom_admin.css',)
-        }
+    description_preview.short_description = 'Описание'
 
 
 @admin.register(Tag)
@@ -265,134 +164,100 @@ class TagAdmin(admin.ModelAdmin):
     list_display = ('title', 'slug', 'post_count')
     search_fields = ('title',)
     prepopulated_fields = {"slug": ("title",)}
-    list_per_page = 20
-
+    
     def post_count(self, obj):
-        return obj.posts.count()
-    post_count.short_description = "Количество постов"
-
-    class Media:
-        css = {
-            'all': ('admin/css/custom_admin.css',)
-        }
+        count = obj.posts.count()
+        url = reverse('admin:blog_post_changelist') + f'?tags__id__exact={obj.id}'
+        return format_html('<a href="{}">{} постов</a>', url, count)
+    post_count.short_description = 'Количество постов'
 
 
-# ----------------------------------------
-# COMMENTS с модерацией
-# ----------------------------------------
 @admin.register(Comment)
 class CommentAdmin(admin.ModelAdmin):
-    list_display = ('name', 'post_link', 'user', 'content_preview', 'status_badge', 'created_at')
-    list_filter = ('is_public', 'is_moderated', 'created_at', 'post')
+    list_display = ('author_name', 'post_link', 'content_preview', 'status_badge', 'created_at', 'action_buttons')
+    list_filter = ('is_public', 'is_moderated', 'created_at')
     search_fields = ('name', 'email', 'content', 'post__title')
-    autocomplete_fields = ('post', 'parent', 'user')
-    actions = ['approve_comments', 'reject_comments', 'make_public', 'make_private']
     readonly_fields = ('created_at',)
-
+    actions = ['approve_comments', 'spam_comments']
+    
+    def author_name(self, obj):
+        return obj.user.username if obj.user else obj.name
+    author_name.short_description = 'Автор'
+    
     def post_link(self, obj):
-        return format_html(
-            '<a href="{}">{}</a>',
-            reverse('admin:blog_post_change', args=[obj.post.id]),
-            obj.post.title[:30] + '...' if len(obj.post.title) > 30 else obj.post.title
-        )
-    post_link.short_description = "Пост"
-
+        url = reverse('admin:blog_post_change', args=[obj.post.id])
+        return format_html('<a href="{}">{}</a>', url, obj.post.title)
+    post_link.short_description = 'Пост'
+    
     def content_preview(self, obj):
-        return obj.content[:50] + '...' if len(obj.content) > 50 else obj.content
-    content_preview.short_description = "Комментарий"
-
+        return obj.content[:100] + '...' if len(obj.content) > 100 else obj.content
+    content_preview.short_description = 'Комментарий'
+    
     def status_badge(self, obj):
-        if obj.is_moderated:
-            return format_html('<span style="color: red;">⛔ Отклонен</span>')
-        elif obj.is_public:
-            return format_html('<span style="color: green;">✓ Опубликован</span>')
+        if not obj.is_public:
+            return format_html('<span style="background: red; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px;">Спам</span>')
+        elif not obj.is_moderated:
+            return format_html('<span style="background: orange; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px;">На модерации</span>')
         else:
-            return format_html('<span style="color: orange;">⏳ На модерации</span>')
-    status_badge.short_description = "Статус"
-
+            return format_html('<span style="background: green; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px;">Одобрен</span>')
+    status_badge.short_description = 'Статус'
+    
+    def action_buttons(self, obj):
+        approve_url = reverse('admin:blog_comment_approve', args=[obj.id])
+        spam_url = reverse('admin:blog_comment_spam', args=[obj.id])
+        return format_html('''
+            <div class="action-buttons">
+                <a href="{}" class="button">Одобрить</a>
+                <a href="{}" class="button">Спам</a>
+            </div>
+        ''', approve_url, spam_url)
+    action_buttons.short_description = 'Действия'
+    
     def approve_comments(self, request, queryset):
-        updated = queryset.update(is_moderated=False, is_public=True)
-        self.message_user(request, f"{updated} комментариев одобрены.")
-    approve_comments.short_description = "Одобрить выбранные комментарии"
-
-    def reject_comments(self, request, queryset):
-        updated = queryset.update(is_moderated=True, is_public=False)
-        self.message_user(request, f"{updated} комментариев отклонены.")
-    reject_comments.short_description = "Отклонить выбранные комментарии"
-
-    def make_public(self, request, queryset):
-        updated = queryset.update(is_public=True)
-        self.message_user(request, f"{updated} комментариев сделаны публичными.")
-    make_public.short_description = "Сделать публичными"
-
-    def make_private(self, request, queryset):
-        updated = queryset.update(is_public=False)
-        self.message_user(request, f"{updated} комментариев скрыты.")
-    make_private.short_description = "Скрыть комментарии"
-
-    class Media:
-        css = {
-            'all': ('admin/css/custom_admin.css',)
-        }
+        queryset.update(is_moderated=True, is_public=True)
+        self.message_user(request, f"{queryset.count()} комментариев одобрено.")
+    approve_comments.short_description = "Одобрить выбранные"
+    
+    def spam_comments(self, request, queryset):
+        queryset.update(is_public=False)
+        self.message_user(request, f"{queryset.count()} комментариев помечено как спам.")
+    spam_comments.short_description = "Пометить как спам"
 
 
-# ----------------------------------------
-# POST REACTIONS
-# ----------------------------------------
 @admin.register(PostReaction)
 class PostReactionAdmin(admin.ModelAdmin):
-    list_display = ('post', 'likes_count', 'anon_count', 'created_at', 'updated_at')
+    list_display = ('post', 'likes_count', 'users_count', 'anon_count', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at')
     search_fields = ('post__title',)
-    autocomplete_fields = ('post', 'users')
-    ordering = ('-created_at',)
-    list_per_page = 20
-
-    class Media:
-        css = {
-            'all': ('admin/css/custom_admin.css',)
-        }
-
-
-# ----------------------------------------
-# POST ATTACHMENTS
-# ----------------------------------------
-@admin.register(PostAttachment)
-class PostAttachmentAdmin(admin.ModelAdmin):
-    list_display = ('title', 'post', 'uploaded_by', 'uploaded_at')
-    search_fields = ('title', 'post__title')
-    autocomplete_fields = ('post', 'uploaded_by')
-    list_filter = ('uploaded_at',)
-    readonly_fields = ('uploaded_by', 'uploaded_at')
-
-    def save_model(self, request, obj, form, change):
-        if not obj.uploaded_by_id:
-            obj.uploaded_by = request.user
-        super().save_model(request, obj, form, change)
-
-
-# ----------------------------------------
-# POST VIEWS
-# ----------------------------------------
-@admin.register(PostView)
-class PostViewAdmin(admin.ModelAdmin):
-    list_display = ('post', 'ip_address', 'viewed_at')
-    search_fields = ('post__title', 'ip_address')
-    autocomplete_fields = ('post',)
-    list_filter = ('viewed_at',)
-    readonly_fields = ('viewed_at',)
-
-
-# ----------------------------------------
-# Регистрация пользователей
-# ----------------------------------------
-@admin.register(CustomUser)
-class CustomUserAdmin(admin.ModelAdmin):
-    search_fields = ['username', 'email']
-    list_display = ('username', 'email', 'is_staff', 'is_active', 'date_joined')
-    list_filter = ('is_staff', 'is_active', 'date_joined')
-    ordering = ('-date_joined',)
     
-    class Media:
-        css = {
-            'all': ('admin/css/custom_admin.css',)
-        }
+    def likes_count(self, obj):
+        return obj.likes_count()
+    likes_count.short_description = 'Всего лайков'
+    
+    def users_count(self, obj):
+        return obj.users.count()
+    users_count.short_description = 'Лайков от пользователей'
+
+
+@staff_member_required
+def wordpress_dashboard(request):
+    stats = {
+        'total_posts': Post.objects.count(),
+        'published_posts': Post.objects.filter(status='published').count(),
+        'draft_posts': Post.objects.filter(status='draft').count(),
+        'total_comments': Comment.objects.count(),
+        'pending_comments': Comment.objects.filter(is_moderated=False).count(),
+        'recent_posts': Post.objects.all().order_by('-created_at')[:5],
+        'recent_comments': Comment.objects.all().order_by('-created_at')[:5],
+    }
+    return TemplateResponse(request, 'admin/wordpress_dashboard.html', {
+        'title': 'Панель управления',
+        'stats': stats,
+    })
+
+
+def get_admin_urls():
+    from django.urls import path
+    return [
+        path('wordpress-dashboard/', wordpress_dashboard, name='wordpress_dashboard'),
+    ]
