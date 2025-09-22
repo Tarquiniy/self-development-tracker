@@ -44,6 +44,8 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
+      outDir: 'dist',          // билд по умолчанию в dist
+      assetsDir: 'assets',     // ассеты будут в dist/assets
       sourcemap: false,
       rollupOptions: {
         output: {
@@ -51,9 +53,7 @@ export default defineConfig(({ mode }) => {
             vendor: ['react', 'react-dom'],
           }
         }
-      },
-      outDir: 'dist',
-      assetsDir: 'assets',
+      }
     },
     define: {
       'process.env': {},
