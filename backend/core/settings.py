@@ -104,7 +104,7 @@ CSRF_COOKIE_SAMESITE = 'None'
 CSRF_COOKIE_SECURE = True
 
 # ========== СТАТИЧЕСКИЕ ФАЙЛЫ ==========
-STATIC_URL = "/blog/"
+STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 # Важно: правильный порядок для статических файлов
@@ -113,10 +113,9 @@ STATICFILES_DIRS = [
 ]
 
 # Для React build
-FRONTEND_DIR = os.path.join(BASE_DIR.parent, "frontend")
-DIST_DIR = os.path.join(FRONTEND_DIR, "dist")
-if os.path.exists(DIST_DIR):
-    STATICFILES_DIRS.append(DIST_DIR)
+FRONTEND_DIR = os.path.join(BASE_DIR.parent, 'frontend')
+if os.path.exists(os.path.join(FRONTEND_DIR, 'dist')):
+    STATICFILES_DIRS.append(os.path.join(FRONTEND_DIR, 'dist'))
 
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
