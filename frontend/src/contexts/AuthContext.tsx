@@ -60,7 +60,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     .from('users')
     .select('*')
     .eq('email', email)
-    .single();
+    .maybeSingle();
 
   if (userFromSupabase) {
     setProfileState(userFromSupabase);

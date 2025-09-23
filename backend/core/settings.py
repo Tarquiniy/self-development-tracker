@@ -63,6 +63,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.onrender.com",
     "https://*.supabase.co",
     "https://sdracker.onrender.com/",
+    "https://sdtracker.vercel.app",
     "https://cs88500-wordpress-o0a99.tw1.ru",
 ]
 

@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.permissions import IsAuthenticated
 
 User = get_user_model()
 
@@ -75,3 +76,16 @@ class LoginView(APIView):
             'user': {'id': user.id, 'username': user.username, 'email': user.email},
             'tokens': {'refresh': str(refresh), 'access': str(refresh.access_token)}
         }, status=status.HTTP_200_OK)
+
+class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response({
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "is_staff": user.is_staff,
+            "date_joined": user.date_joined,
+        })

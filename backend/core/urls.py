@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.urls import path, include
 from users.views import RegisterView, LoginView
 from django.conf.urls.static import static
+from users.views import RegisterView, LoginView, ProfileView
 
 urlpatterns = [
     path('grappelli/', include('grappelli.urls')),
@@ -15,6 +16,7 @@ urlpatterns = [
     path('api/tables/', include(('tables.urls', 'tables'), namespace='tables')),
     path('admin/', admin.site.urls),
     path('summernote/', include('django_summernote.urls')),
+    path('api/auth/profile/', ProfileView.as_view(), name='profile'),  # <-- добавил
 ]
 
 if settings.DEBUG:  # только в dev
