@@ -26,24 +26,16 @@ class CustomUserAdmin(admin.ModelAdmin):
     search_fields = ('username', 'email', 'first_name', 'last_name')
     ordering = ('-date_joined',)
     fieldsets = (
-        (None, {
-            'fields': ('username', 'email', 'password')
-        }),
-        ('Personal info', {
-            'fields': ('first_name', 'last_name')
-        }),
-        ('Permissions', {
-            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')
-        }),
-        ('Important dates', {
-            'fields': ('last_login', 'date_joined')
-        }),
+        (None, {'fields': ('username', 'email', 'password')}),
+        ('Personal info', {'fields': ('first_name', 'last_name')}),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
     
     class Media:
         css = {'all': ('admin/admin-modern.css',)}
 
-# ========== ПОСТЫ С УЛУЧШЕННЫМ ИНТЕРФЕЙСОМ ==========
+# ========== ПОСТЫ ==========
 class CommentInline(admin.TabularInline):
     model = Comment
     extra = 0
@@ -62,19 +54,10 @@ class PostAdmin(SummernoteModelAdmin):
     filter_horizontal = ('categories', 'tags')
     
     fieldsets = (
-        ('Основная информация', {
-            'fields': ('title', 'slug', 'author', 'status', 'published_at')
-        }),
-        ('Содержание', {
-            'fields': ('excerpt', 'content', 'featured_image')
-        }),
-        ('Категории и теги', {
-            'fields': ('categories', 'tags')
-        }),
-        ('SEO', {
-            'fields': ('meta_title', 'meta_description', 'og_image'),
-            'classes': ('collapse',)
-        }),
+        ('Основная информация', {'fields': ('title', 'slug', 'author', 'status', 'published_at')}),
+        ('Содержание', {'fields': ('excerpt', 'content', 'featured_image')}),
+        ('Категории и теги', {'fields': ('categories', 'tags')}),
+        ('SEO', {'fields': ('meta_title', 'meta_description', 'og_image'), 'classes': ('collapse',)}),
     )
     
     inlines = [CommentInline]
@@ -121,13 +104,13 @@ class PostAdmin(SummernoteModelAdmin):
         css = {'all': ('admin/admin-modern.css',)}
         js = ('admin/admin.js',)
 
-# ========== КАТЕГОРИИ И ТЕГИ ==========
+# ========== КАТЕГОРИИ ==========
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ('name', 'slug', 'post_count', 'created_at')
-    search_fields = ('name', 'description')
-    prepopulated_fields = {'slug': ('name',)}
-    fields = ('name', 'slug', 'description')
+    list_display = ('title', 'slug', 'post_count', 'created_at')
+    search_fields = ('title', 'description')
+    prepopulated_fields = {'slug': ('title',)}
+    fields = ('title', 'slug', 'description')
     
     def post_count(self, obj):
         return obj.posts.count()
@@ -136,11 +119,12 @@ class CategoryAdmin(admin.ModelAdmin):
     class Media:
         css = {'all': ('admin/admin-modern.css',)}
 
+# ========== ТЕГИ ==========
 @admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):
-    list_display = ('name', 'slug', 'post_count')
-    search_fields = ('name',)
-    prepopulated_fields = {'slug': ('name',)}
+    list_display = ('title', 'slug', 'post_count')
+    search_fields = ('title',)
+    prepopulated_fields = {'slug': ('title',)}
     
     def post_count(self, obj):
         return obj.posts.count()
@@ -204,7 +188,7 @@ class PostReactionAdmin(admin.ModelAdmin):
     class Media:
         css = {'all': ('admin/admin-modern.css',)}
 
-# ========== DASHBOARD WIDGETS ==========
+# ========== DASHBOARD ==========
 class DashboardAdmin(admin.ModelAdmin):
     def get_urls(self):
         from django.urls import path

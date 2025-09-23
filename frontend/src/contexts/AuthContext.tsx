@@ -1,7 +1,9 @@
+// frontend/src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { User, UserProfile, AuthContextType } from '../types';
 import { apiService } from '../services/api';
+import { supabase } from '../services/supabaseClient';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -45,37 +47,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const data = await apiService.login(email, password);
-    setUser(data.user);
+  const data = await apiService.login(email, password);
+  setUser(data.user);
 
-    if (data.access) {
-      localStorage.setItem('accessToken', data.access);
-      localStorage.setItem('refreshToken', data.refresh);
-    }
+  if (data.access) {
+    localStorage.setItem('accessToken', data.access);
+    localStorage.setItem('refreshToken', data.refresh);
+  }
 
-    const profileData = await apiService.getProfile();
-    setProfileState(profileData);
-  };
+  // грузим профиль из Supabase
+  const { data: userFromSupabase } = await supabase
+    .from('users')
+    .select('*')
+    .eq('email', email)
+    .single();
+
+  if (userFromSupabase) {
+    setProfileState(userFromSupabase);
+  }
+};
 
   const register = async (userData: {
-    email: string;
-    username: string;
-    password: string;
-    first_name?: string;
-    last_name?: string;
-    phone?: string;
-  }) => {
-    const data = await apiService.register(userData);
-    setUser(data.user);
+  email: string;
+  username: string;
+  password: string;
+}) => {
+  const data = await apiService.register(userData);
+  setUser(data.user);
 
-    if (data.access) {
-      localStorage.setItem('accessToken', data.access);
-      localStorage.setItem('refreshToken', data.refresh);
-    }
+  if (data.access) {
+    localStorage.setItem('accessToken', data.access);
+    localStorage.setItem('refreshToken', data.refresh);
+  }
 
-    const profileData = await apiService.getProfile();
-    setProfileState(profileData);
-  };
+  // сохраняем пользователя в Supabase
+  await supabase.from('users').insert([
+    {
+      email: userData.email,
+      username: userData.username,
+    },
+  ]);
+
+  setProfileState({
+    email: userData.email,
+    username: userData.username,
+  } as any);
+};
 
   const logout = () => {
     localStorage.removeItem('accessToken');
@@ -84,15 +101,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setProfileState(null);
   };
 
-  // Функция для установки пользователя
   const setUserData = (userData: User) => {
     setUser(userData);
   };
 
-  // Функция для установки профиля
   const setProfile = (profileData: UserProfile) => {
     setProfileState(profileData);
-    setUser(profileData.user); // Также обновляем данные пользователя
+    setUser(profileData.user);
   };
 
   const value: AuthContextType = {
@@ -108,7 +123,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {children}
+      {loading ? <div>Загрузка...</div> : children}
     </AuthContext.Provider>
   );
 };

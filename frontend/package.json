@@ -11,8 +11,10 @@
     "deploy": "npm run build && vercel --prod"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
     "@types/node": "^24.3.0",
     "dexie": "^4.2.0",
+    "dompurify": "^3.2.7",
     "lucide-react": "^0.542.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -27,6 +29,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
+    "@types/dompurify": "^3.0.5",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@types/workbox-precaching": "^4.3.1",

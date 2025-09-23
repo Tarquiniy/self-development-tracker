@@ -1,11 +1,15 @@
-from django.urls import path, include
+# backend/tables/urls.py
 from rest_framework.routers import DefaultRouter
-from .views import ProgressTableViewSet, tables_test
+from django.urls import path, include
+
+from .views import ProgressTableViewSet, DailyProgressViewSet
+
+app_name = "tables"
 
 router = DefaultRouter()
-router.register(r'tables', ProgressTableViewSet, basename='table')
+router.register(r'tables', ProgressTableViewSet, basename='table')   # -> /api/tables/tables/
+router.register(r'progress', DailyProgressViewSet, basename='progress')  # -> /api/tables/progress/
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('test/', tables_test, name='tables-test'),
 ]

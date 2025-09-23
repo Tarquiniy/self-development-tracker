@@ -1,22 +1,27 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiService } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
     try {
-      await apiService.login(email, password);
+      await login(email, password); // используем login из контекста
       navigate('/dashboard'); // перенаправление после логина
     } catch (err: any) {
       setError(err.message || 'Ошибка входа');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -31,6 +36,7 @@ const Login: React.FC = () => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            disabled={loading}
           />
         </div>
 
@@ -41,12 +47,15 @@ const Login: React.FC = () => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            disabled={loading}
           />
         </div>
 
         {error && <p className="error">{error}</p>}
 
-        <button type="submit">Войти</button>
+        <button type="submit" disabled={loading}>
+          {loading ? 'Вход...' : 'Войти'}
+        </button>
       </form>
 
       <p>

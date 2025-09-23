@@ -93,7 +93,19 @@ INSTALLED_APPS = [
     'rest_framework',
     'django_summernote',
     'blog',
+    'tables',
 ]
+
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+]
+
+JWT_SECRET = os.environ.get('DJANGO_JWT_SECRET', os.environ.get('SECRET_KEY'))
+JWT_ALGORITHM = 'HS256'
+JWT_EXP_DELTA_SECONDS = 60 * 60 * 24 * 7  # 7 дней
+
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
