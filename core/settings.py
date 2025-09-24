@@ -29,7 +29,7 @@ SECRET_KEY = 'django-insecure-q(9(10%w2tkw)=^=17wa8yl*6tjk-1@&3mvuxsfht*&jz!gb7a
 DEBUG = False
 
 CORS_ALLOWED_ORIGINS = [
-    "https://sdtracker.vercel.app",  # Ваш фронтенд
+    "https://positive-theta.vercel.app",  
     "http://localhost:3000",         # Для локальной разработки
     "http://127.0.0.1:3000",         # Для локальной разработки
 ]

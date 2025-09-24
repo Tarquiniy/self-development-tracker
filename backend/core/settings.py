@@ -64,6 +64,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.supabase.co",
     "https://sdracker.onrender.com/",
     "https://sdtracker.vercel.app",
+    "https://positive-theta.vercel.app",
     "https://cs88500-wordpress-o0a99.tw1.ru",
 ]
 
@@ -73,6 +74,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "https://cs88500-wordpress-o0a99.tw1.ru",
     "https://sdracker.onrender.com",
+    "https://positive-theta.vercel.app",
 ]
 
 CORS_ALLOW_ALL_ORIGINS = False
