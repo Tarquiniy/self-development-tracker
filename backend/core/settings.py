@@ -113,11 +113,6 @@ STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "static"),
 ]
 
-# Для React build
-FRONTEND_DIR = os.path.join(BASE_DIR.parent, 'frontend')
-if os.path.exists(os.path.join(FRONTEND_DIR, 'dist')):
-    STATICFILES_DIRS.append(os.path.join(FRONTEND_DIR, 'dist'))
-
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # ========== БАЗА ДАННЫХ ==========

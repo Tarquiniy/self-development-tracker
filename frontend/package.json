@@ -1,54 +1,41 @@
 {
   "name": "frontend",
+  "version": "0.1.0",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "description": "This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).",
+  "homepage": "https://github.com/Tarquiniy/self-development-tracker#readme",
+  "bugs": {
+    "url": "https://github.com/Tarquiniy/self-development-tracker/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tarquiniy/self-development-tracker.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "next.config.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "deploy": "npm run build && vercel --prod"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.57.4",
-    "@types/node": "^24.3.0",
-    "dexie": "^4.2.0",
-    "dompurify": "^3.2.7",
-    "lucide-react": "^0.542.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-helmet-async": "^2.0.5",
-    "react-router-dom": "^7.8.2",
-    "recharts": "^3.1.2",
-    "workbox-core": "^7.3.0",
-    "workbox-expiration": "^7.3.0",
-    "workbox-precaching": "^7.3.0",
-    "workbox-routing": "^7.3.0",
-    "workbox-strategies": "^7.3.0"
+    "next": "15.5.3",
+    "next-pwa": "^5.6.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.33.0",
-    "@types/dompurify": "^3.0.5",
-    "@types/react": "^19.1.10",
-    "@types/react-dom": "^19.1.7",
-    "@types/workbox-precaching": "^4.3.1",
-    "@vitejs/plugin-react": "^5.0.0",
+    "@tailwindcss/line-clamp": "^0.4.4",
+    "@tailwindcss/postcss": "^4.1.13",
+    "@tailwindcss/typography": "^0.5.18",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "autoprefixer": "^10.4.21",
-    "eslint": "^9.33.0",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "eslint-plugin-react-refresh": "^0.4.20",
-    "globals": "^16.3.0",
     "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.17",
-    "typescript": "~5.8.3",
-    "typescript-eslint": "^8.39.1",
-    "vite": "^7.1.2",
-    "vite-plugin-pwa": "^1.0.3"
-  },
-  "description": "This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.",
-  "main": "eslint.config.js",
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+    "tailwindcss": "^4.1.13",
+    "typescript": "^5"
+  }
 }
