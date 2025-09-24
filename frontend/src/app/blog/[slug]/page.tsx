@@ -1,206 +1,134 @@
 // frontend/src/app/blog/[slug]/page.tsx
-"use client";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import Header from "@/components/Header";
+import ArticleMeta from "@/components/ArticleMeta";
 
-import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
-import Image from "next/image";
-import Link from "next/link";
-import { motion } from "framer-motion";
-
-interface Category {
-  id: number;
-  title: string;
+type PostData = {
   slug: string;
-}
-
-interface Tag {
-  id: number;
-  title: string;
-  slug: string;
-}
-
-interface Comment {
-  id: number;
-  name: string;
-  content: string;
-  created_at: string;
-}
-
-interface Post {
-  id: number;
   title: string;
   content: string;
-  excerpt: string;
-  featured_image?: string;
-  slug: string;
-  published_at: string;
-  categories: Category[];
-  tags: Tag[];
-  comments: Comment[];
+  excerpt?: string;
+  og_image?: string;
+  published_at?: string;
+  categories?: { title: string }[];
+  author?: { name?: string };
+  meta_title?: string;
+  meta_description?: string;
+};
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const revalidate = 3600;
+
+export async function generateStaticParams(): Promise<{ slug: string }[]> {
+  if (!API_URL) return [];
+  try {
+    const res = await fetch(`${API_URL}/api/blog/posts/?per_page=200`, { next: { revalidate } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const posts: PostData[] = Array.isArray(data) ? data : data.results ?? [];
+    return posts.map((p) => ({ slug: p.slug }));
+  } catch {
+    return [];
+  }
 }
 
-export default function BlogPostPage() {
-  const params = useParams();
-  const { slug } = params as { slug: string };
-
-  const [post, setPost] = useState<Post | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [comment, setComment] = useState("");
-  const [sending, setSending] = useState(false);
-
-  useEffect(() => {
-    async function fetchPost() {
-      try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/blog/posts/${slug}/`);
-        const data = await res.json();
-        setPost(data);
-      } catch (err) {
-        console.error("Ошибка загрузки поста", err);
-      } finally {
-        setLoading(false);
+// Ключевое изменение: Тип params для generateMetadata также должен быть Promise
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  // Извлекаем slug с помощью await
+  const { slug } = await params;
+  try {
+    const res = await fetch(`${API_URL}/api/blog/posts/${slug}/`, { next: { revalidate } });
+    if (!res.ok) return { title: "Пост" };
+    const post: PostData = await res.json();
+    return {
+      title: post.meta_title ?? post.title,
+      description: post.meta_description ?? post.excerpt,
+      openGraph: {
+        images: post.og_image ? [post.og_image] : undefined,
       }
-    }
-    if (slug) fetchPost();
-  }, [slug]);
-
-  async function handleAddComment(e: React.FormEvent) {
-    e.preventDefault();
-    if (!comment.trim()) return;
-    setSending(true);
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/blog/posts/${slug}/add_comment/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Гость", content: comment }),
-      });
-      if (res.ok) {
-        const newComment = await res.json();
-        setPost((prev) =>
-          prev ? { ...prev, comments: [...prev.comments, newComment] } : prev
-        );
-        setComment("");
-      }
-    } catch (err) {
-      console.error("Ошибка добавления комментария", err);
-    } finally {
-      setSending(false);
-    }
+    };
+  } catch {
+    return { title: "Пост" };
   }
+}
 
-  if (loading) {
-    return <p className="text-center mt-20 text-gray-500">Загрузка...</p>;
-  }
+// Ключевое изменение: Тип params для компонента страницы должен быть Promise
+export default async function Page(props: { params: Promise<{ slug: string }> }) {
+  // Извлекаем slug с помощью await
+  const { slug } = await props.params;
+  try {
+    const res = await fetch(`${API_URL}/api/blog/posts/${slug}/`, { next: { revalidate } });
+    if (!res.ok) return notFound();
+    const post: PostData = await res.json();
 
-  if (!post) {
-    return <p className="text-center mt-20 text-gray-500">Статья не найдена.</p>;
-  }
-
-  return (
-    <main className="min-h-screen bg-white dark:bg-neutral-950 transition-colors duration-300">
-      {/* Hero Image */}
-      {post.featured_image && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="relative w-full h-96"
-        >
-          <Image
-            src={post.featured_image}
-            alt={post.title}
-            fill
-            className="object-cover"
-            priority
-          />
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-            <h1 className="text-4xl sm:text-5xl font-extrabold text-white text-center drop-shadow-lg">
-              {post.title}
-            </h1>
-          </div>
-        </motion.div>
-      )}
-
-      <article className="mx-auto max-w-4xl px-6 py-16">
-        {/* Meta */}
-        <div className="mb-8 text-sm text-gray-600 dark:text-gray-400 flex flex-wrap items-center gap-4">
-          <span>
-            📅 {new Date(post.published_at).toLocaleDateString("ru-RU")}
-          </span>
-          {post.categories.map((cat) => (
-            <Link
-              key={cat.id}
-              href={`/blog?category=${cat.slug}`}
-              className="px-3 py-1 rounded-full bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 text-xs font-medium"
-            >
-              {cat.title}
-            </Link>
-          ))}
-        </div>
-
-        {/* Content */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="prose dark:prose-invert max-w-none prose-lg prose-img:rounded-xl prose-a:text-pink-600 hover:prose-a:text-pink-700"
-          dangerouslySetInnerHTML={{ __html: post.content }}
-        />
-
-        {/* Tags */}
-        {post.tags.length > 0 && (
-          <div className="mt-10 flex flex-wrap gap-2">
-            {post.tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="px-3 py-1 rounded-full bg-gray-200 dark:bg-neutral-800 text-gray-700 dark:text-gray-300 text-xs font-medium"
-              >
-                #{tag.title}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Comments */}
-        <section className="mt-16">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-            Комментарии ({post.comments.length})
-          </h2>
-
-          <div className="space-y-6">
-            {post.comments.map((c) => (
-              <div
-                key={c.id}
-                className="p-4 rounded-lg bg-gray-100 dark:bg-neutral-900"
-              >
-                <p className="text-sm text-gray-700 dark:text-gray-300 font-semibold">
-                  {c.name}
-                </p>
-                <p className="text-gray-600 dark:text-gray-400">{c.content}</p>
-                <span className="text-xs text-gray-500">
-                  {new Date(c.created_at).toLocaleDateString("ru-RU")}
-                </span>
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-primary-50/20">
+        <Header />
+        <main className="pt-32 pb-20 px-4">
+          <div className="container-max mx-auto">
+            <article className="bg-white rounded-3xl shadow-card p-8 lg:p-12 max-w-4xl mx-auto">
+              {post.og_image && (
+                <div className="rounded-2xl overflow-hidden mb-8">
+                  <img 
+                    src={post.og_image} 
+                    alt={post.title} 
+                    className="w-full h-64 lg:h-80 object-cover"
+                  />
+                </div>
+              )}
+              
+              <div className="mb-6">
+                {post.categories && post.categories.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {post.categories.map((category, index) => (
+                      <span 
+                        key={index} 
+                        className="tag-pill bg-primary-100 text-primary-700"
+                      >
+                        {category.title}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                
+                <h1 className="text-3xl lg:text-5xl font-heading font-bold text-neutral-900 mb-4 leading-tight">
+                  {post.title}
+                </h1>
+                
+                <ArticleMeta 
+                  author={post.author} 
+                  date={post.published_at} 
+                  tags={post.categories || []} 
+                />
               </div>
-            ))}
-          </div>
 
-          {/* Add Comment */}
-          <form onSubmit={handleAddComment} className="mt-8">
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Оставьте комментарий..."
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-neutral-900 p-3 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-pink-600"
-              rows={4}
-            />
-            <button
-              type="submit"
-              disabled={sending}
-              className="mt-4 rounded-full bg-pink-600 px-6 py-2 text-white font-medium shadow hover:bg-pink-700 transition disabled:opacity-50"
-            >
-              {sending ? "Отправка..." : "Отправить"}
-            </button>
-          </form>
-        </section>
-      </article>
-    </main>
-  );
+              {post.excerpt && (
+                <div className="bg-neutral-50 rounded-xl p-6 mb-8">
+                  <p className="text-lg text-neutral-700 italic leading-relaxed">
+                    {post.excerpt}
+                  </p>
+                </div>
+              )}
+
+              <div 
+                className="prose prose-lg max-w-none text-neutral-700"
+                dangerouslySetInnerHTML={{ __html: post.content }} 
+              />
+            </article>
+          </div>
+        </main>
+        
+        <footer className="py-12 px-4 bg-neutral-900 text-white">
+          <div className="container-max text-center">
+            <p className="text-neutral-400">
+              © {new Date().getFullYear()} Positive Theta. Все права защищены.
+            </p>
+          </div>
+        </footer>
+      </div>
+    );
+  } catch {
+    return notFound();
+  }
 }

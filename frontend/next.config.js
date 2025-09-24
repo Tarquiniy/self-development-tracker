@@ -17,21 +17,8 @@ const nextConfig = {
       'sdtracker.vercel.app',
     ],
   },
-  async rewrites() {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (!apiUrl) {
-      console.warn(
-        '⚠️ NEXT_PUBLIC_API_URL не задан! Rewrites будут отключены.'
-      );
-      return [];
-    }
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${apiUrl}/api/:path*`,
-      },
-    ];
-  },
+  // Убедитесь, что эта опция совместима с вашим хостингом
+   output: 'standalone',
 };
 
 module.exports = withPWA(nextConfig);
