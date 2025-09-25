@@ -2,7 +2,7 @@
 from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include
-from backend.core.views import health_check
+from core.views import health_check
 from users.views import RegisterView, LoginView
 from django.conf.urls.static import static
 from users.views import RegisterView, LoginView, ProfileView
