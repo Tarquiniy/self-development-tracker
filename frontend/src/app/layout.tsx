@@ -24,15 +24,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <div className="flex flex-col min-h-screen">
-            <Navbar />
-            <main className="flex-1">{children}</main>
-            <Footer />
-          </div>
-        </ThemeProvider>
-      </body>
+      <body className={`${inter.className} antialiased bg-background text-foreground`}>
+  <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <div className="flex flex-col min-h-screen container mx-auto px-4">
+      <Navbar />
+      <main className="flex-1">{children}</main>
+      <Footer />
+    </div>
+  </ThemeProvider>
+</body>
     </html>
   );
 }

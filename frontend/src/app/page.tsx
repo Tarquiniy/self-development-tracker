@@ -24,7 +24,7 @@ export default function HomePage() {
     async function loadPosts() {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/blog/posts/?page=1&per_page=3`
+          `${process.env.NEXT_PUBLIC_API_URL}/api/blog/posts`
         );
         if (!res.ok) throw new Error("Ошибка загрузки постов");
         const data = await res.json();
