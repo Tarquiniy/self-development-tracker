@@ -7,4 +7,4 @@ class BlogConfig(AppConfig):
 
     def ready(self):
         # Импортируем сигналы для регистрации
-        import blog.revalidation
+        from . import revalidation

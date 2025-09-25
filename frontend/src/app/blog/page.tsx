@@ -21,23 +21,48 @@ interface Post {
 }
 
 async function getPosts(): Promise<Post[]> {
+  // Увеличиваем таймаут для "просыпающихся" инстансов
+  const timeoutDuration = 30000; // 30 секунд
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
+
   try {
     const res = await fetch(`${API_BASE_URL}/api/blog/posts/?page=1&per_page=20`, {
+      signal: controller.signal,
       next: { 
-        revalidate: 3600, // 1 час кэша
-        tags: ['posts'] // Тег для ревалидации
+        revalidate: 3600,
+        tags: ['posts']
       }
-    })
+    });
     
+    clearTimeout(timeoutId);
+
+    // Проверяем статус ответа
     if (!res.ok) {
-      throw new Error(`Failed to fetch posts: ${res.status}`)
+      // Если бэкенд ответил ошибкой, выбрасываем исключение с деталями
+      throw new Error(`HTTP error! status: ${res.status}`);
     }
     
-    const data = await res.json()
-    return Array.isArray(data) ? data : data.results || []
+    const data = await res.json();
+    return Array.isArray(data) ? data : data.results || [];
+    
   } catch (error) {
-    console.error('Error fetching posts:', error)
-    return []
+    clearTimeout(timeoutId);
+    
+    // Обрабатываем разные типы ошибок
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        console.error('Fetch timeout: Backend took too long to respond');
+        // Возвращаем пустой массив вместо выброса ошибки
+        return [];
+      }
+      console.error('Network error:', error.message);
+    } else {
+      console.error('Unexpected error:', error);
+    }
+    
+    // Вместо прерывания сборки возвращаем пустой массив
+    return [];
   }
 }
 
