@@ -1,4 +1,6 @@
+// frontend/src/components/Header.tsx
 "use client";
+
 import Link from "next/link";
 import { useState, useEffect } from "react";
 
@@ -23,14 +25,13 @@ export default function Header() {
         <div className="flex items-center justify-between">
           {/* Логотип */}
           <Link href="/" className="flex items-center space-x-3 group">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow duration-300">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg">
               <span className="text-white font-heading font-bold text-xl">Θ</span>
             </div>
             <div className="flex flex-col">
               <span className="text-2xl font-heading font-bold bg-gradient-to-r from-neutral-900 to-neutral-700 bg-clip-text text-transparent">
                 Positive Theta
               </span>
-              <span className="text-xs text-neutral-500 font-medium">Блог развития</span>
             </div>
           </Link>
 
@@ -38,31 +39,24 @@ export default function Header() {
           <nav className="hidden lg:flex items-center space-x-8">
             <Link 
               href="/" 
-              className="text-neutral-700 hover:text-primary-500 font-medium transition-colors duration-200 relative group"
+              className="text-neutral-700 hover:text-blue-500 font-medium transition-colors duration-200 relative group"
             >
               Главная
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary-500 group-hover:w-full transition-all duration-300"></span>
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-500 group-hover:w-full transition-all duration-300"></span>
             </Link>
             <Link 
               href="/blog" 
-              className="text-neutral-700 hover:text-primary-500 font-medium transition-colors duration-200 relative group"
+              className="text-neutral-700 hover:text-blue-500 font-medium transition-colors duration-200 relative group"
             >
               Блог
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary-500 group-hover:w-full transition-all duration-300"></span>
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-500 group-hover:w-full transition-all duration-300"></span>
             </Link>
             <Link 
               href="/about" 
-              className="text-neutral-700 hover:text-primary-500 font-medium transition-colors duration-200 relative group"
+              className="text-neutral-700 hover:text-blue-500 font-medium transition-colors duration-200 relative group"
             >
               О проекте
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary-500 group-hover:w-full transition-all duration-300"></span>
-            </Link>
-            <Link 
-              href="/contact" 
-              className="text-neutral-700 hover:text-primary-500 font-medium transition-colors duration-200 relative group"
-            >
-              Контакты
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary-500 group-hover:w-full transition-all duration-300"></span>
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-500 group-hover:w-full transition-all duration-300"></span>
             </Link>
           </nav>
 
@@ -95,35 +89,28 @@ export default function Header() {
 
         {/* Мобильное меню выпадающее */}
         {isMenuOpen && (
-          <div className="lg:hidden mt-6 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-neutral-200 p-6 animate-scale-in">
+          <div className="lg:hidden mt-6 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-neutral-200 p-6">
             <nav className="flex flex-col space-y-4">
               <Link 
                 href="/" 
-                className="text-neutral-700 hover:text-primary-500 font-medium py-2 transition-colors duration-200"
+                className="text-neutral-700 hover:text-blue-500 font-medium py-2 transition-colors duration-200"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Главная
               </Link>
               <Link 
                 href="/blog" 
-                className="text-neutral-700 hover:text-primary-500 font-medium py-2 transition-colors duration-200"
+                className="text-neutral-700 hover:text-blue-500 font-medium py-2 transition-colors duration-200"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Блог
               </Link>
               <Link 
                 href="/about" 
-                className="text-neutral-700 hover:text-primary-500 font-medium py-2 transition-colors duration-200"
+                className="text-neutral-700 hover:text-blue-500 font-medium py-2 transition-colors duration-200"
                 onClick={() => setIsMenuOpen(false)}
               >
                 О проекте
-              </Link>
-              <Link 
-                href="/contact" 
-                className="text-neutral-700 hover:text-primary-500 font-medium py-2 transition-colors duration-200"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Контакты
               </Link>
             </nav>
             <div className="flex flex-col space-y-3 mt-6 pt-6 border-t border-neutral-200">

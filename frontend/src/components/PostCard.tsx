@@ -1,58 +1,78 @@
-import Link from "next/link";
-import Image from "next/image";
+import Link from 'next/link'
+import Image from 'next/image'
 
 interface Category {
-  title: string;
-  id?: string;
+  title: string
+  slug: string
 }
 
 interface Post {
-  slug: string;
-  title: string;
-  excerpt?: string;
-  featured_image?: string;
-  og_image?: string;
-  published_at?: string;
-  created_at?: string;
-  categories?: Category[];
+  id: number
+  slug: string
+  title: string
+  excerpt: string
+  featured_image?: string
+  og_image?: string
+  published_at: string
+  categories?: Category[]
+  reading_time?: number
 }
 
 interface PostCardProps {
-  post: Post;
+  post: Post
 }
 
 export default function PostCard({ post }: PostCardProps) {
-  const img = post.og_image || post.featured_image || "/images/placeholder-article.jpg";
-  const date = post.published_at || post.created_at || new Date().toISOString();
-
+  const imageUrl = post.featured_image || post.og_image || '/placeholder-article.jpg'
+  const readingTime = post.reading_time || Math.ceil((post.excerpt?.length || 0) / 200)
+  
   return (
-    <article className="card overflow-hidden transition-shadow hover:shadow-lg">
-      <Link href={`/blog/${post.slug}`} className="block">
-        <div className="w-full h-44 bg-neutral-100 overflow-hidden">
+    <article className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+      <Link href={`/blog/${post.slug}`}>
+        <div className="aspect-video relative overflow-hidden">
           <Image 
-            src={img} 
-            alt={post.title} 
-            width={400}
-            height={176}
-            className="w-full h-full object-cover" 
+            src={imageUrl} 
+            alt={post.title}
+            fill
+            className="object-cover hover:scale-105 transition-transform"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
         </div>
-        <div className="p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="tag-pill">
-              {post.categories?.[0]?.title ?? "Статья"}
-            </span>
-            <span className="text-xs text-muted">
-              {new Date(date).toLocaleDateString()}
+        
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap gap-2">
+              {post.categories?.slice(0, 2).map((category) => (
+                <span key={category.slug} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                  {category.title}
+                </span>
+              ))}
+            </div>
+            <span className="text-gray-500 text-sm">{readingTime} мин</span>
+          </div>
+          
+          <h3 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2 hover:text-blue-600 transition-colors">
+            {post.title}
+          </h3>
+          
+          <p className="text-gray-600 line-clamp-3 mb-4">
+            {post.excerpt.replace(/<[^>]*>/g, '')}
+          </p>
+          
+          <div className="flex items-center justify-between text-sm text-gray-500">
+            <time dateTime={post.published_at}>
+              {new Date(post.published_at).toLocaleDateString('ru-RU', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </time>
+            <span className="text-blue-600 font-medium hover:text-blue-700 transition-colors">
+              Читать →
             </span>
           </div>
-          <h3 className="text-lg font-heading text-text mb-2">{post.title}</h3>
-          <p 
-            className="text-sm text-muted line-clamp-3" 
-            dangerouslySetInnerHTML={{ __html: post.excerpt || "" }} 
-          />
         </div>
       </Link>
     </article>
-  );
+  )
 }
