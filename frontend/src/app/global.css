@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Тема (светлая/тёмная) */
+:root {
+  --background: #ffffff;
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --primary: #0073aa;
+  --primary-foreground: #ffffff;
+  --muted: #f5f5f5;
+  --muted-foreground: #555555;
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #f5f5f5;
+  --card: #1a1a1a;
+  --card-foreground: #f5f5f5;
+  --primary: #00a0d2;
+  --primary-foreground: #0a0a0a;
+  --muted: #222222;
+  --muted-foreground: #bbbbbb;
+}
+
+body {
+  @apply bg-background text-foreground;
+}

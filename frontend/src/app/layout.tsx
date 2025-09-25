@@ -1,22 +1,38 @@
-import './globals.css'
-import type { Metadata } from 'next'
+// app/layout.tsx
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./global.css";
+import { ThemeProvider } from "@/components/theme-provider";
+import Navbar from "@/components/navbar";
+import Footer from "@/components/footer";
+
+const inter = Inter({ subsets: ["latin", "cyrillic"] });
 
 export const metadata: Metadata = {
-  title: 'Positive Theta - Блог саморазвития',
-  description: 'Современный подход к саморазвитию и личностному росту',
-  keywords: 'саморазвитие, психология, личностный рост, блог',
-}
+  title: "Positive Theta",
+  description:
+    "Современный блог и платформа для саморазвития. Читайте статьи, отслеживайте прогресс и вдохновляйтесь.",
+  icons: {
+    icon: "/favicon.ico",
+  },
+};
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
-    <html lang="ru">
-      <body className="bg-gray-50 min-h-screen">
-        {children}
+    <html lang="ru" suppressHydrationWarning>
+      <body className={inter.className}>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <div className="flex flex-col min-h-screen">
+            <Navbar />
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </div>
+        </ThemeProvider>
       </body>
     </html>
-  )
+  );
 }

@@ -1,60 +1,111 @@
-// frontend/src/app/page.tsx
-import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+// app/page.tsx
+"use client";
 
-export default function Home() {
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+
+type Post = {
+  id: number;
+  title: string;
+  slug: string;
+  excerpt: string;
+  featured_image?: string | null;
+  published_at: string;
+};
+
+export default function HomePage() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadPosts() {
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/blog/posts/?page=1&per_page=3`
+        );
+        if (!res.ok) throw new Error("Ошибка загрузки постов");
+        const data = await res.json();
+        setPosts(data.results || data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadPosts();
+  }, []);
+
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-pink-50 via-white to-purple-50">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-md border-b border-pink-100">
-        <div className="container mx-auto px-6 flex justify-between items-center py-5">
-          <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">
-            Positive Theta
-          </Link>
-          <nav className="flex gap-6 text-gray-700 font-medium">
-            <Link href="/blog" className="hover:text-pink-500 transition-colors">Блог</Link>
-            <Link href="/login" className="hover:text-pink-500 transition-colors">Войти</Link>
-            <Link
-              href="/signup"
-              className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-400 to-purple-500 text-white font-medium shadow-md hover:shadow-lg transition-all"
-            >
-              Зарегистрироваться
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <main className="min-h-screen bg-gradient-to-b from-background to-muted">
+      {/* Hero */}
+      <section className="flex flex-col items-center justify-center text-center py-32">
+        <motion.h1
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-5xl md:text-6xl font-extrabold tracking-tight"
+        >
+          Positive Theta
+        </motion.h1>
+        <motion.p
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl"
+        >
+          Современный блог и платформа для саморазвития.
+        </motion.p>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-8">
+          <Button asChild size="lg">
+            <Link href="/blog">Перейти к блогу</Link>
+          </Button>
+        </motion.div>
+      </section>
 
-      {/* Main */}
-      <main className="flex-grow flex items-center justify-center text-center px-6">
-        <div className="max-w-3xl animate-fade-in">
-          <h1 className="text-5xl lg:text-7xl font-extrabold mb-8 leading-tight bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
-            Саморазвитие через осознанность
-          </h1>
-          <p className="text-lg lg:text-xl text-gray-600 mb-10 leading-relaxed">
-            Positive Theta — это пространство для вдохновения, личностного роста и поиска гармонии.
-            Мы объединяем науку, практику и философию для того, чтобы каждый мог раскрыть свой потенциал.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/signup"
-              className="px-8 py-4 rounded-xl bg-gradient-to-r from-pink-400 to-purple-500 text-white font-semibold text-lg flex items-center gap-2 hover:shadow-xl transition-all"
-            >
-              Начать путь <ArrowRight className="w-5 h-5" />
-            </Link>
-            <Link
-              href="/blog"
-              className="px-8 py-4 rounded-xl border-2 border-pink-200 text-gray-700 font-semibold text-lg hover:border-pink-400 hover:text-pink-500 transition-all"
-            >
-              Читать блог
-            </Link>
+      {/* Latest Posts */}
+      <section className="py-20 max-w-6xl mx-auto px-4">
+        <h2 className="text-3xl font-bold mb-10">Последние статьи</h2>
+
+        {loading ? (
+          <p className="text-muted-foreground">Загрузка...</p>
+        ) : posts.length === 0 ? (
+          <p className="text-muted-foreground">Постов пока нет.</p>
+        ) : (
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {posts.map((post) => (
+              <Card key={post.id} className="hover:shadow-xl transition">
+                <div className="h-48 bg-muted flex items-center justify-center overflow-hidden">
+                  {post.featured_image ? (
+                    <img
+                      src={post.featured_image}
+                      alt={post.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-muted-foreground">Нет изображения</span>
+                  )}
+                </div>
+                <CardContent className="flex flex-col justify-between h-56">
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2">{post.title}</h3>
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {post.excerpt || "Без описания"}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/blog/${post.slug}`}
+                    className="mt-4 text-primary font-medium hover:underline"
+                  >
+                    Читать →
+                  </Link>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-pink-100 py-8 text-center text-gray-500 text-sm">
-        © {new Date().getFullYear()} Positive Theta. Все права защищены.
-      </footer>
-    </div>
-  )
+        )}
+      </section>
+    </main>
+  );
 }
