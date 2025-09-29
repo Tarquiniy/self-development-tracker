@@ -2,7 +2,7 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
 {% block extrastyle %}
-<link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
+<link rel="stylesheet" href="{% static 'blog/admin-modern.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -34,7 +34,7 @@
       </div>
 
       <div id="upload-progress-list" class="card" style="padding:8px; min-height:60px;">
-        <!-- полосы прогресса -->
+        <!-- progress -->
       </div>
     </div>
   </div>
@@ -68,92 +68,8 @@
     {% endfor %}
   </div>
 
-  {# Hidden file input — если в static/js что-то не сработает, мы создадим input программно в JS.
-     Оставим элемент для совместимости. #}
   <input id="file-input" type="file" style="display:none" multiple />
 </div>
 
-{# Подключаем основной скрипт (static) и затем — небольшая диагностическая обвязка inline.
-   Inline скрипт гарантирует, что даже если static/js не загрузился, кнопка будет работать —
-   он создаёт input если его нет и пытается привязать обработчики. #}
-<script src="{% static 'admin/media-library.js' %}"></script>
-
-<script>
-(function(){
-  // very small defensive initializer — runs after DOM, tries to attach fallback handlers if main script failed
-  try {
-    document.addEventListener('DOMContentLoaded', function () {
-      // basic logging
-      console.log('[media-library] inline initializer running');
-
-      // ensure file-input exists (fallback)
-      var fileInput = document.getElementById('file-input');
-      if (!fileInput) {
-        fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.multiple = true;
-        fileInput.id = 'file-input';
-        fileInput.style.display = 'none';
-        document.body.appendChild(fileInput);
-        console.log('[media-library] created fallback file-input');
-      }
-
-      // ensure upload button exists and attach click (defensive)
-      var uploadBtn = document.getElementById('upload-open-btn');
-      if (uploadBtn) {
-        uploadBtn.removeEventListener('click', window._media_fallback_click, false);
-        window._media_fallback_click = function (e) {
-          e.preventDefault();
-          console.log('[media-library] upload button clicked (fallback) — opening file dialog');
-          fileInput.click();
-        };
-        uploadBtn.addEventListener('click', window._media_fallback_click, false);
-      } else {
-        console.warn('[media-library] upload-open-btn not found in DOM');
-      }
-
-      // attach a very simple filechange handler if none exists
-      if (!fileInput._hasFallbackHandler) {
-        fileInput.addEventListener('change', function (e) {
-          console.log('[media-library] fallback file input change — files:', e.target.files && e.target.files.length);
-          // if main script provides window.uploadFiles, use it; otherwise, try a simple fetch as test
-          if (window.uploadFiles && typeof window.uploadFiles === 'function') {
-            window.uploadFiles(e.target.files);
-          } else {
-            console.warn('[media-library] uploadFiles() not available on window — main script probably failed to initialize');
-            alert('JS загрузки не инициализирован. Откройте консоль и пришлите ошибки (Console / Network).');
-          }
-          // reset
-          fileInput.value = '';
-        });
-        fileInput._hasFallbackHandler = true;
-      }
-
-      // attach basic drop handlers (fallback)
-      var drop = document.getElementById('dropzone');
-      if (drop) {
-        drop.addEventListener('dragover', function (ev) { ev.preventDefault(); drop.style.borderColor = 'var(--primary)'; });
-        drop.addEventListener('dragleave', function (ev) { ev.preventDefault(); drop.style.borderColor = ''; });
-        drop.addEventListener('drop', function (ev) {
-          ev.preventDefault();
-          drop.style.borderColor = '';
-          var dt = ev.dataTransfer;
-          if (dt && dt.files && dt.files.length) {
-            if (window.uploadFiles && typeof window.uploadFiles === 'function') {
-              window.uploadFiles(dt.files);
-            } else {
-              console.warn('[media-library] uploadFiles() not available — cannot upload dropped files');
-              alert('JS загрузки не инициализирован. Откройте консоль и пришлите ошибки (Console / Network).');
-            }
-          }
-        });
-      }
-
-    });
-  } catch (err) {
-    console.error('[media-library] inline initializer error', err);
-  }
-})();
-</script>
-
+<script src="{% static 'blog/admin-media-library.js' %}"></script>
 {% endblock %}

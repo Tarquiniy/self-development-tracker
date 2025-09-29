@@ -1,11 +1,7 @@
-// backend/blog/static/admin/media-library.js
+// backend/blog/static/blog/admin-media-library.js
 (function () {
     'use strict';
-    // defensive wrapper — если файл загружается дважды, не ломаемся
-    if (window._mediaLibraryLoaded) {
-        console.log('[media-library.js] already loaded — skipping re-init');
-        return;
-    }
+    if (window._mediaLibraryLoaded) return;
     window._mediaLibraryLoaded = true;
 
     function getCookie(name) {
@@ -21,9 +17,8 @@
     const csrftoken = getCookie('csrftoken');
     console.log('[media-library.js] csrftoken', !!csrftoken);
 
-    // helpers
-    function $(id) { return document.getElementById(id); }
-    function apiUrl(path) { return `/api/blog/media/${path}`; }
+    function $(id){ return document.getElementById(id); }
+    function apiUrl(path){ return `/api/blog/media/${path}`; }
     function showToast(msg, isError) {
         try {
             const t = document.createElement('div');
@@ -42,7 +37,6 @@
         } catch (e) { console.log(msg); }
     }
 
-    // main variables (DOM)
     var mediaGrid = $('media-grid');
     var searchInput = $('media-search');
     var unattachedCheckbox = $('filter-unattached');
@@ -52,7 +46,6 @@
     var refreshBtn = $('refresh-btn');
     var progressList = $('upload-progress-list');
 
-    // create fallback fileInput if not present
     if (!fileInput) {
         fileInput = document.createElement('input');
         fileInput.type = 'file';
@@ -63,10 +56,8 @@
         console.log('[media-library.js] created fallback file-input');
     }
 
-    // expose uploadFiles on window for fallback inline script
     window.uploadFiles = uploadFiles;
 
-    // fetch media
     function fetchMedia(page=1) {
         var q = encodeURIComponent((searchInput && searchInput.value) ? searchInput.value.trim() : '');
         var unatt = (unattachedCheckbox && unattachedCheckbox.checked) ? '1' : '0';
@@ -160,7 +151,6 @@
         });
     }
 
-    // Upload with progress (exposed as window.uploadFiles)
     function uploadFiles(files) {
         try {
             if (!files || !files.length) return;
@@ -220,7 +210,6 @@
         }
     }
 
-    // Attach events (robustly)
     function attachEvents() {
         try {
             if (uploadBtn) {
@@ -256,7 +245,6 @@
             if (unattachedCheckbox) unattachedCheckbox.addEventListener('change', function(){ fetchMedia(1); });
             if (refreshBtn) refreshBtn.addEventListener('click', function(){ fetchMedia(1); });
 
-            // delegate for server-rendered grid items
             document.addEventListener('click', function (e) {
                 var el = e.target;
                 if (el.classList && el.classList.contains('select-btn')) {
@@ -296,10 +284,8 @@
         }
     }
 
-    // simple debounce
     function debounce(fn,t){ var id; return function(){ var a=arguments; clearTimeout(id); id=setTimeout(function(){ fn.apply(null,a); }, t||200); }; }
 
-    // init after DOM ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function(){ attachEvents(); fetchMedia(1); });
     } else {
