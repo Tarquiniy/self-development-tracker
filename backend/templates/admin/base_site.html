@@ -26,12 +26,14 @@
 
             <div class="top-actions">
                 <div class="search-wrap">
-                    <form action="{% url 'admin:search' %}" method="get">
+                    {# Упрощённая форма поиска: отправляет на админ-index (встроенный поиск в админке необязателен) #}
+                    <form action="{% url 'admin:index' %}" method="get">
                         <input name="q" placeholder="{% trans 'Search admin...' %}" class="top-search" />
                     </form>
                 </div>
 
                 <nav class="top-links">
+                    {# Ссылки на админ-страницы — имена маршрутов должны соответствовать тем, что зарегистрированы в core/urls.py #}
                     <a href="{% url 'admin-media-library' %}" class="top-link">Медиа</a>
                     <a href="{% url 'admin-dashboard' %}" class="top-link">Dashboard</a>
                     <a href="{% url 'admin:logout' %}" class="top-link">Выйти</a>
@@ -50,7 +52,8 @@
                     <li><a href="{% url 'admin:blog_category_changelist' %}">Категории</a></li>
                     <li><a href="{% url 'admin:blog_tag_changelist' %}">Теги</a></li>
                     <li><a href="{% url 'admin:blog_comment_changelist' %}">Комментарии</a></li>
-                    <li><a href="{% url 'admin:blogmedialibrary_changelist' %}">Медиа библиотека</a></li>
+                    {# Правильное имя маршрута для proxy-модели MediaLibrary: admin:<app_label>_<modelname>_changelist #}
+                    <li><a href="{% url 'admin:blog_medialibrary_changelist' %}">Медиа библиотека</a></li>
                 </ul>
             </div>
 
