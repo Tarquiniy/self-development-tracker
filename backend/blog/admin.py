@@ -4,7 +4,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.http import JsonResponse, Http404
 from django.utils import timezone
 from django.db.models import Count
@@ -13,15 +13,15 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.http import require_GET, require_POST
 from django.utils.safestring import mark_safe
 
-from .models import Post, Category, Tag, Comment, PostReaction, PostView, PostAttachment
+from .models import (
+    Post, Category, Tag, Comment, PostReaction, PostView,
+    PostAttachment, MediaLibrary
+)
 from django_summernote.admin import SummernoteModelAdmin
 
 CustomUser = get_user_model()
 
-# ---------------- existing admin classes (users, posts, categories, tags, comments, reactions)
-# For brevity and compatibility we've kept the same PostAdmin/CategoryAdmin/TagAdmin/CommentAdmin/PostReactionAdmin
-# (the implementation is identical to the previously provided admin; it's required to be complete in this file)
-
+# ---------- Пользовательский админ
 @admin.register(CustomUser)
 class CustomUserAdmin(admin.ModelAdmin):
     list_display = ('username', 'email', 'is_staff', 'is_active', 'date_joined')
@@ -33,6 +33,7 @@ class CustomUserAdmin(admin.ModelAdmin):
         css = {'all': ('admin/admin-modern.css',)}
 
 
+# ---------- Inline для комментариев
 class CommentInline(admin.TabularInline):
     model = Comment
     extra = 0
@@ -40,6 +41,7 @@ class CommentInline(admin.TabularInline):
     readonly_fields = ('created_at',)
 
 
+# ---------- PostAdmin (inline editing UI already present)
 @admin.register(Post)
 class PostAdmin(SummernoteModelAdmin):
     summernote_fields = ('content', 'excerpt')
@@ -131,6 +133,7 @@ class PostAdmin(SummernoteModelAdmin):
         js = ('admin/admin.js', 'admin/admin-list-inline.js',)
 
 
+# ---------- CategoryAdmin, TagAdmin, CommentAdmin, PostReactionAdmin
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('title', 'slug', 'post_count', 'created_at')
@@ -219,7 +222,7 @@ class PostReactionAdmin(admin.ModelAdmin):
         css = {'all': ('admin/admin-modern.css',)}
 
 
-# ---------------- Admin dashboard view (kept for compatibility)
+# ---------- Dashboard & stats views (kept)
 @admin.site.admin_view
 @require_GET
 def admin_dashboard_view(request):
@@ -319,7 +322,7 @@ def admin_stats_api(request):
     })
 
 
-# ---------------- Admin post update endpoint (inline edit)
+# ---------- Post inline AJAX update endpoint
 @admin.site.admin_view
 @require_POST
 def admin_post_update_view(request):
@@ -364,16 +367,32 @@ def admin_post_update_view(request):
     return JsonResponse({'success': True, 'post_id': post.id, 'field': field, 'value': getattr(post, field)})
 
 
-# ---------------- Media library admin view
+# ---------- Media library admin view
 @admin.site.admin_view
 @require_GET
 def admin_media_library_view(request):
-    """
-    Renders the media library admin page.
-    The JS on the page calls /api/blog/media/... endpoints (staff-only).
-    """
     if not request.user.is_staff:
         raise Http404
-
     return render(request, 'admin/media_library.html', {})
 
+
+# ---------- Register proxy model "MediaLibrary" that redirects to the media library page
+@admin.register(MediaLibrary)
+class MediaLibraryAdmin(admin.ModelAdmin):
+    list_display = ('title', 'uploaded_by', 'uploaded_at', 'post_link')
+
+    def post_link(self, obj):
+        if obj.post:
+            return format_html('<a href="{}">{}</a>', reverse('admin:blog_post_change', args=[obj.post.id]), obj.post.title)
+        return '-'
+    post_link.short_description = "Привязка к посту"
+
+    def changelist_view(self, request, extra_context=None):
+        """
+        Redirect changelist clicks in the admin app list to the full media-library page.
+        This makes "Media Library" appear as a normal item under the Blog app and open the media UI.
+        """
+        return redirect('admin-media-library')
+
+    class Media:
+        css = {'all': ('admin/admin-modern.css',)}

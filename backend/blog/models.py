@@ -59,8 +59,7 @@ class Tag(models.Model):
 
 class PostAttachment(AbstractAttachment):
     """
-    File attachments for posts — now can be unattached (post nullable),
-    which allows using attachments as media library items.
+    File attachments for posts — can be unattached (post nullable) to support media library.
     """
     post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
     file = models.FileField(upload_to='post_attachments/%Y/%m/%d/')
@@ -211,3 +210,13 @@ class PostView(models.Model):
 
     def __str__(self):
         return f"Просмотр {self.post.title}"
+
+
+# ---------------------------
+# Proxy model to show "Media Library" in the Blog app list of Django admin.
+# This model is a proxy of PostAttachment and does not require DB schema changes.
+class MediaLibrary(PostAttachment):
+    class Meta:
+        proxy = True
+        verbose_name = "Медиа библиотека"
+        verbose_name_plural = "Медиа библиотека"
