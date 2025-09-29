@@ -1,38 +1,42 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { ModeToggle } from "@/components/theme-toggle";
-
-const links = [
-  { href: "/", label: "Главная" },
-  { href: "/blog", label: "Блог" },
-  { href: "/about", label: "О проекте" },
-];
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Navbar() {
-  const pathname = usePathname();
+  const { user, loading, logout } = useAuth();
 
   return (
-    <header className="border-b bg-background sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 flex h-16 items-center justify-between">
-        <Link href="/" className="text-xl font-bold">
-          Positive <span className="text-primary">Theta</span>
+    <header className="w-full border-b border-border bg-background/70 backdrop-blur">
+      <div className="container flex items-center justify-between py-4">
+        {/* Лого */}
+        <Link href="/" className="text-xl font-extrabold tracking-tight text-primary">
+          Positive Theta
         </Link>
-        <nav className="flex gap-6">
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`text-sm font-medium transition hover:text-primary ${
-                pathname === link.href ? "text-primary" : "text-foreground"
-              }`}
-            >
-              {link.label}
-            </Link>
-          ))}
+
+        {/* Навигация */}
+        <nav className="flex items-center gap-4">
+          {!loading && user ? (
+            <>
+              <span className="text-muted-foreground hidden sm:inline">
+                Привет, {user.username}
+              </span>
+              <Button variant="secondary" onClick={logout}>
+                Выйти
+              </Button>
+            </>
+          ) : (
+            <>
+              <Link href="/login">
+                <Button variant="secondary">Войти</Button>
+              </Link>
+              <Link href="/register">
+                <Button className="btn-primary">Регистрация</Button>
+              </Link>
+            </>
+          )}
         </nav>
-        <ModeToggle />
       </div>
     </header>
   );

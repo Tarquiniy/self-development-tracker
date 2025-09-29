@@ -8,8 +8,8 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 # ========== НАСТРОЙКИ ADMIN И GRAPPELLI ==========
 GRAPPELLI_ADMIN_TITLE = 'Positive Theta Admin'

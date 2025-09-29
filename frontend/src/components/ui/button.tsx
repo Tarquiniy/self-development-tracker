@@ -1,55 +1,50 @@
-// components/ui/button.tsx
-import * as React from "react";
-import { Slot } from "@radix-ui/react-slot";
-import { cva, type VariantProps } from "class-variance-authority";
+// frontend/src/components/ui/button.tsx
+"use client";
 
+import * as React from "react";
 import { cn } from "@/lib/utils";
 
-const buttonVariants = cva(
-  "inline-flex items-center justify-center rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:pointer-events-none",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        secondary:
-          "bg-muted text-foreground hover:bg-muted/80 border border-input",
-        outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "underline-offset-4 hover:underline text-primary",
-      },
-      size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 px-3 rounded-md",
-        lg: "h-11 px-8 rounded-md",
-        icon: "h-10 w-10",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  }
-);
+export type ButtonVariant = "default" | "primary" | "secondary" | "ghost";
+export type ButtonSize = "sm" | "md" | "lg";
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
   asChild?: boolean;
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
+/**
+ * Map variant -> CSS class defined in global.css
+ * - "default" intentionally maps to the primary visual style for backward compatibility.
+ */
+const variantClassMap: Record<ButtonVariant, string> = {
+  default: "btn-primary",
+  primary: "btn-primary",
+  secondary: "btn-secondary",
+  ghost: "bg-transparent",
+};
+
+const sizeClassMap: Record<ButtonSize, string> = {
+  sm: "px-3 py-1.5 text-sm",
+  md: "px-4 py-2 text-base",
+  lg: "px-6 py-3 text-lg",
+};
+
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant = "default", size = "md", children, ...props }, ref) => {
+    const variantClass = variantClassMap[variant] || variantClassMap.default;
+    const sizeClass = sizeClassMap[size] || sizeClassMap.md;
+
     return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
+      <button
         ref={ref}
+        className={cn("btn", variantClass, sizeClass, className)}
         {...props}
-      />
+      >
+        {children}
+      </button>
     );
   }
 );
-Button.displayName = "Button";
 
-export { Button, buttonVariants };
+Button.displayName = "Button";
