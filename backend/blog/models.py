@@ -1,3 +1,4 @@
+# backend/blog/models.py
 from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
@@ -57,10 +58,14 @@ class Tag(models.Model):
 
 
 class PostAttachment(AbstractAttachment):
-    post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='attachments')
+    """
+    File attachments for posts — now can be unattached (post nullable),
+    which allows using attachments as media library items.
+    """
+    post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
     file = models.FileField(upload_to='post_attachments/%Y/%m/%d/')
     title = models.CharField(max_length=255, blank=True)
-    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -88,8 +93,8 @@ class Post(models.Model):
     title = models.CharField(max_length=255, verbose_name="Заголовок")
     slug = models.SlugField(max_length=300, unique=True, blank=True, db_index=True, verbose_name="URL")
     excerpt = models.TextField(blank=True, verbose_name="Краткое описание")
-    content = models.TextField(verbose_name="Содержание")  # html/markdown stored as text (frontend decides render)
-    featured_image = models.URLField(blank=True, null=True, verbose_name="Главное изображение")  # simple approach: store image URL
+    content = models.TextField(verbose_name="Содержание")
+    featured_image = models.URLField(blank=True, null=True, verbose_name="Главное изображение")
     categories = models.ManyToManyField(Category, related_name='posts', blank=True, verbose_name="Категории")
     tags = models.ManyToManyField(Tag, related_name='posts', blank=True, verbose_name="Теги")
 
@@ -142,7 +147,6 @@ class Post(models.Model):
 
     @property
     def reading_time(self):
-        # Примерная оценка времени чтения (200 слов в минуту)
         word_count = len(self.content.split())
         return max(1, round(word_count / 200))
 
@@ -150,7 +154,7 @@ class Post(models.Model):
 class Comment(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
-    name = models.CharField(max_length=120, verbose_name="Имя")   # for anonymous comments
+    name = models.CharField(max_length=120, verbose_name="Имя")
     email = models.EmailField(blank=True, null=True, verbose_name="Email")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='comments')
     content = models.TextField(verbose_name="Комментарий")
@@ -167,7 +171,6 @@ class Comment(models.Model):
         return f"Комментарий к {self.post.title} от {self.name[:20]}"
 
 
-# Optional: keep your reaction model (was present). This lets frontend show likes.
 class PostReaction(models.Model):
     post = models.ForeignKey(
         Post,
@@ -190,7 +193,7 @@ class PostReaction(models.Model):
         return self.anon_count + self.users.count()
 
     def __str__(self):
-        return f"{self.post.slug} лайков={self.likes_count()}"
+        return f"{self.post.slug if self.post else 'unknown'} лайков={self.likes_count()}"
 
 
 class PostView(models.Model):

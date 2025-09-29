@@ -5,22 +5,25 @@ from django.urls import path, include
 from users.views import RegisterView, LoginView, ProfileView
 from django.conf.urls.static import static
 
-# Импортируем админ-views из blog.admin (dashboard, stats, post update)
+# Импорт админ-views из blog.admin (dashboard, stats, post update, media library)
 admin_dashboard_view = None
 admin_stats_api = None
 admin_post_update_view = None
+admin_media_library_view = None
 try:
     from blog.admin import admin_dashboard_view as _dashboard_view
     from blog.admin import admin_stats_api as _stats_api
     from blog.admin import admin_post_update_view as _post_update
+    from blog.admin import admin_media_library_view as _media_lib
     admin_dashboard_view = _dashboard_view
     admin_stats_api = _stats_api
     admin_post_update_view = _post_update
+    admin_media_library_view = _media_lib
 except Exception:
-    # если импорт не удался — продолжим без этих view
     admin_dashboard_view = None
     admin_stats_api = None
     admin_post_update_view = None
+    admin_media_library_view = None
 
 urlpatterns = [
     path('grappelli/', include('grappelli.urls')),
@@ -49,6 +52,11 @@ if admin_stats_api:
 if admin_post_update_view:
     urlpatterns += [
         path('admin/posts/update/', admin_post_update_view, name='admin-post-update'),
+    ]
+
+if admin_media_library_view:
+    urlpatterns += [
+        path('admin/media-library/', admin_media_library_view, name='admin-media-library'),
     ]
 
 if settings.DEBUG:  # только в dev
