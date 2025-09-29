@@ -1,119 +1,108 @@
 {# backend/templates/admin/blog/post/change_form.html #}
 {% extends "admin/change_form.html" %}
-{% load static i18n admin_urls %}
+{% load static i18n %}
 
 {% block extrastyle %}
-{{ block.super }}
 <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
+<link rel="stylesheet" href="{% static 'admin/admin-post-form.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="post-edit-page">
-    <form {% if has_file_field %}enctype="multipart/form-data"{% endif %} method="post" id="post-form" novalidate>
-        {% csrf_token %}
-        <div class="post-edit-grid">
-            <section class="post-main">
-                <div class="post-header">
-                    {# Рендер стандартного виджета поля title — Django сам подставит value и id="id_title" #}
-<div class="post-title-wrapper">
-    {{ adminform.form.title }}
-</div>
-                    <div class="post-actions">
-                        <button class="button" type="submit" name="_save">Сохранить</button>
-                        <button type="button" class="button button-secondary" id="preview-button">Предпросмотр</button>
-                        <button type="button" class="button button-primary" id="publish-button">Опубликовать</button>
-                    </div>
-                </div>
+<form method="post" enctype="multipart/form-data" id="post-edit-form" novalidate>
+  {% csrf_token %}
+  <div class="post-edit-page">
+    <div class="post-edit-grid">
+      <section class="post-main card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="flex:1">
+            {{ adminform.form.title.errors }}
+            {{ adminform.form.title }}
+          </div>
 
-                <div class="post-meta-row">
-                    <div class="post-editor card">
-                        <div class="field-group">
-                            <label>Краткое описание</label>
-                            {{ adminform.form.excerpt }}
-                        </div>
-
-                        <div class="field-group">
-                            <label>Содержимое</label>
-                            {{ adminform.form.content }}
-                        </div>
-                    </div>
-
-                    <aside class="post-sidebar card">
-                        <div class="sidebar-section">
-                            <label>Featured image</label>
-                            <div class="featured-image-preview" id="featured-preview">
-                                {% if adminform.form.initial.featured_image %}
-                                    <img id="featured-preview-img" src="{{ adminform.form.initial.featured_image }}" alt="featured" />
-                                {% else %}
-                                    <div class="featured-placeholder">Нет изображения</div>
-                                {% endif %}
-                            </div>
-                            <div class="sidebar-controls">
-                                <input type="text" name="featured_image" id="id_featured_image" value="{{ adminform.form.initial.featured_image|default:'' }}" class="input-text" placeholder="URL или выберите из медиатеки" />
-                                <div style="display:flex;gap:8px;margin-top:8px">
-                                    <button class="small-btn" type="button" id="open-media-btn">Открыть медиабиблиотеку</button>
-                                    <button class="small-btn" type="button" id="clear-featured-btn">Очистить</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="sidebar-section">
-                            <label>Статус</label>
-                            {{ adminform.form.status }}
-                        </div>
-
-                        <div class="sidebar-section">
-                            <label>Автор</label>
-                            {{ adminform.form.author }}
-                        </div>
-
-                        <div class="sidebar-section">
-                            <label>Публикация</label>
-                            {{ adminform.form.published_at }}
-                        </div>
-
-                        <div class="sidebar-section">
-                            <label>Категории</label>
-                            {{ adminform.form.categories }}
-                        </div>
-
-                        <div class="sidebar-section">
-                            <label>Теги</label>
-                            {{ adminform.form.tags }}
-                        </div>
-                    </aside>
-                </div>
-            </section>
-
-            <section class="post-preview card" id="post-preview">
-                <div class="preview-inner">
-                    <div class="preview-header">
-                        <div class="preview-thumb" id="preview-thumb"></div>
-                        <div class="preview-meta">
-                            <h2 id="preview-title">Заголовок поста</h2>
-                            <div id="preview-excerpt">Краткое описание появится здесь</div>
-                            <div class="preview-stats"><span id="preview-reading">~1 мин чтения</span></div>
-                        </div>
-                    </div>
-
-                    <div class="preview-body" id="preview-body">
-                        <p>Здесь будет превью содержимого — в целях скорости отображается только краткая выдержка.</p>
-                    </div>
-
-                    <div class="preview-footer">
-                        <a id="preview-link" class="button button-secondary" target="_blank">Открыть на сайте</a>
-                    </div>
-                </div>
-            </section>
+          <div style="display:flex;gap:8px">
+            <button class="button" type="submit" name="_save">Сохранить</button>
+            <button class="button button-secondary" id="preview-button" type="button">Предпросмотр</button>
+            <button class="button button-primary" type="submit" name="_publish">Опубликовать</button>
+          </div>
         </div>
 
-        {# Hidden admin inputs (Django admin requires them) #}
-        {% for hidden in adminform.hidden_fields %}
-            {{ hidden }}
-        {% endfor %}
-    </form>
-</div>
+        <div style="display:flex;gap:18px;align-items:flex-start">
+          <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+            <div class="card">
+              <label class="field-label">Краткое описание</label>
+              {{ adminform.form.excerpt }}
+            </div>
+
+            <div class="card">
+              <label class="field-label">Содержимое</label>
+              {{ adminform.form.content }}
+            </div>
+          </div>
+
+          <aside class="post-sidebar">
+            <div class="card">
+              <label class="field-label">Featured image</label>
+              <div id="featured-preview" class="featured-preview">
+                {% if adminform.form.featured_image.value %}
+                  <img id="featured-preview-img" src="{{ adminform.form.featured_image.value }}" alt="featured" />
+                {% else %}
+                  <div class="featured-placeholder">Нет изображения</div>
+                {% endif %}
+              </div>
+              <div style="margin-top:8px">
+                {{ adminform.form.featured_image }}
+                <div style="display:flex;gap:8px;margin-top:8px">
+                  <button class="small-btn" type="button" id="open-media-btn">Открыть медиабиблиотеку</button>
+                  <button class="small-btn" type="button" id="clear-featured-btn">Очистить</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <label class="field-label">Статус</label>
+              {{ adminform.form.status }}
+            </div>
+
+            <div class="card">
+              <label class="field-label">Автор</label>
+              {{ adminform.form.author }}
+            </div>
+
+            <div class="card">
+              <label class="field-label">Категории</label>
+              {{ adminform.form.categories }}
+            </div>
+
+            <div class="card">
+              <label class="field-label">Теги</label>
+              {{ adminform.form.tags }}
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="post-preview card" id="post-preview">
+        <div class="preview-inner">
+          <div class="preview-header" style="display:flex;gap:12px;align-items:center">
+            <div class="preview-thumb" id="preview-thumb"></div>
+            <div>
+              <h2 id="preview-title">Заголовок поста</h2>
+              <div id="preview-excerpt">Краткое описание появится здесь</div>
+              <div id="preview-reading" style="color:#6b7280;margin-top:6px">~1 мин чтения</div>
+            </div>
+          </div>
+          <div id="preview-body" style="margin-top:12px;color:#111">Здесь будет отрывок содержимого</div>
+          <div style="margin-top:12px"><a id="preview-link" class="button button-secondary" target="_blank">Открыть на сайте</a></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  {# Hidden admin inputs (required) #}
+  {% for hidden in adminform.hidden_fields %}
+    {{ hidden }}
+  {% endfor %}
+</form>
 
 <script src="{% static 'admin/admin-post-form.js' %}"></script>
-{{ block.super }}
 {% endblock %}

@@ -1,43 +1,65 @@
+{# backend/templates/admin/media_library.html #}
 {% extends "admin/base_site.html" %}
 {% load static %}
-
 {% block extrastyle %}
-{{ block.super }}
-<link rel="stylesheet" href="{% static 'admin/css/admin-custom.css' %}">
+<link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
+<style>
+.media-lib-wrap { padding: 18px; max-width:1200px; margin:0 auto; }
+.media-top { display:flex; gap:12px; align-items:center; margin-bottom:12px; }
+.media-search { flex:1; padding:10px 12px; border-radius:10px; border:1px solid #e6eef6; }
+.media-actions { display:flex; gap:8px; }
+.media-grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(180px,1fr)); gap:12px; margin-top:12px; }
+.media-item { background:#fff; border-radius:10px; padding:10px; box-shadow:0 6px 18px rgba(2,6,23,0.06); display:flex; flex-direction:column; gap:8px; }
+.media-thumb { height:120px; display:flex; align-items:center; justify-content:center; background:#f3f4f6; border-radius:6px; overflow:hidden; }
+.media-thumb img { width:100%; height:100%; object-fit:cover; }
+.media-title { font-weight:700; font-size:13px; color:#0f172a; }
+.media-meta { font-size:12px; color:#6b7280; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.btn { padding:8px 10px; border-radius:8px; border:none; cursor:pointer; background:#eef2f6; }
+.btn.primary { background:#0ea5e9; color:#fff; }
+.btn.danger { background:#fee2e2; color:#b91c1c; }
+@media (max-width:900px){ .media-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))} }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="dashboard-card">
-    <h1>📁 Медиатека</h1>
-    <p>Здесь будут отображаться все загруженные медиафайлы. Функциональность в разработке.</p>
-    
-    <div class="quick-actions">
-        <button type="button" class="quick-action-btn" onclick="uploadMedia()">
-            📤 Загрузить файлы
-        </button>
-        <button type="button" class="quick-action-btn" onclick="createFolder()">
-            📂 Создать папку
-        </button>
+<div class="media-lib-wrap">
+  <h1>Медиа-библиотека</h1>
+  <div class="media-top">
+    <input class="media-search" id="media-search" placeholder="Поиск по имени или заголовку..." />
+    <div class="media-actions">
+      <button class="btn" id="upload-open-btn">Загрузить</button>
+      <button class="btn" id="refresh-btn">Обновить</button>
     </div>
-    
-    <div style="margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; text-align: center;">
-        <p>🚧 Медиатека находится в разработке</p>
-        <p>Скоро здесь появится возможность управлять всеми медиафайлами вашего блога</p>
-    </div>
+  </div>
+
+  <div id="media-grid" class="media-grid" aria-live="polite">
+    {% for a in attachments %}
+      <div class="media-item" data-id="{{ a.id }}" data-url="{{ a.url|default:'' }}" data-title="{{ a.title|escape }}" data-filename="{{ a.filename|escape }}">
+        <div class="media-thumb">
+          {% if a.url and a.filename|lower|endswith:".png" or a.url and a.filename|lower|endswith:".jpg" or a.url and a.filename|lower|endswith:".jpeg" or a.url and a.filename|lower|endswith:".gif" or a.url and a.filename|lower|endswith:".webp" %}
+            <img src="{{ a.url }}" alt="{{ a.title }}">
+          {% else %}
+            <div style="padding:6px;color:#6b7280">{{ a.filename }}</div>
+          {% endif %}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div class="media-title">{{ a.title }}</div>
+          <div class="media-meta">
+            <span>{{ a.uploaded_at|default:"" }}</span>
+            <div>
+              <button class="btn select-btn">Выбрать</button>
+              <a href="{{ a.url }}" target="_blank" class="btn">Открыть</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% empty %}
+      <div class="card">Файлов нет.</div>
+    {% endfor %}
+  </div>
+
+  <input id="media-file-input" type="file" style="display:none" multiple />
 </div>
-{% endblock %}
 
-{% block extrajs %}
-<script>
-function uploadMedia() {
-    alert('Функция загрузки файлов будет доступна в следующем обновлении!');
-}
-
-function createFolder() {
-    const folderName = prompt('Введите название папки:');
-    if (folderName) {
-        alert(`Папка "${folderName}" будет создана в следующем обновлении!`);
-    }
-}
-</script>
+<script src="{% static 'admin/media-library.js' %}"></script>
 {% endblock %}

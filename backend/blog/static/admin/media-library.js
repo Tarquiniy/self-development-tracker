@@ -44,6 +44,9 @@
             const el = document.createElement('div');
             el.className = 'media-item';
             el.dataset.id = item.id;
+            el.dataset.url = item.url || '';
+            el.dataset.title = item.title || '';
+            el.dataset.filename = item.filename || '';
 
             const thumb = document.createElement('div'); thumb.className='media-thumb';
             if (item.url && /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(item.filename || '')) {
@@ -106,8 +109,7 @@
     if (searchInput) searchInput.addEventListener('input', debounce(()=>fetchMedia(1), 300));
     if (unattachedCheckbox) unattachedCheckbox.addEventListener('change', ()=>fetchMedia(1));
 
-    // drag & drop handling and file input are present in original version — omitted here for brevity;
-    // still, if file input exists in DOM use the following:
+    // file input handling
     const fileInput = document.getElementById('file-input');
     if (fileInput) {
         fileInput.addEventListener('change', function () {

@@ -4,7 +4,7 @@
     function $(sel){ return document.querySelector(sel); }
     function $all(sel){ return Array.from(document.querySelectorAll(sel)); }
 
-    const titleInput = $('#id_title') || $('#id_title') || document.getElementById('id_title');
+    const titleInput = $('#id_title') || document.getElementById('id_title');
     const excerptField = document.getElementById('id_excerpt') || document.querySelector('[name=excerpt]');
     const contentField = document.getElementById('id_content') || document.querySelector('[name=content]');
     const featuredInput = document.getElementById('id_featured_image') || document.querySelector('[name=featured_image]');
@@ -40,6 +40,9 @@
             if (featured) {
                 const img = document.createElement('img');
                 img.src = featured;
+                img.style.width = '100%';
+                img.style.height = '100%';
+                img.style.objectFit = 'cover';
                 previewThumb.appendChild(img);
             } else {
                 previewThumb.textContent = '';
@@ -47,7 +50,7 @@
             }
         }
         if (previewLink) {
-            // If there's slug or post URL input? we can't compute exact URL here; leave link blank
+            // If there's slug or post URL input? leave hash
             previewLink.href = '#';
         }
     }
@@ -123,8 +126,9 @@
         previewBtn.addEventListener('click', function (e){
             e.preventDefault();
             // open simple preview page using a blob
+            function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
             const html = `
-                <html><head><meta charset="utf-8"><title>${titleInput.value || 'Preview'}</title>
+                <html><head><meta charset="utf-8"><title>${escapeHtml(titleInput ? titleInput.value : 'Preview')}</title>
                 <style>body{font-family:Inter,Arial;padding:28px;max-width:880px;margin:auto}h1{font-size:28px}img{max-width:100%}</style>
                 </head><body>
                 <h1>${(titleInput && titleInput.value) ? escapeHtml(titleInput.value) : 'Preview'}</h1>
@@ -138,9 +142,6 @@
             w.document.close();
         });
     }
-
-    // simple escaper
-    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
 
     // Listen for media-library selection when opened in the same window (click on item sends postMessage)
     window.addEventListener('message', function (ev){

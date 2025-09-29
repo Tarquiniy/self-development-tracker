@@ -1,0 +1,8 @@
+{# backend/templates/admin/media_library_unavailable.html #}
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div class="card" style="max-width:900px;margin:18px auto;">
+  <h2>Медиа-библиотека недоступна</h2>
+  <p>View медиатеки не загружен. Проверь ошибки импорта в blog.views. Посмотри логи сервера и убедись, что файл <code>blog/views.py</code> содержит <code>MediaLibraryView</code>.</p>
+</div>
+{% endblock %}

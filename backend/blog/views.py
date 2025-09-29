@@ -1,9 +1,11 @@
+# backend/blog/views.py
 import json
+import os
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny, IsAdminUser
 from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
@@ -13,12 +15,18 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Count
+from django.views.generic import TemplateView
+from django.utils.decorators import method_decorator
+from django.contrib.admin.views.decorators import staff_member_required
+from django.conf import settings
 
-from .models import Post, Category, PostView, Tag, Comment, PostReaction
+from .models import Post, Category, PostView, Tag, Comment, PostReaction, PostAttachment
 from .serializers import (
     PostListSerializer, PostDetailSerializer, PostCreateUpdateSerializer,
     CategorySerializer, TagSerializer, CommentSerializer
 )
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.parsers import MultiPartParser, FormParser
 
 
 class PostViewSet(viewsets.ModelViewSet):
@@ -135,6 +143,7 @@ def reaction_toggle(request):
         reaction.save()
     return Response({'post_slug': post.slug, 'likes_count': reaction.likes_count()})
 
+
 @require_POST
 @csrf_exempt
 @user_passes_test(lambda u: u.is_staff)
@@ -144,9 +153,9 @@ def quick_action_view(request):
         data = json.loads(request.body)
         action = data.get('action')
         post_id = data.get('post_id')
-        
+
         post = Post.objects.get(id=post_id)
-        
+
         if action == 'publish':
             post.status = 'published'
             post.save()
@@ -161,18 +170,19 @@ def quick_action_view(request):
             return JsonResponse({'success': True, 'message': 'Пост перемещен в архив'})
         else:
             return JsonResponse({'success': False, 'message': 'Неизвестное действие'})
-            
+
     except Post.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'Пост не найден'})
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)})
+
 
 @login_required
 @user_passes_test(lambda u: u.is_staff)
 def dashboard_stats(request):
     """Статистика для дашборда админки"""
     today = timezone.now().date()
-    
+
     stats = {
         'total_posts': Post.objects.count(),
         'published_posts': Post.objects.filter(status='published').count(),
@@ -183,5 +193,120 @@ def dashboard_stats(request):
         'total_views': PostView.objects.count(),
         'today_views': PostView.objects.filter(viewed_at__date=today).count(),
     }
-    
+
     return JsonResponse(stats)
+
+
+# ---------------------------
+# Media Library view + API
+# ---------------------------
+
+@method_decorator(staff_member_required(login_url='/admin/login/'), name='dispatch')
+class MediaLibraryView(TemplateView):
+    """
+    Рендерит страницу админской медиатеки (staff only)
+    Шаблон: admin/media_library.html
+    Контекст: attachments = [{id, title, filename, url, uploaded_at, post_id}, ...]
+    """
+    template_name = 'admin/media_library.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        qs = PostAttachment.objects.all().order_by('-uploaded_at')
+        attachments = []
+        for a in qs:
+            url = a.file.url if a.file else ''
+            attachments.append({
+                'id': a.id,
+                'title': a.title or os.path.basename(a.file.name) if a.file else '',
+                'filename': os.path.basename(a.file.name) if a.file else '',
+                'url': url,
+                'uploaded_at': a.uploaded_at.isoformat() if a.uploaded_at else None,
+                'post_id': a.post.id if a.post else None,
+            })
+        ctx['attachments'] = attachments
+        return ctx
+
+
+# API: list / upload / delete
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def media_list(request):
+    """
+    GET /api/blog/media/list/?q=...&page=1&page_size=24&unattached_only=1
+    returns JSON: { results: [ {id, title, filename, url, uploaded_at, post_id}, ... ] }
+    """
+    q = request.GET.get('q', '').strip()
+    unattached = request.GET.get('unattached_only') == '1'
+    qs = PostAttachment.objects.all().order_by('-uploaded_at')
+    if unattached:
+        qs = qs.filter(post__isnull=True)
+    if q:
+        qs = qs.filter(dj_models.Q(title__icontains=q) | dj_models.Q(file__icontains=q))
+    # simple pagination
+    page_size = min(int(request.GET.get('page_size', 24)), 200)
+    page = max(int(request.GET.get('page', 1)), 1)
+    start = (page - 1) * page_size
+    end = start + page_size
+    items = []
+    for a in qs[start:end]:
+        items.append({
+            'id': a.id,
+            'title': a.title or os.path.basename(a.file.name) if a.file else '',
+            'filename': os.path.basename(a.file.name) if a.file else '',
+            'url': a.file.url if a.file else '',
+            'uploaded_at': a.uploaded_at.isoformat() if a.uploaded_at else None,
+            'post_id': a.post.id if a.post else None,
+        })
+    return Response({'results': items})
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+@parser_classes([MultiPartParser, FormParser])
+def media_upload(request):
+    """
+    POST multipart/form-data: files -> 'file' (multiple allowed), title optional
+    returns { success: True, uploaded: [ {id, url, filename, title} ] }
+    """
+    files = request.FILES.getlist('file') or []
+    uploaded = []
+    for f in files:
+        att = PostAttachment()
+        att.file.save(f.name, f, save=False)
+        att.title = request.data.get('title') or f.name
+        att.uploaded_by = request.user if request.user.is_authenticated else None
+        att.save()
+        uploaded.append({
+            'id': att.id,
+            'url': att.file.url,
+            'filename': os.path.basename(att.file.name),
+            'title': att.title,
+        })
+    return Response({'success': True, 'uploaded': uploaded})
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def media_delete(request):
+    """
+    POST JSON: { ids: [1,2,3] }
+    """
+    ids = request.data.get('ids') or []
+    if not isinstance(ids, (list, tuple)):
+        return Response({'success': False, 'message': 'ids must be a list'}, status=status.HTTP_400_BAD_REQUEST)
+    deleted = 0
+    for pk in ids:
+        try:
+            att = PostAttachment.objects.get(pk=pk)
+            # remove file from storage
+            try:
+                if att.file:
+                    att.file.delete(save=False)
+            except Exception:
+                pass
+            att.delete()
+            deleted += 1
+        except PostAttachment.DoesNotExist:
+            continue
+    return Response({'success': True, 'deleted': deleted})
