@@ -1,0 +1,91 @@
+{# backend/templates/admin/base_site.html #}
+{% load static i18n admin_urls %}
+<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>{% block title %}{{ site_title|default:_('Django site admin') }}{% endblock %}</title>
+
+    {% block extrahead %}
+    <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
+    <script>document.documentElement.classList.add('admin-modern');</script>
+    {% endblock %}
+    {% block extrastyle %}{% endblock %}
+    {% block global_script %}{% endblock %}
+</head>
+<body class="admin-theme">
+    <header class="admin-topbar">
+        <div class="admin-topbar-inner">
+            <div class="brand">
+                <a href="{% url 'admin:index' %}" class="brand-link">
+                    <img src="{% static 'admin/logo.png' %}" alt="logo" class="brand-logo" />
+                    <span class="brand-title">{{ site_header|default:site_title|default:_('Site administration') }}</span>
+                </a>
+            </div>
+
+            <div class="top-actions">
+                <div class="search-wrap">
+                    <form action="{% url 'admin:search' %}" method="get">
+                        <input name="q" placeholder="{% trans 'Search admin...' %}" class="top-search" />
+                    </form>
+                </div>
+
+                <nav class="top-links">
+                    <a href="{% url 'admin-media-library' %}" class="top-link">Медиа</a>
+                    <a href="{% url 'admin-dashboard' %}" class="top-link">Dashboard</a>
+                    <a href="{% url 'admin:logout' %}" class="top-link">Выйти</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <div class="admin-container">
+        <aside class="admin-sidebar">
+            <div class="sidebar-section">
+                <h4 class="sidebar-heading">Управление</h4>
+                <ul class="sidebar-list">
+                    <li><a href="{% url 'admin:index' %}">Главная</a></li>
+                    <li><a href="{% url 'admin:blog_post_changelist' %}">Посты</a></li>
+                    <li><a href="{% url 'admin:blog_category_changelist' %}">Категории</a></li>
+                    <li><a href="{% url 'admin:blog_tag_changelist' %}">Теги</a></li>
+                    <li><a href="{% url 'admin:blog_comment_changelist' %}">Комментарии</a></li>
+                    <li><a href="{% url 'admin:blogmedialibrary_changelist' %}">Медиа библиотека</a></li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <h4 class="sidebar-heading">Инструменты</h4>
+                <ul class="sidebar-list">
+                    <li><a href="{% url 'admin:blog_post_add' %}">Создать пост</a></li>
+                    <li><a href="{% url 'admin:app_list' 'blog' %}">Blog App</a></li>
+                    <li><a href="{% url 'admin:auth_user_changelist' %}">Пользователи</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <main class="admin-main">
+            <div class="admin-breadcrumbs">
+                {% block breadcrumbs %}{% endblock %}
+            </div>
+
+            <div class="admin-content">
+                {% block content %}
+                <h1>{{ site_header|default:site_title|default:_('Site administration') }}</h1>
+                {% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <footer class="admin-footer">
+        <div class="admin-footer-inner">
+            <div>© {{ now|date:"Y" }} — Твоя админка</div>
+            <div>Powered by Django</div>
+        </div>
+    </footer>
+
+    {% block footer_extra %}
+        <script src="{% static 'admin/admin-core.js' %}"></script>
+    {% endblock %}
+</body>
+</html>

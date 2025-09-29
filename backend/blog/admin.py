@@ -44,6 +44,7 @@ class CommentInline(admin.TabularInline):
 # ---------- PostAdmin (inline editing UI already present)
 @admin.register(Post)
 class PostAdmin(SummernoteModelAdmin):
+    change_form_template = 'admin/blog/post/change_form.html'
     summernote_fields = ('content', 'excerpt')
     list_display = ('admin_thumbnail', 'editable_title', 'editable_status', 'author', 'published_at', 'action_buttons')
     list_filter = ('status', 'published_at', 'categories', 'tags')
@@ -130,7 +131,12 @@ class PostAdmin(SummernoteModelAdmin):
 
     class Media:
         css = {'all': ('admin/admin-modern.css',)}
-        js = ('admin/admin.js', 'admin/admin-list-inline.js',)
+        js = (
+            'admin/admin-core.js',
+            'admin/admin-post-form.js',
+            'admin/admin-list-inline.js',
+            'admin/media-library.js',
+        )
 
 
 # ---------- CategoryAdmin, TagAdmin, CommentAdmin, PostReactionAdmin
