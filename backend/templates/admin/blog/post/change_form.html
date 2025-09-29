@@ -14,7 +14,10 @@
         <div class="post-edit-grid">
             <section class="post-main">
                 <div class="post-header">
-                    <input type="text" name="title" id="id_title" value="{{ adminform.form.initial.title|default:adminform.form.data.title|default:'' }}" placeholder="Заголовок поста" class="post-title" />
+                    {# Рендер стандартного виджета поля title — Django сам подставит value и id="id_title" #}
+<div class="post-title-wrapper">
+    {{ adminform.form.title }}
+</div>
                     <div class="post-actions">
                         <button class="button" type="submit" name="_save">Сохранить</button>
                         <button type="button" class="button button-secondary" id="preview-button">Предпросмотр</button>

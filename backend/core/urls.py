@@ -11,19 +11,12 @@ admin_stats_api = None
 admin_post_update_view = None
 admin_media_library_view = None
 try:
-    from blog.admin import admin_dashboard_view as _dashboard_view
-    from blog.admin import admin_stats_api as _stats_api
-    from blog.admin import admin_post_update_view as _post_update
-    from blog.admin import admin_media_library_view as _media_lib
-    admin_dashboard_view = _dashboard_view
-    admin_stats_api = _stats_api
-    admin_post_update_view = _post_update
-    admin_media_library_view = _media_lib
+    from blog.admin import admin_media_library_view, admin_dashboard_view, admin_post_update_view, admin_stats_api
 except Exception:
-    admin_dashboard_view = None
-    admin_stats_api = None
-    admin_post_update_view = None
     admin_media_library_view = None
+    admin_dashboard_view = None
+    admin_post_update_view = None
+    admin_stats_api = None
 
 urlpatterns = [
     path('grappelli/', include('grappelli.urls')),
@@ -55,9 +48,11 @@ if admin_post_update_view:
     ]
 
 if admin_media_library_view:
-    urlpatterns += [
-        path('admin/media-library/', admin_media_library_view, name='admin-media-library'),
-    ]
+    urlpatterns += [path('admin/media-library/', admin_media_library_view, name='admin-media-library')]
+else:
+    # fallback: if view not available — still create a simple placeholder to avoid 404
+    from django.views.generic import TemplateView
+    urlpatterns += [path('admin/media-library/', TemplateView.as_view(template_name='admin/media_library.html'), name='admin-media-library')]
 
 if settings.DEBUG:  # только в dev
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
