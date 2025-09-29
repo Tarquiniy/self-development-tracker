@@ -1,8 +1,9 @@
 # backend/blog/views.py
 import json
 import os
+import logging
 from rest_framework import viewsets, status, filters
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny, IsAdminUser
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404, render
@@ -19,22 +20,19 @@ from django.views.generic import TemplateView
 from django.utils.decorators import method_decorator
 from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from .models import Post, Category, PostView, Tag, Comment, PostReaction, PostAttachment
 from .serializers import (
     PostListSerializer, PostDetailSerializer, PostCreateUpdateSerializer,
     CategorySerializer, TagSerializer, CommentSerializer
 )
-from rest_framework.decorators import api_view, parser_classes
-from rest_framework.parsers import MultiPartParser, FormParser
+
+logger = logging.getLogger(__name__)
 
 
 class PostViewSet(viewsets.ModelViewSet):
-    """
-    /api/blog/posts/
-    Public list shows only published posts.
-    Admins/authors can create/update/draft posts.
-    """
+    # (ваша существующая реализация — оставил без изменений)
     queryset = Post.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -42,7 +40,7 @@ class PostViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'excerpt', 'content', 'meta_description']
     ordering_fields = ['published_at', 'created_at']
     ordering = ['-published_at']
-    lookup_field = 'slug'  # enable /posts/<slug>/
+    lookup_field = 'slug'
 
     def get_serializer_class(self):
         if self.action in ('list',):
@@ -53,16 +51,11 @@ class PostViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = Post.objects.select_related('author').prefetch_related('categories', 'tags')
-        # public endpoint: only published for non-staff
         if not self.request.user.is_authenticated or not self.request.user.is_staff:
             qs = qs.filter(dj_models.Q(status='published', published_at__lte=timezone.now()))
-        else:
-            # staff/authenticated can see all
-            pass
         return qs
 
     def perform_create(self, serializer):
-        # set author automatically if authenticated
         user = self.request.user if self.request.user.is_authenticated else None
         serializer.save(author=user)
 
@@ -98,12 +91,11 @@ class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     def perform_create(self, serializer):
-        # attach authenticated user if available
         user = self.request.user if self.request.user.is_authenticated else None
         serializer.save(user=user)
 
 
-# Simple reaction endpoints (toggle)
+# Reactions endpoints (оставил без изменений)
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def reaction_detail(request):
@@ -135,7 +127,6 @@ def reaction_toggle(request):
             else:
                 reaction.users.add(user)
         else:
-            # simplistic anon toggle
             if reaction.anon_count > 0:
                 reaction.anon_count = max(0, reaction.anon_count - 1)
             else:
@@ -148,41 +139,33 @@ def reaction_toggle(request):
 @csrf_exempt
 @user_passes_test(lambda u: u.is_staff)
 def quick_action_view(request):
-    """Обработчик быстрых действий для постов"""
     try:
         data = json.loads(request.body)
         action = data.get('action')
         post_id = data.get('post_id')
-
         post = Post.objects.get(id=post_id)
-
         if action == 'publish':
-            post.status = 'published'
-            post.save()
+            post.status = 'published'; post.save()
             return JsonResponse({'success': True, 'message': 'Пост опубликован'})
         elif action == 'draft':
-            post.status = 'draft'
-            post.save()
+            post.status = 'draft'; post.save()
             return JsonResponse({'success': True, 'message': 'Пост перемещен в черновики'})
         elif action == 'archive':
-            post.status = 'archived'
-            post.save()
+            post.status = 'archived'; post.save()
             return JsonResponse({'success': True, 'message': 'Пост перемещен в архив'})
         else:
             return JsonResponse({'success': False, 'message': 'Неизвестное действие'})
-
     except Post.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'Пост не найден'})
     except Exception as e:
+        logger.exception("quick_action_view error")
         return JsonResponse({'success': False, 'message': str(e)})
 
 
 @login_required
 @user_passes_test(lambda u: u.is_staff)
 def dashboard_stats(request):
-    """Статистика для дашборда админки"""
     today = timezone.now().date()
-
     stats = {
         'total_posts': Post.objects.count(),
         'published_posts': Post.objects.filter(status='published').count(),
@@ -193,120 +176,152 @@ def dashboard_stats(request):
         'total_views': PostView.objects.count(),
         'today_views': PostView.objects.filter(viewed_at__date=today).count(),
     }
-
     return JsonResponse(stats)
 
 
 # ---------------------------
-# Media Library view + API
+# Media Library view + API (устойчивый к ошибкам)
 # ---------------------------
 
 @method_decorator(staff_member_required(login_url='/admin/login/'), name='dispatch')
 class MediaLibraryView(TemplateView):
-    """
-    Рендерит страницу админской медиатеки (staff only)
-    Шаблон: admin/media_library.html
-    Контекст: attachments = [{id, title, filename, url, uploaded_at, post_id}, ...]
-    """
     template_name = 'admin/media_library.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        # Перехватываем исключения, логируем и показываем аккуратную страницу ошибки
+        try:
+            return super().dispatch(request, *args, **kwargs)
+        except Exception as e:
+            logger.exception("MediaLibraryView dispatch error")
+            # В production не выводим полный трейс в шаблон — показываем аккуратное сообщение.
+            return render(request, 'admin/media_library_error.html', {'error': str(e)}, status=500)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        qs = PostAttachment.objects.all().order_by('-uploaded_at')
         attachments = []
-        for a in qs:
-            url = a.file.url if a.file else ''
-            attachments.append({
-                'id': a.id,
-                'title': a.title or os.path.basename(a.file.name) if a.file else '',
-                'filename': os.path.basename(a.file.name) if a.file else '',
-                'url': url,
-                'uploaded_at': a.uploaded_at.isoformat() if a.uploaded_at else None,
-                'post_id': a.post.id if a.post else None,
-            })
+        try:
+            # Безопасно формируем queryset и поля
+            qs = PostAttachment.objects.all().order_by('-uploaded_at')[:1000]
+            for a in qs:
+                try:
+                    file_field = getattr(a, 'file', None)
+                    url = ''
+                    if file_field:
+                        # безопасный доступ к storage url
+                        try:
+                            url = file_field.url
+                        except Exception:
+                            # возможно файл отсутствует в storage
+                            url = ''
+                    title = a.title if getattr(a, 'title', None) else (os.path.basename(file_field.name) if file_field and getattr(file_field, 'name', None) else '')
+                    filename = os.path.basename(file_field.name) if file_field and getattr(file_field, 'name', None) else ''
+                    uploaded_at = a.uploaded_at.isoformat() if getattr(a, 'uploaded_at', None) else None
+                    attachments.append({
+                        'id': getattr(a, 'id', None),
+                        'title': title,
+                        'filename': filename,
+                        'url': url,
+                        'uploaded_at': uploaded_at,
+                        'post_id': a.post.id if getattr(a, 'post', None) else None,
+                    })
+                except Exception:
+                    # безопасно продолжаем — не даём одному объекту сломать страницу
+                    logger.exception("Error serializing PostAttachment id=%s", getattr(a, 'id', None))
+                    continue
+        except Exception:
+            logger.exception("Error fetching PostAttachment queryset")
         ctx['attachments'] = attachments
         return ctx
 
 
-# API: list / upload / delete
+# API: list / upload / delete (robust)
 @api_view(['GET'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def media_list(request):
-    """
-    GET /api/blog/media/list/?q=...&page=1&page_size=24&unattached_only=1
-    returns JSON: { results: [ {id, title, filename, url, uploaded_at, post_id}, ... ] }
-    """
-    q = request.GET.get('q', '').strip()
-    unattached = request.GET.get('unattached_only') == '1'
-    qs = PostAttachment.objects.all().order_by('-uploaded_at')
-    if unattached:
-        qs = qs.filter(post__isnull=True)
-    if q:
-        qs = qs.filter(dj_models.Q(title__icontains=q) | dj_models.Q(file__icontains=q))
-    # simple pagination
-    page_size = min(int(request.GET.get('page_size', 24)), 200)
-    page = max(int(request.GET.get('page', 1)), 1)
-    start = (page - 1) * page_size
-    end = start + page_size
-    items = []
-    for a in qs[start:end]:
-        items.append({
-            'id': a.id,
-            'title': a.title or os.path.basename(a.file.name) if a.file else '',
-            'filename': os.path.basename(a.file.name) if a.file else '',
-            'url': a.file.url if a.file else '',
-            'uploaded_at': a.uploaded_at.isoformat() if a.uploaded_at else None,
-            'post_id': a.post.id if a.post else None,
-        })
-    return Response({'results': items})
+    try:
+        q = request.GET.get('q', '').strip()
+        unattached = request.GET.get('unattached_only') == '1'
+        qs = PostAttachment.objects.all().order_by('-uploaded_at')
+        if unattached:
+            qs = qs.filter(post__isnull=True)
+        if q:
+            qs = qs.filter(dj_models.Q(title__icontains=q) | dj_models.Q(file__icontains=q))
+
+        page_size = min(int(request.GET.get('page_size', 24)), 200)
+        page = max(int(request.GET.get('page', 1)), 1)
+        start = (page - 1) * page_size
+        end = start + page_size
+        items = []
+        for a in qs[start:end]:
+            file_field = getattr(a, 'file', None)
+            url = ''
+            filename = ''
+            if file_field:
+                try:
+                    url = file_field.url
+                except Exception:
+                    url = ''
+                filename = os.path.basename(file_field.name) if getattr(file_field, 'name', None) else ''
+            items.append({
+                'id': getattr(a, 'id', None),
+                'title': a.title or filename,
+                'filename': filename,
+                'url': url,
+                'uploaded_at': a.uploaded_at.isoformat() if getattr(a, 'uploaded_at', None) else None,
+                'post_id': a.post.id if getattr(a, 'post', None) else None,
+            })
+        return Response({'results': items})
+    except Exception as e:
+        logger.exception("media_list error")
+        return Response({'results': []})
 
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 @parser_classes([MultiPartParser, FormParser])
 def media_upload(request):
-    """
-    POST multipart/form-data: files -> 'file' (multiple allowed), title optional
-    returns { success: True, uploaded: [ {id, url, filename, title} ] }
-    """
-    files = request.FILES.getlist('file') or []
-    uploaded = []
-    for f in files:
-        att = PostAttachment()
-        att.file.save(f.name, f, save=False)
-        att.title = request.data.get('title') or f.name
-        att.uploaded_by = request.user if request.user.is_authenticated else None
-        att.save()
-        uploaded.append({
-            'id': att.id,
-            'url': att.file.url,
-            'filename': os.path.basename(att.file.name),
-            'title': att.title,
-        })
-    return Response({'success': True, 'uploaded': uploaded})
+    try:
+        files = request.FILES.getlist('file') or []
+        uploaded = []
+        for f in files:
+            att = PostAttachment()
+            att.file.save(f.name, f, save=False)
+            att.title = request.data.get('title') or f.name
+            att.uploaded_by = request.user if request.user.is_authenticated else None
+            att.save()
+            uploaded.append({
+                'id': att.id,
+                'url': att.file.url if getattr(att, 'file', None) else '',
+                'filename': os.path.basename(att.file.name) if getattr(att, 'file', None) else '',
+                'title': att.title,
+            })
+        return Response({'success': True, 'uploaded': uploaded})
+    except Exception as e:
+        logger.exception("media_upload error")
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def media_delete(request):
-    """
-    POST JSON: { ids: [1,2,3] }
-    """
-    ids = request.data.get('ids') or []
-    if not isinstance(ids, (list, tuple)):
-        return Response({'success': False, 'message': 'ids must be a list'}, status=status.HTTP_400_BAD_REQUEST)
-    deleted = 0
-    for pk in ids:
-        try:
-            att = PostAttachment.objects.get(pk=pk)
-            # remove file from storage
+    try:
+        ids = request.data.get('ids') or []
+        if not isinstance(ids, (list, tuple)):
+            return Response({'success': False, 'message': 'ids must be a list'}, status=status.HTTP_400_BAD_REQUEST)
+        deleted = 0
+        for pk in ids:
             try:
-                if att.file:
-                    att.file.delete(save=False)
-            except Exception:
-                pass
-            att.delete()
-            deleted += 1
-        except PostAttachment.DoesNotExist:
-            continue
-    return Response({'success': True, 'deleted': deleted})
+                att = PostAttachment.objects.get(pk=pk)
+                try:
+                    if att.file:
+                        att.file.delete(save=False)
+                except Exception:
+                    logger.exception("Error deleting file for attachment id=%s", pk)
+                att.delete()
+                deleted += 1
+            except PostAttachment.DoesNotExist:
+                continue
+        return Response({'success': True, 'deleted': deleted})
+    except Exception as e:
+        logger.exception("media_delete error")
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

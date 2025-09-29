@@ -2,161 +2,50 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
 {% block extrastyle %}
-{{ block.super }}
 <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
-<style>
-.media-lib {
-    padding: 16px;
-}
-
-.media-toolbar {
-    display:flex;
-    gap:12px;
-    align-items:center;
-    margin-bottom:12px;
-}
-
-.uploader {
-    border: 2px dashed #e6eef6;
-    padding: 18px;
-    border-radius: 10px;
-    display:flex;
-    align-items:center;
-    gap:12px;
-    background: #fff;
-}
-
-.uploader.dragover {
-    background: linear-gradient(90deg, rgba(240,249,255,1), #ffffff);
-    border-color: var(--wp-primary);
-    box-shadow: 0 6px 18px rgba(0,115,170,0.06);
-}
-
-.uploader input[type=file] {
-    display:none;
-}
-
-.media-grid {
-    display:grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 12px;
-    margin-top:12px;
-}
-
-.media-item {
-    background:white;
-    border-radius:10px;
-    overflow:hidden;
-    border:1px solid var(--wp-border);
-    display:flex;
-    flex-direction:column;
-    gap:8px;
-    padding:8px;
-}
-
-.media-thumb {
-    height:120px;
-    background:#f3f4f6;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    border-radius:6px;
-    overflow:hidden;
-}
-
-.media-thumb img {
-    max-width:100%;
-    max-height:100%;
-    display:block;
-}
-
-.media-meta {
-    padding:6px 6px 10px 6px;
-    display:flex;
-    justify-content:space-between;
-    gap:8px;
-    align-items:center;
-}
-
-.media-title {
-    font-size:13px;
-    font-weight:600;
-    color:var(--wp-text-dark);
-}
-
-.media-actions {
-    display:flex;
-    gap:6px;
-}
-
-.small-btn {
-    padding:6px 8px;
-    border-radius:6px;
-    background:#eef2f6;
-    font-size:13px;
-    border:none;
-    cursor:pointer;
-}
-
-.small-btn.danger {
-    background: #fee2e2;
-    color: #b91c1c;
-}
-
-.controls {
-    display:flex;
-    gap:8px;
-    align-items:center;
-}
-
-/* pagination simple */
-.pagination {
-    display:flex;
-    gap:8px;
-    align-items:center;
-    margin-top:12px;
-}
-</style>
 {% endblock %}
 
 {% block content %}
-<div class="media-lib">
-    <h1>Медиа-библиотека</h1>
+<div class="media-lib-wrap card" role="main">
+  <h1>Медиа-библиотека</h1>
 
-    <div class="media-toolbar">
-        <div class="uploader" id="uploader">
-            <div style="flex:1">
-                <strong>Перетащите файлы сюда</strong>
-                <div style="font-size:13px;color:#6b7280">Или выберите файл вручную</div>
-            </div>
+  <div class="media-top" style="margin-top:12px;">
+    <input id="media-search" class="media-search" placeholder="Поиск по имени или заголовку..." />
+    <div style="display:flex;gap:8px;">
+      <button id="upload-open-btn" class="button-secondary small-btn">Загрузить</button>
+      <button id="refresh-btn" class="button small-btn">Обновить</button>
+    </div>
+  </div>
+
+  <div id="media-grid" class="media-grid" aria-live="polite" style="margin-top:12px;">
+    {% for a in attachments %}
+      <div class="media-item" data-id="{{ a.id }}" data-url="{{ a.url|default:'' }}" data-title="{{ a.title|default:'' }}" data-filename="{{ a.filename|default:'' }}">
+        <div class="media-thumb">
+          {% if a.url %}
+            <img src="{{ a.url }}" alt="{{ a.title|default:a.filename }}">
+          {% else %}
+            <div style="padding:12px;color:#6b7280">{{ a.filename|default:"файл" }}</div>
+          {% endif %}
+        </div>
+        <div>
+          <div class="media-title">{{ a.title|default:a.filename }}</div>
+          <div class="media-meta">
+            <span>{{ a.uploaded_at|default:"" }}</span>
             <div>
-                <label class="button-primary" for="file-input">Выбрать файл</label>
-                <input id="file-input" type="file" multiple />
+              <button class="small-btn select-btn">Выбрать</button>
+              {% if a.url %}
+                <a href="{{ a.url }}" class="small-btn" target="_blank">Открыть</a>
+              {% endif %}
             </div>
+          </div>
         </div>
+      </div>
+    {% empty %}
+      <div style="grid-column:1/-1;padding:18px;color:#6b7280">Файлов нет.</div>
+    {% endfor %}
+  </div>
 
-        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-            <input type="text" id="media-search" placeholder="Поиск по имени..." style="padding:8px;border-radius:6px;border:1px solid #e6eef6">
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#6b7280">
-                <input type="checkbox" id="filter-unattached" /> Только без привязки
-            </label>
-            <button class="button" id="bulk-delete-btn">Удалить выбранные</button>
-        </div>
-    </div>
-
-    <div id="media-grid" class="media-grid" aria-live="polite"></div>
-
-    <div class="pagination" id="media-pagination" style="display:flex"></div>
-
-    <div style="margin-top:16px" class="card">
-        <h3 style="margin:0 0 8px 0">Привязать выбранный файл к посту</h3>
-        <div style="display:flex;gap:8px;align-items:center">
-            <select id="attach-post-select" style="padding:8px;border-radius:6px;border:1px solid #e6eef6">
-                <option value="">— Выберите пост (или очистить) —</option>
-            </select>
-            <button class="button" id="attach-to-post-btn">Привязать</button>
-        </div>
-    </div>
+  <input id="media-file-input" type="file" style="display:none" multiple />
 </div>
 
 <script src="{% static 'admin/media-library.js' %}"></script>
