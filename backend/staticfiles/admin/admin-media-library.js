@@ -1,0 +1,295 @@
+// backend/blog/static/blog/admin-media-library.js
+(function () {
+    'use strict';
+    if (window._mediaLibraryLoaded) return;
+    window._mediaLibraryLoaded = true;
+
+    function getCookie(name) {
+        if (!document.cookie) return null;
+        const cookies = document.cookie.split(';').map(c => c.trim());
+        for (let c of cookies) {
+            if (c.startsWith(name + '=')) {
+                return decodeURIComponent(c.split('=')[1]);
+            }
+        }
+        return null;
+    }
+    const csrftoken = getCookie('csrftoken');
+    console.log('[media-library.js] csrftoken', !!csrftoken);
+
+    function $(id){ return document.getElementById(id); }
+    function apiUrl(path){ return `/api/blog/media/${path}`; }
+    function showToast(msg, isError) {
+        try {
+            const t = document.createElement('div');
+            t.textContent = msg;
+            t.style.position = 'fixed';
+            t.style.bottom = '18px';
+            t.style.right = '18px';
+            t.style.padding = '10px 14px';
+            t.style.borderRadius = '10px';
+            t.style.boxShadow = '0 6px 18px rgba(2,6,23,0.12)';
+            t.style.background = isError ? 'linear-gradient(90deg,#ef4444,#f97316)' : 'linear-gradient(90deg,#10b981,#0ea5e9)';
+            t.style.color = '#fff';
+            t.style.zIndex = 99999;
+            document.body.appendChild(t);
+            setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(()=>{ try{ document.body.removeChild(t); }catch(e){} }, 400); }, 3500);
+        } catch (e) { console.log(msg); }
+    }
+
+    var mediaGrid = $('media-grid');
+    var searchInput = $('media-search');
+    var unattachedCheckbox = $('filter-unattached');
+    var fileInput = $('file-input');
+    var uploadBtn = $('upload-open-btn');
+    var dropzone = $('dropzone');
+    var refreshBtn = $('refresh-btn');
+    var progressList = $('upload-progress-list');
+
+    if (!fileInput) {
+        fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.multiple = true;
+        fileInput.id = 'file-input';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
+        console.log('[media-library.js] created fallback file-input');
+    }
+
+    window.uploadFiles = uploadFiles;
+
+    function fetchMedia(page=1) {
+        var q = encodeURIComponent((searchInput && searchInput.value) ? searchInput.value.trim() : '');
+        var unatt = (unattachedCheckbox && unattachedCheckbox.checked) ? '1' : '0';
+        var url = apiUrl('list/') + '?page=' + page + '&page_size=48&q=' + q + '&unattached_only=' + unatt;
+        console.log('[media-library.js] fetching', url);
+        fetch(url, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (json) {
+                renderGrid(json.results || []);
+            })
+            .catch(function (err) {
+                console.error('[media-library.js] fetchMedia error', err);
+                showToast('Ошибка загрузки списка файлов', true);
+            });
+    }
+
+    function renderGrid(items) {
+        if (!mediaGrid) return;
+        mediaGrid.innerHTML = '';
+        if (!items.length) {
+            mediaGrid.innerHTML = '<div style="grid-column:1/-1;padding:18px;color:#6b7280">Файлы не найдены</div>';
+            return;
+        }
+        items.forEach(function (item) {
+            var el = document.createElement('div');
+            el.className = 'media-item card';
+            el.dataset.id = item.id;
+            el.style.display = 'flex'; el.style.gap = '12px'; el.style.padding = '12px'; el.style.alignItems = 'center';
+
+            var thumb = document.createElement('div'); thumb.className='media-thumb';
+            thumb.style.width='96px'; thumb.style.height='72px'; thumb.style.borderRadius='8px'; thumb.style.overflow='hidden';
+            thumb.style.display='flex'; thumb.style.alignItems='center'; thumb.style.justifyContent='center'; thumb.style.background='#f8fafc';
+            if (item.url && /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(item.filename || '')) {
+                var img = document.createElement('img'); img.src = item.url; img.alt = item.title||item.filename||'';
+                img.style.width='100%'; img.style.height='100%'; img.style.objectFit='cover';
+                thumb.appendChild(img);
+            } else {
+                var txt = document.createElement('div'); txt.style.padding='8px'; txt.style.color='#6b7280';
+                txt.textContent = item.filename || item.title || '—';
+                thumb.appendChild(txt);
+            }
+
+            var metaWrap = document.createElement('div'); metaWrap.style.flex='1'; metaWrap.style.display='flex'; metaWrap.style.flexDirection='column'; metaWrap.style.gap='6px';
+
+            var rowTop = document.createElement('div'); rowTop.style.display='flex'; rowTop.style.justifyContent='space-between'; rowTop.style.alignItems='center';
+            var title = document.createElement('div'); title.style.fontWeight='700'; title.textContent = item.title || item.filename || '';
+            var uploaded = document.createElement('div'); uploaded.style.fontSize='12px'; uploaded.style.color='#6b7280';
+            uploaded.textContent = item.uploaded_at ? new Date(item.uploaded_at).toLocaleString() : '';
+            rowTop.appendChild(title); rowTop.appendChild(uploaded);
+
+            var rowActions = document.createElement('div'); rowActions.style.display='flex'; rowActions.style.gap='8px'; rowActions.style.alignItems='center';
+            var selectBtn = document.createElement('button'); selectBtn.className='small-btn select-btn'; selectBtn.textContent='Выбрать';
+            selectBtn.addEventListener('click', function () {
+                var payload = { source: 'media-library', action: 'select', attachment: item };
+                if (window.opener && !window.opener.closed) {
+                    window.opener.postMessage(payload, '*');
+                    window.close();
+                    return;
+                }
+                window.parent.postMessage(payload, '*');
+                showToast('Выбран файл: ' + (item.filename || item.title || ''), false);
+            });
+            rowActions.appendChild(selectBtn);
+
+            if (item.url) {
+                var openBtn = document.createElement('a'); openBtn.className='small-btn'; openBtn.textContent='Открыть';
+                openBtn.href = item.url; openBtn.target = '_blank'; rowActions.appendChild(openBtn);
+            }
+
+            var delBtn = document.createElement('button'); delBtn.className='small-btn delete-btn'; delBtn.textContent='Удалить';
+            delBtn.addEventListener('click', function () {
+                if (!confirm('Удалить файл?')) return;
+                fetch(apiUrl('delete/'), {
+                    method:'POST', credentials:'same-origin',
+                    headers:{ 'Content-Type':'application/json', 'X-CSRFToken': csrftoken },
+                    body: JSON.stringify({ ids: [item.id] })
+                }).then(function (r){ return r.json(); }).then(function (j){
+                    if (j.success) {
+                        showToast('Файл удалён', false);
+                        fetchMedia();
+                    } else {
+                        showToast('Ошибка удаления: ' + (j.message || 'unknown'), true);
+                    }
+                }).catch(function (e){ console.error(e); showToast('Network error', true); });
+            });
+            rowActions.appendChild(delBtn);
+
+            metaWrap.appendChild(rowTop); metaWrap.appendChild(rowActions);
+            el.appendChild(thumb); el.appendChild(metaWrap);
+            mediaGrid.appendChild(el);
+        });
+    }
+
+    function uploadFiles(files) {
+        try {
+            if (!files || !files.length) return;
+            var form = new FormData();
+            Array.from(files).forEach(function (f) { form.append('file', f, f.name); });
+
+            var row = document.createElement('div'); row.style.display='flex'; row.style.flexDirection='column'; row.style.gap='6px'; row.style.marginBottom='8px';
+            var label = document.createElement('div'); label.textContent = 'Загрузка ' + files.length + ' файлов...';
+            var barWrap = document.createElement('div'); barWrap.style.width='100%'; barWrap.style.background='#eef2f6'; barWrap.style.borderRadius='8px';
+            var bar = document.createElement('div'); bar.style.height='10px'; bar.style.width='0%'; bar.style.borderRadius='8px'; bar.style.transition='width .2s';
+            bar.style.background='linear-gradient(90deg,#0ea5e9,#7c3aed)';
+            barWrap.appendChild(bar);
+            row.appendChild(label); row.appendChild(barWrap);
+            if (progressList) progressList.appendChild(row);
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', apiUrl('upload/'), true);
+            xhr.withCredentials = true;
+            if (csrftoken) xhr.setRequestHeader('X-CSRFToken', csrftoken);
+
+            xhr.upload.addEventListener('progress', function (e) {
+                if (!e.lengthComputable) return;
+                var pct = Math.round((e.loaded / e.total) * 100);
+                bar.style.width = pct + '%';
+            });
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) return;
+                try {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        var resp = JSON.parse(xhr.responseText || '{}');
+                        if (resp.success) {
+                            label.textContent = 'Готово';
+                            bar.style.width = '100%';
+                            showToast('Загрузка завершена', false);
+                            fetchMedia();
+                        } else {
+                            label.textContent = 'Ошибка: ' + (resp.message || 'unknown');
+                            showToast('Ошибка загрузки: ' + (resp.message || ''), true);
+                        }
+                    } else {
+                        showToast('Upload failed: ' + xhr.status, true);
+                        label.textContent = 'Ошибка';
+                    }
+                } catch (err) {
+                    console.error('[media-library.js] upload parse error', err);
+                    showToast('Ошибка ответа сервера', true);
+                } finally {
+                    setTimeout(function(){ try{ progressList.removeChild(row); }catch(e){} }, 3000);
+                }
+            };
+
+            xhr.send(form);
+        } catch (ex) {
+            console.error('[media-library.js] uploadFiles exception', ex);
+            showToast('Непредвиденная ошибка при загрузке', true);
+        }
+    }
+
+    function attachEvents() {
+        try {
+            if (uploadBtn) {
+                uploadBtn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    console.log('[media-library.js] upload button clicked');
+                    fileInput.click();
+                });
+            } else {
+                console.warn('[media-library.js] upload button not found');
+            }
+
+            if (fileInput) {
+                fileInput.addEventListener('change', function (e) {
+                    if (this.files && this.files.length) {
+                        uploadFiles(this.files);
+                        this.value = '';
+                    }
+                });
+            }
+
+            if (dropzone) {
+                dropzone.addEventListener('dragover', function (e) { e.preventDefault(); dropzone.style.borderColor = 'var(--primary)'; });
+                dropzone.addEventListener('dragleave', function (e) { e.preventDefault(); dropzone.style.borderColor = ''; });
+                dropzone.addEventListener('drop', function (e) {
+                    e.preventDefault(); dropzone.style.borderColor = '';
+                    var dt = e.dataTransfer;
+                    if (dt && dt.files && dt.files.length) uploadFiles(dt.files);
+                });
+            }
+
+            if (searchInput) searchInput.addEventListener('input', debounce(function(){ fetchMedia(1); }, 350));
+            if (unattachedCheckbox) unattachedCheckbox.addEventListener('change', function(){ fetchMedia(1); });
+            if (refreshBtn) refreshBtn.addEventListener('click', function(){ fetchMedia(1); });
+
+            document.addEventListener('click', function (e) {
+                var el = e.target;
+                if (el.classList && el.classList.contains('select-btn')) {
+                    var item = el.closest('.media-item');
+                    if (!item) return;
+                    var payload = {
+                        source: 'media-library',
+                        action: 'select',
+                        attachment: {
+                            id: item.dataset.id,
+                            url: item.dataset.url,
+                            filename: item.dataset.filename,
+                            title: item.dataset.title
+                        }
+                    };
+                    if (window.opener && !window.opener.closed) { window.opener.postMessage(payload, '*'); window.close(); return; }
+                    window.parent.postMessage(payload, '*'); showToast('Выбран файл', false);
+                }
+                if (el.classList && el.classList.contains('delete-btn')) {
+                    var id = el.dataset.id || (el.closest('.media-item') && el.closest('.media-item').dataset.id);
+                    if (!id) return;
+                    if (!confirm('Удалить файл?')) return;
+                    fetch(apiUrl('delete/'), {
+                        method:'POST', credentials:'same-origin',
+                        headers:{ 'Content-Type':'application/json', 'X-CSRFToken': csrftoken },
+                        body: JSON.stringify({ ids: [Number(id)] })
+                    }).then(function (r){ return r.json(); }).then(function (j){
+                        if (j.success) { showToast('Файл удалён', false); fetchMedia(); }
+                        else showToast('Ошибка удаления: ' + (j.message || ''), true);
+                    }).catch(function (e){ console.error(e); showToast('Network error', true); });
+                }
+            });
+
+            console.log('[media-library.js] events attached');
+        } catch (err) {
+            console.error('[media-library.js] attachEvents error', err);
+        }
+    }
+
+    function debounce(fn,t){ var id; return function(){ var a=arguments; clearTimeout(id); id=setTimeout(function(){ fn.apply(null,a); }, t||200); }; }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function(){ attachEvents(); fetchMedia(1); });
+    } else {
+        attachEvents(); fetchMedia(1);
+    }
+
+})();
