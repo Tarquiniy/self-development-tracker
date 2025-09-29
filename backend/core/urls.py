@@ -5,13 +5,22 @@ from django.urls import path, include
 from users.views import RegisterView, LoginView, ProfileView
 from django.conf.urls.static import static
 
-# Импортируем админ-views из blog.admin
+# Импортируем админ-views из blog.admin (dashboard, stats, post update)
+admin_dashboard_view = None
+admin_stats_api = None
+admin_post_update_view = None
 try:
-    from blog.admin import admin_dashboard_view, admin_stats_api
+    from blog.admin import admin_dashboard_view as _dashboard_view
+    from blog.admin import admin_stats_api as _stats_api
+    from blog.admin import admin_post_update_view as _post_update
+    admin_dashboard_view = _dashboard_view
+    admin_stats_api = _stats_api
+    admin_post_update_view = _post_update
 except Exception:
-    # безопасный fallback — если импорт не прошёл, admin dashboard не будет доступен
+    # если импорт не удался — продолжим без этих view
     admin_dashboard_view = None
     admin_stats_api = None
+    admin_post_update_view = None
 
 urlpatterns = [
     path('grappelli/', include('grappelli.urls')),
@@ -26,7 +35,7 @@ urlpatterns = [
     path('api/auth/profile/', ProfileView.as_view(), name='profile'),
 ]
 
-# Регистрируем админ дашборд и API, если они доступны
+# Регистрация админ-views если они доступны
 if admin_dashboard_view:
     urlpatterns += [
         path('admin/dashboard/', admin_dashboard_view, name='admin-dashboard'),
@@ -35,6 +44,11 @@ if admin_dashboard_view:
 if admin_stats_api:
     urlpatterns += [
         path('admin/dashboard/stats-data/', admin_stats_api, name='admin-dashboard-stats'),
+    ]
+
+if admin_post_update_view:
+    urlpatterns += [
+        path('admin/posts/update/', admin_post_update_view, name='admin-post-update'),
     ]
 
 if settings.DEBUG:  # только в dev

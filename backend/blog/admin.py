@@ -1,4 +1,5 @@
 # backend/blog/admin.py
+import json
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
@@ -10,6 +11,8 @@ from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.safestring import mark_safe
 
 from .models import Post, Category, Tag, Comment, PostReaction, PostView
 from django_summernote.admin import SummernoteModelAdmin
@@ -34,17 +37,21 @@ class CustomUserAdmin(admin.ModelAdmin):
         css = {'all': ('admin/admin-modern.css',)}
 
 
-# ---------- Посты
+# ---------- ПОСТЫ (с inline-редактированием в списке)
 class CommentInline(admin.TabularInline):
     model = Comment
     extra = 0
     fields = ('name', 'content', 'is_public', 'is_moderated', 'created_at')
     readonly_fields = ('created_at',)
 
+
 @admin.register(Post)
 class PostAdmin(SummernoteModelAdmin):
+    """
+    PostAdmin с inline-редактированием title и status прямо в списке (AJAX).
+    """
     summernote_fields = ('content', 'excerpt')
-    list_display = ('admin_thumbnail', 'title', 'author', 'status', 'published_at', 'action_buttons')
+    list_display = ('admin_thumbnail', 'editable_title', 'editable_status', 'author', 'published_at', 'action_buttons')
     list_filter = ('status', 'published_at', 'categories', 'tags')
     search_fields = ('title', 'content', 'excerpt')
     prepopulated_fields = {'slug': ('title',)}
@@ -62,15 +69,43 @@ class PostAdmin(SummernoteModelAdmin):
     inlines = [CommentInline]
     actions = ['make_published', 'make_draft', 'duplicate_post']
 
+    # ---------- отображение миниатюры
     def admin_thumbnail(self, obj):
         if obj.featured_image:
             return format_html(
-                '<img src="{}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;" />',
+                '<img src="{}" style="width: 56px; height: 42px; object-fit: cover; border-radius: 6px; border:1px solid #e6edf3;" />',
                 obj.featured_image
             )
         return "🖼️"
     admin_thumbnail.short_description = "Изображение"
+    admin_thumbnail.admin_order_field = 'featured_image'
 
+    # ---------- inline-editable title
+    def editable_title(self, obj):
+        # input with data attributes for JS
+        title = obj.title or ''
+        html = format_html(
+            '<input class="inline-title-input" data-post-id="{}" value="{}" title="Нажмите Enter или уйдите с поля для сохранения" />',
+            obj.id,
+            title.replace('"', '&quot;')
+        )
+        return mark_safe(html)
+    editable_title.short_description = "Заголовок"
+    editable_title.admin_order_field = 'title'
+
+    # ---------- inline-editable status (select)
+    def editable_status(self, obj):
+        options = []
+        choices = getattr(self.model, 'STATUS_CHOICES', [])
+        for value, label in choices:
+            selected = 'selected' if obj.status == value else ''
+            options.append(f'<option value="{value}" {selected}>{label}</option>')
+        select_html = f'<select class="inline-status-select" data-post-id="{obj.id}">{"".join(options)}</select>'
+        return mark_safe(select_html)
+    editable_status.short_description = "Статус"
+    editable_status.admin_order_field = 'status'
+
+    # ---------- кнопки действий
     def action_buttons(self, obj):
         return format_html(
             '<div class="action-icons">'
@@ -82,6 +117,7 @@ class PostAdmin(SummernoteModelAdmin):
         )
     action_buttons.short_description = "Действия"
 
+    # ---------- массовые экшены
     def make_published(self, request, queryset):
         updated = queryset.update(status='published')
         self.message_user(request, f"{updated} постов опубликовано.")
@@ -95,7 +131,7 @@ class PostAdmin(SummernoteModelAdmin):
     def duplicate_post(self, request, queryset):
         created = 0
         for post in queryset:
-            old_slug = post.slug
+            old_slug = post.slug or ''
             post.pk = None
             post.slug = f"{old_slug}-copy"
             post.title = f"{post.title} (копия)"
@@ -107,10 +143,10 @@ class PostAdmin(SummernoteModelAdmin):
 
     class Media:
         css = {'all': ('admin/admin-modern.css',)}
-        js = ('admin/admin.js',)
+        js = ('admin/admin.js', 'admin/admin-list-inline.js',)
 
 
-# ---------- Категории
+# ---------- КАТЕГОРИИ
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('title', 'slug', 'post_count', 'created_at')
@@ -126,7 +162,7 @@ class CategoryAdmin(admin.ModelAdmin):
         css = {'all': ('admin/admin-modern.css',)}
 
 
-# ---------- Теги
+# ---------- ТЕГИ
 @admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):
     list_display = ('title', 'slug', 'post_count')
@@ -141,7 +177,7 @@ class TagAdmin(admin.ModelAdmin):
         css = {'all': ('admin/admin-modern.css',)}
 
 
-# ---------- Комментарии
+# ---------- КОММЕНТАРИИ
 @admin.register(Comment)
 class CommentAdmin(admin.ModelAdmin):
     list_display = ('shorter_name', 'post_link', 'user', 'short_content', 'is_public', 'is_moderated', 'created_at')
@@ -183,7 +219,7 @@ class CommentAdmin(admin.ModelAdmin):
         css = {'all': ('admin/admin-modern.css',)}
 
 
-# ---------- Реакции
+# ---------- РЕАКЦИИ
 @admin.register(PostReaction)
 class PostReactionAdmin(admin.ModelAdmin):
     list_display = ('post', 'likes_count', 'users_count', 'anon_count', 'updated_at')
@@ -202,18 +238,16 @@ class PostReactionAdmin(admin.ModelAdmin):
         css = {'all': ('admin/admin-modern.css',)}
 
 
-# ---------- DASHBOARD VIEW & API
+# ---------- DASHBOARD VIEW & API (как раньше)
 @admin.site.admin_view
 @require_GET
 def admin_dashboard_view(request):
     """
-    Render the enhanced admin dashboard.
-    Registered in core/urls.py as /admin/dashboard/
+    Enhanced admin dashboard view.
     """
     if not request.user.is_staff:
         raise Http404
 
-    # Base stats
     posts_count = Post.objects.count()
     published_count = Post.objects.filter(status='published').count()
     draft_count = Post.objects.filter(status='draft').count()
@@ -224,7 +258,6 @@ def admin_dashboard_view(request):
     users_count = CustomUser.objects.count()
     total_views = PostView.objects.count()
 
-    # Recent items
     recent_posts = Post.objects.order_by('-created_at')[:8]
     recent_comments = Comment.objects.select_related('post').order_by('-created_at')[:8]
 
@@ -249,8 +282,7 @@ def admin_dashboard_view(request):
 @require_GET
 def admin_stats_api(request):
     """
-    JSON API returning time series for charts (last 30 days).
-    Registered in core/urls.py as /admin/dashboard/stats-data/
+    JSON API returning time series for charts (last N days).
     """
     if not request.user.is_staff:
         return JsonResponse({'detail': 'permission denied'}, status=403)
@@ -259,7 +291,6 @@ def admin_stats_api(request):
     now = timezone.now()
     start = now - timezone.timedelta(days=days - 1)
 
-    # Posts per day
     posts_qs = (
         Post.objects.filter(created_at__date__gte=start.date())
         .annotate(day=TruncDate('created_at'))
@@ -268,7 +299,6 @@ def admin_stats_api(request):
         .order_by('day')
     )
 
-    # Comments per day
     comments_qs = (
         Comment.objects.filter(created_at__date__gte=start.date())
         .annotate(day=TruncDate('created_at'))
@@ -277,7 +307,6 @@ def admin_stats_api(request):
         .order_by('day')
     )
 
-    # Views per day
     views_qs = (
         PostView.objects.filter(viewed_at__date__gte=start.date())
         .annotate(day=TruncDate('viewed_at'))
@@ -286,7 +315,6 @@ def admin_stats_api(request):
         .order_by('day')
     )
 
-    # Build full date series (fill zeros)
     labels = []
     posts_series = []
     comments_series = []
@@ -314,3 +342,56 @@ def admin_stats_api(request):
         'comments': comments_series,
         'views': views_series,
     })
+
+
+# ---------- AJAX endpoint for inline-updates
+@admin.site.admin_view
+@require_POST
+def admin_post_update_view(request):
+    """
+    Handle AJAX updates for post fields from inline editors in changelist.
+    Expected JSON body: { "post_id": <int>, "field": "title"|"status", "value": "<new value>" }
+    """
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'message': 'permission denied'}, status=403)
+
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Invalid JSON: {e}'}, status=400)
+
+    post_id = data.get('post_id')
+    field = data.get('field')
+    value = data.get('value')
+
+    if not post_id or not field:
+        return JsonResponse({'success': False, 'message': 'Missing post_id or field'}, status=400)
+
+    ALLOWED = {'title', 'status', 'published_at'}
+    if field not in ALLOWED:
+        return JsonResponse({'success': False, 'message': 'Field not allowed'}, status=400)
+
+    try:
+        post = Post.objects.get(pk=post_id)
+    except Post.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Post not found'}, status=404)
+
+    # Handle type conversion if needed
+    if field == 'published_at':
+        # Expect ISO date/time string, try parse
+        from django.utils.dateparse import parse_datetime, parse_date
+        dt = parse_datetime(value) or parse_date(value)
+        if not dt:
+            return JsonResponse({'success': False, 'message': 'Invalid datetime format'}, status=400)
+        post.published_at = dt
+
+    else:
+        setattr(post, field, value)
+
+    try:
+        post.save()
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error saving: {e}'}, status=500)
+
+    return JsonResponse({'success': True, 'post_id': post.id, 'field': field, 'value': getattr(post, field)})
+

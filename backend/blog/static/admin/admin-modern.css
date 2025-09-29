@@ -1,4 +1,4 @@
-/* WordPress-like Modern Admin Styles */
+/* WordPress-like Modern Admin Styles (UPDATED with inline editor UI) */
 :root {
     --wp-primary: #0073aa;
     --wp-primary-dark: #005a87;
@@ -19,18 +19,22 @@
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
     background: var(--wp-gray-light);
+    color: var(--wp-text-dark);
 }
 
+/* HEADER */
 #header {
     background: var(--wp-text-dark);
     color: var(--wp-text-light);
     border-bottom: 3px solid var(--wp-primary);
+    padding: 10px 16px;
 }
 
 #branding h1 {
     color: var(--wp-text-light);
     font-weight: 600;
     font-size: 1.5rem;
+    margin: 0;
 }
 
 #branding h1 a {
@@ -53,99 +57,74 @@ body {
     transition: all 0.2s ease;
 }
 
-#user-tools a:hover {
-    color: var(--wp-text-light);
-    border-bottom-color: var(--wp-primary-light);
-}
-
-/* Боковое меню */
+/* Sidebar */
 #content-related {
     background: var(--wp-text-dark);
-}
-
-.module h2, .module caption {
-    background: var(--wp-primary);
     color: var(--wp-text-light);
-    font-weight: 600;
-    padding: 12px 15px;
-    margin: 0;
 }
 
-/* Карточки для постов */
+/* Card styles */
 .card {
     background: white;
     border: 1px solid var(--wp-border);
-    border-radius: 8px;
+    border-radius: 10px;
     box-shadow: var(--wp-shadow);
     margin-bottom: 20px;
-    transition: all 0.3s ease;
+    transition: all 0.25s ease;
     overflow: hidden;
 }
 
 .card:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.08);
     transform: translateY(-2px);
 }
 
 .card-header {
     background: var(--wp-gray-light);
-    padding: 15px 20px;
+    padding: 12px 16px;
     border-bottom: 1px solid var(--wp-border);
 }
 
 .card-header strong {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     color: var(--wp-text-dark);
 }
 
 .card-body {
-    padding: 20px;
+    padding: 16px;
     display: flex;
-    gap: 15px;
+    gap: 12px;
     align-items: flex-start;
-}
-
-.card-img {
-    width: 120px;
-    height: 80px;
-    object-fit: cover;
-    border-radius: 4px;
-    flex-shrink: 0;
 }
 
 .card-footer {
     background: var(--wp-gray-light);
-    padding: 15px 20px;
+    padding: 12px 16px;
     border-top: 1px solid var(--wp-border);
     display: flex;
     gap: 10px;
 }
 
-/* Кнопки WordPress-style */
-.button, input[type=submit], input[type=button] {
+/* Buttons */
+.button, input[type=submit], input[type=button], .button-primary {
     background: var(--wp-primary);
     color: white;
     border: none;
-    border-radius: 3px;
-    padding: 8px 16px;
+    border-radius: 6px;
+    padding: 8px 14px;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     text-decoration: none;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.18s ease;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
 }
 
-.button:hover, input[type=submit]:hover, input[type=button]:hover {
+.button:hover, .button-primary:hover {
     background: var(--wp-primary-dark);
-    color: white;
-    transform: translateY(-1px);
-}
-
-.button-primary {
-    background: var(--wp-primary);
+    transform: translateY(-2px);
 }
 
 .button-secondary {
@@ -153,12 +132,7 @@ body {
     color: var(--wp-text-dark);
 }
 
-.button-secondary:hover {
-    background: var(--wp-gray-dark);
-    color: white;
-}
-
-/* Бейджи для категорий и тегов */
+/* badges */
 .category-badge, .tag-badge {
     display: inline-block;
     background: var(--wp-primary-light);
@@ -166,7 +140,7 @@ body {
     padding: 4px 8px;
     border-radius: 12px;
     font-size: 11px;
-    font-weight: 500;
+    font-weight: 600;
     margin: 2px;
 }
 
@@ -174,89 +148,95 @@ body {
     background: var(--wp-gray-dark);
 }
 
-/* Формы */
-input[type=text], input[type=email], input[type=password], input[type=url], 
+/* Forms */
+input[type=text], input[type=email], input[type=password], input[type=url],
 textarea, select {
     border: 1px solid var(--wp-border);
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 8px 12px;
     font-size: 14px;
-    transition: all 0.2s ease;
+    transition: all 0.18s ease;
 }
 
-input[type=text]:focus, input[type=email]:focus, input[type=password]:focus, 
+input[type=text]:focus, input[type=email]:focus, input[type=password]:focus,
 input[type=url]:focus, textarea:focus, select:focus {
     border-color: var(--wp-primary);
-    box-shadow: 0 0 0 2px rgba(0, 115, 170, 0.2);
+    box-shadow: 0 0 0 3px rgba(0, 115, 170, 0.08);
     outline: none;
 }
 
-/* Таблицы */
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
 thead th, thead td {
     background: var(--wp-gray-light);
-    font-weight: 600;
+    font-weight: 700;
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--wp-border);
+    font-size: 13px;
 }
 
-/* Адаптивность */
-@media (max-width: 768px) {
-    .card-body {
-        flex-direction: column;
-    }
-    
-    .card-img {
-        width: 100%;
-        height: 200px;
-    }
-    
-    .card-footer {
-        flex-direction: column;
-    }
+/* List rows */
+tbody tr {
+    background: white;
+    border-bottom: 1px solid #f3f4f6;
+    transition: background 0.12s ease;
 }
 
-/* Иконки действий */
+tbody tr:hover {
+    background: #fbfbfd;
+}
+
+/* Action icons (round) */
 .action-icons {
     display: flex;
     gap: 10px;
-    margin-top: 10px;
+    margin-top: 6px;
 }
 
 .action-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     background: var(--wp-gray-light);
     color: var(--wp-text-dark);
     text-decoration: none;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
 }
 
 .action-icon:hover {
     background: var(--wp-primary);
     color: white;
-    transform: scale(1.1);
+    transform: scale(1.06);
+    border-color: rgba(0,0,0,0.04);
 }
 
-/* Статусы */
+/* Status classes */
 .status-published {
     color: var(--wp-success);
-    font-weight: 600;
+    font-weight: 700;
 }
 
 .status-draft {
     color: var(--wp-warning);
-    font-weight: 600;
+    font-weight: 700;
 }
 
 /* Dashboard widgets */
 .dashboard-widget {
     background: white;
     border: 1px solid var(--wp-border);
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 20px;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 18px;
     box-shadow: var(--wp-shadow);
 }
 
@@ -264,26 +244,26 @@ thead th, thead td {
     margin-top: 0;
     color: var(--wp-text-dark);
     border-bottom: 2px solid var(--wp-primary);
-    padding-bottom: 10px;
+    padding-bottom: 8px;
 }
 
 /* Quick actions */
 .quick-actions {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
-    margin: 20px 0;
+    gap: 12px;
+    margin: 18px 0;
 }
 
 .quick-action {
     background: white;
-    padding: 20px;
-    border-radius: 8px;
+    padding: 16px;
+    border-radius: 10px;
     text-align: center;
     text-decoration: none;
     color: var(--wp-text-dark);
     border: 1px solid var(--wp-border);
-    transition: all 0.3s ease;
+    transition: all 0.18s ease;
 }
 
 .quick-action:hover {
@@ -292,8 +272,84 @@ thead th, thead td {
     color: var(--wp-primary);
 }
 
-.quick-action i {
-    font-size: 24px;
-    margin-bottom: 10px;
-    display: block;
+/* Recent list */
+.recent-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.recent-list li {
+    padding: 10px 8px;
+    border-radius: 8px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+.recent-list li + li { margin-top: 8px; border-top: 1px solid #f1f5f9; padding-top: 12px; }
+
+/* small thumb */
+.recent-thumb {
+    width: 64px;
+    height: 48px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: #f3f4f6;
+    flex-shrink: 0;
+}
+
+/* Inline editor styles specific for changelist */
+.inline-title-input {
+    width: 420px;
+    max-width: 100%;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #e6eef6;
+    background: #ffffff;
+    transition: box-shadow 0.12s ease, border-color 0.12s ease;
+    font-size: 14px;
+}
+
+.inline-title-input:focus {
+    outline: none;
+    border-color: var(--wp-primary);
+    box-shadow: 0 0 0 4px rgba(0,115,170,0.06);
+}
+
+.inline-title-input.saving {
+    opacity: 0.7;
+    background: linear-gradient(90deg, rgba(230,240,250,0.8), #fff);
+}
+
+.inline-title-input.saved {
+    border-color: var(--wp-success);
+    box-shadow: 0 0 0 3px rgba(70,180,80,0.08);
+}
+
+.inline-title-input.error {
+    border-color: var(--wp-danger);
+}
+
+/* Select for status */
+.inline-status-select {
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid #e6eef6;
+    background: #fff;
+    font-weight: 600;
+}
+
+.inline-status-select.saving { opacity: 0.8; }
+.inline-status-select.saved { outline: 2px solid rgba(70,180,80,0.08); }
+.inline-status-select.error { outline: 2px solid rgba(220,50,50,0.12); }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .card-body {
+        flex-direction: column;
+    }
+
+    .recent-thumb {
+        width: 100%;
+        height: 160px;
+    }
 }
