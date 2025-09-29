@@ -1,5 +1,7 @@
 # backend/blog/admin.py
+import os
 import json
+import logging
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
@@ -19,7 +21,9 @@ from .models import (
 )
 from django_summernote.admin import SummernoteModelAdmin
 
+logger = logging.getLogger(__name__)
 CustomUser = get_user_model()
+
 
 # ---------- Пользовательский админ
 @admin.register(CustomUser)
@@ -228,12 +232,15 @@ class PostReactionAdmin(admin.ModelAdmin):
         css = {'all': ('admin/admin-modern.css',)}
 
 
-# ---------- Dashboard & stats views (kept)
+# ---------- Dashboard & stats views (updated to include admin context)
 @admin.site.admin_view
 @require_GET
 def admin_dashboard_view(request):
     if not request.user.is_staff:
         raise Http404
+
+    # include admin context to satisfy admin templates (site_title etc.)
+    context = admin.site.each_context(request)
 
     posts_count = Post.objects.count()
     published_count = Post.objects.filter(status='published').count()
@@ -248,7 +255,7 @@ def admin_dashboard_view(request):
     recent_posts = Post.objects.order_by('-created_at')[:8]
     recent_comments = Comment.objects.select_related('post').order_by('-created_at')[:8]
 
-    context = {
+    context.update({
         'title': 'Dashboard',
         'posts_count': posts_count,
         'published_count': published_count,
@@ -260,7 +267,7 @@ def admin_dashboard_view(request):
         'total_views': total_views,
         'recent_posts': recent_posts,
         'recent_comments': recent_comments,
-    }
+    })
 
     return render(request, 'admin/dashboard.html', context)
 
@@ -328,7 +335,7 @@ def admin_stats_api(request):
     })
 
 
-# ---------- Post inline AJAX update endpoint
+# ---------- Post inline AJAX update endpoint (stays as-is)
 @admin.site.admin_view
 @require_POST
 def admin_post_update_view(request):
@@ -368,18 +375,56 @@ def admin_post_update_view(request):
     try:
         post.save()
     except Exception as e:
+        logger.exception("Error saving post inline update")
         return JsonResponse({'success': False, 'message': f'Error saving: {e}'}, status=500)
 
     return JsonResponse({'success': True, 'post_id': post.id, 'field': field, 'value': getattr(post, field)})
 
 
-# ---------- Media library admin view
+# ---------- Media library admin view (fixed: includes admin context and attachments)
 @admin.site.admin_view
 @require_GET
 def admin_media_library_view(request):
     if not request.user.is_staff:
         raise Http404
-    return render(request, 'admin/media_library.html', {})
+
+    # include admin context so admin templates have site_title/site_header etc.
+    context = admin.site.each_context(request)
+
+    # Build attachments list safely
+    attachments = []
+    try:
+        qs = PostAttachment.objects.all().order_by('-uploaded_at')[:1000]
+        for a in qs:
+            try:
+                file_field = getattr(a, 'file', None)
+                url = ''
+                filename = ''
+                if file_field:
+                    try:
+                        url = file_field.url
+                    except Exception:
+                        url = ''
+                    filename = os.path.basename(file_field.name) if getattr(file_field, 'name', None) else ''
+                attachments.append({
+                    'id': getattr(a, 'id', None),
+                    'title': getattr(a, 'title', '') or filename,
+                    'filename': filename,
+                    'url': url,
+                    'uploaded_at': a.uploaded_at.isoformat() if getattr(a, 'uploaded_at', None) else None,
+                    'post_id': a.post.id if getattr(a, 'post', None) else None,
+                })
+            except Exception:
+                logger.exception("Error serializing PostAttachment id=%s", getattr(a, 'id', None))
+                continue
+    except Exception:
+        logger.exception("Error fetching PostAttachment queryset")
+
+    context.update({
+        'attachments': attachments,
+    })
+
+    return render(request, 'admin/media_library.html', context)
 
 
 # ---------- Register proxy model "MediaLibrary" that redirects to the media library page
