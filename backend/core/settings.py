@@ -15,6 +15,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Читаем из окружения — безопасные значения по умолчанию (пустая строка / None)
 SUPABASE_URL = env("SUPABASE_URL", "").strip() or None
 SUPABASE_KEY = env("SUPABASE_KEY", "").strip() or None
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "post_attachments")  # имя бакета, например media
 SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", "").strip() or None
 
 # S3-совместимые ключи (Supabase может выдавать S3-ключи)
@@ -22,7 +23,7 @@ AWS_ACCESS_KEY_ID = env("SUPABASE_S3_KEY", "").strip() or None
 AWS_SECRET_ACCESS_KEY = env("SUPABASE_S3_SECRET", "").strip() or None
 
 # Имя бакета (bucket)
-AWS_STORAGE_BUCKET_NAME = env("SUPABASE_BUCKET", "").strip() or None
+AWS_STORAGE_BUCKET_NAME = env("SUPABASE_BUCKET", "post_attachments").strip() or None
 
 # Флаг: бакет публичный? (True по умолчанию). Можно переопределить через env:
 SUPABASE_PUBLIC_BUCKET = env("SUPABASE_PUBLIC_BUCKET", "1") in ("1", "true", "True")
