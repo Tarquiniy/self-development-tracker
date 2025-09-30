@@ -132,7 +132,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(blank=True, help_text='Defaults to filename, if left blank', max_length=255, null=True)),
                 ('uploaded', models.DateTimeField(auto_now_add=True)),
-                ('file', models.FileField(upload_to="%Y/%m/%d")),
+                ('file', models.FileField("post_attachments")),
                 ('title', models.CharField(blank=True, max_length=255)),
                 ('uploaded_at', models.DateTimeField(auto_now_add=True)),
                 ('post', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='attachments', to='blog.post')),

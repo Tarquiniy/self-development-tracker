@@ -8,6 +8,7 @@
     }
     window._mediaLibraryLoaded = true;
 
+    // --- helpers for cookies / CSRF / DOM ---
     function getCookie(name) {
         if (!document.cookie) return null;
         const cookies = document.cookie.split(';').map(c => c.trim());
@@ -21,7 +22,6 @@
     const csrftoken = getCookie('csrftoken');
     console.log('[media-library.js] csrftoken', !!csrftoken);
 
-    // helpers
     function $(id) { return document.getElementById(id); }
     function apiUrl(path) { return `/api/blog/media/${path}`; }
     function showToast(msg, isError) {
@@ -41,6 +41,22 @@
             setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(()=>{ try{ document.body.removeChild(t); }catch(e){} }, 400); }, 3500);
         } catch (e) { console.log(msg); }
     }
+
+    // Read post_id from query string or from global variable window.ADMIN_CURRENT_POST_ID
+    function getQueryParam(name) {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            return params.get(name);
+        } catch (e) {
+            return null;
+        }
+    }
+    const CURRENT_POST_ID = (function(){
+        const q = getQueryParam('post_id');
+        if (q && q !== 'null' && q !== '') return q;
+        if (typeof window.ADMIN_CURRENT_POST_ID !== 'undefined' && window.ADMIN_CURRENT_POST_ID !== null) return String(window.ADMIN_CURRENT_POST_ID);
+        return null;
+    })();
 
     // main variables (DOM)
     var mediaGrid = $('media-grid');
@@ -83,6 +99,7 @@
             });
     }
 
+    // Render single item — includes Attach / Unlink buttons
     function renderGrid(items) {
         if (!mediaGrid) return;
         mediaGrid.innerHTML = '';
@@ -94,6 +111,9 @@
             var el = document.createElement('div');
             el.className = 'media-item card';
             el.dataset.id = item.id;
+            el.dataset.url = item.url || '';
+            el.dataset.filename = item.filename || '';
+            el.dataset.title = item.title || '';
             el.style.display = 'flex'; el.style.gap = '12px'; el.style.padding = '12px'; el.style.alignItems = 'center';
 
             var thumb = document.createElement('div'); thumb.className='media-thumb';
@@ -118,6 +138,8 @@
             rowTop.appendChild(title); rowTop.appendChild(uploaded);
 
             var rowActions = document.createElement('div'); rowActions.style.display='flex'; rowActions.style.gap='8px'; rowActions.style.alignItems='center';
+
+            // Select button (for window.postMessage usage)
             var selectBtn = document.createElement('button'); selectBtn.className='small-btn select-btn'; selectBtn.textContent='Выбрать';
             selectBtn.addEventListener('click', function () {
                 var payload = { source: 'media-library', action: 'select', attachment: item };
@@ -130,6 +152,26 @@
                 showToast('Выбран файл: ' + (item.filename || item.title || ''), false);
             });
             rowActions.appendChild(selectBtn);
+
+            // Attach to post button
+            var attachBtn = document.createElement('button'); attachBtn.className='small-btn attach-btn'; attachBtn.textContent='Прикрепить к посту';
+            attachBtn.addEventListener('click', function () {
+                var postId = CURRENT_POST_ID;
+                if (!postId) {
+                    postId = prompt('Введите ID поста, к которому прикрепить изображение (число):');
+                    if (!postId) return;
+                }
+                attachToPost(item.id, postId, el);
+            });
+            rowActions.appendChild(attachBtn);
+
+            // Unlink button
+            var unlinkBtn = document.createElement('button'); unlinkBtn.className='small-btn unlink-btn'; unlinkBtn.textContent='Открепить';
+            unlinkBtn.addEventListener('click', function () {
+                if (!confirm('Открепить файл от поста?')) return;
+                attachToPost(item.id, null, el);
+            });
+            rowActions.appendChild(unlinkBtn);
 
             if (item.url) {
                 var openBtn = document.createElement('a'); openBtn.className='small-btn'; openBtn.textContent='Открыть';
@@ -158,6 +200,52 @@
             el.appendChild(thumb); el.appendChild(metaWrap);
             mediaGrid.appendChild(el);
         });
+    }
+
+    // Attach file to post (attachment_id, post_id or null)
+    function attachToPost(attachmentId, postId, el) {
+        try {
+            var body = { attachment_id: Number(attachmentId) };
+            if (postId === null || postId === undefined || postId === '' || String(postId).toLowerCase() === 'null') {
+                body.post_id = null;
+            } else {
+                body.post_id = Number(postId);
+            }
+            fetch(apiUrl('attach/'), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify(body)
+            }).then(function (r) { return r.json().then(function (j) { return {status: r.status, ok: r.ok, json: j}; }); })
+            .then(function (res) {
+                if (!res.ok || !res.json.success) {
+                    showToast('Ошибка: ' + (res.json.message || res.statusText || 'unknown'), true);
+                    return;
+                }
+                // success
+                var att = res.json.attachment || {};
+                showToast(postId ? ('Прикреплено к посту ' + att.post_id) : 'Откреплено', false);
+                // Update UI meta if present
+                try {
+                    var meta = el && el.querySelector && el.querySelector('div[style*="font-size:12px"]');
+                    if (meta) {
+                        // append or replace post info
+                        var base = (meta.dataset && meta.dataset.base) ? meta.dataset.base : meta.textContent.split('·')[0].trim();
+                        meta.dataset.base = base;
+                        meta.textContent = base + (att.post_id ? (' · post:' + att.post_id) : '');
+                    }
+                } catch (e) { /* ignore UI update errors */ }
+            }).catch(function (err) {
+                console.error('[media-library.js] attachToPost error', err);
+                showToast('Сетевая ошибка при привязке', true);
+            });
+        } catch (ex) {
+            console.error(ex);
+            showToast('Ошибка при подготовке запроса', true);
+        }
     }
 
     // Upload with progress (exposed as window.uploadFiles)
@@ -256,38 +344,10 @@
             if (unattachedCheckbox) unattachedCheckbox.addEventListener('change', function(){ fetchMedia(1); });
             if (refreshBtn) refreshBtn.addEventListener('click', function(){ fetchMedia(1); });
 
-            // delegate for server-rendered grid items
+            // delegate for server-rendered grid items (fallback)
             document.addEventListener('click', function (e) {
                 var el = e.target;
-                if (el.classList && el.classList.contains('select-btn')) {
-                    var item = el.closest('.media-item');
-                    if (!item) return;
-                    var payload = {
-                        source: 'media-library',
-                        action: 'select',
-                        attachment: {
-                            id: item.dataset.id,
-                            url: item.dataset.url,
-                            filename: item.dataset.filename,
-                            title: item.dataset.title
-                        }
-                    };
-                    if (window.opener && !window.opener.closed) { window.opener.postMessage(payload, '*'); window.close(); return; }
-                    window.parent.postMessage(payload, '*'); showToast('Выбран файл', false);
-                }
-                if (el.classList && el.classList.contains('delete-btn')) {
-                    var id = el.dataset.id || (el.closest('.media-item') && el.closest('.media-item').dataset.id);
-                    if (!id) return;
-                    if (!confirm('Удалить файл?')) return;
-                    fetch(apiUrl('delete/'), {
-                        method:'POST', credentials:'same-origin',
-                        headers:{ 'Content-Type':'application/json', 'X-CSRFToken': csrftoken },
-                        body: JSON.stringify({ ids: [Number(id)] })
-                    }).then(function (r){ return r.json(); }).then(function (j){
-                        if (j.success) { showToast('Файл удалён', false); fetchMedia(); }
-                        else showToast('Ошибка удаления: ' + (j.message || ''), true);
-                    }).catch(function (e){ console.error(e); showToast('Network error', true); });
-                }
+                // handled by per-button listeners already added during renderGrid
             });
 
             console.log('[media-library.js] events attached');
