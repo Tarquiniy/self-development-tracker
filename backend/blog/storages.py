@@ -50,7 +50,7 @@ class SupabaseStorage(S3Boto3Storage):
         public_base = self._public_base()
         if public_base and self._is_public_bucket() and self.bucket_name:
             # Прямой public URL (без двойного добавления bucket или upload_to)
-            return f"{public_base}/storage/v1/object/public/{self.bucket_name}/{normalized}"
+            return f"{public_base}/storage/v1/object/public/"
 
         # fallback — стандартное поведение S3Boto3Storage
         return super().url(name, expire)
