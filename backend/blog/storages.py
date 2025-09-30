@@ -15,50 +15,33 @@ from storages.backends.s3boto3 import S3Boto3Storage
 
 class SupabaseStorage(S3Boto3Storage):
     """
-    Наследник S3Boto3Storage, который:
-     * использует settings.AWS_STORAGE_BUCKET_NAME как имя бакета;
-     * для публичных бакетов строит URL в формате Supabase public URL;
-     * для приватных бакетов — вызывает родительский метод (обычно presigned URL).
+    Хранилище для Supabase через S3Boto3Storage:
+     * имя бакета берём из settings.AWS_STORAGE_BUCKET_NAME;
+     * если бакет публичный — строим прямой public URL Supabase;
+     * если приватный — используем стандартный presigned URL.
     """
 
-    # bucket_name унаследуется из настроек S3Boto3Storage, но делаем явное значение
     bucket_name = getattr(settings, "AWS_STORAGE_BUCKET_NAME", None)
-
-    # Не навязываем старый ACL, управляем через bucket policy
     default_acl = None
-
-    # Отключим перезапись по умолчанию чтобы сохранить уникальные имена
     file_overwrite = False
-
-    def __init__(self, *args, **kwargs):
-        # У S3Boto3Storage есть множество настроек, оставляем их дефолтными
-        super().__init__(*args, **kwargs)
 
     def _public_base(self) -> Optional[str]:
         """
-        Возвращает базовый URL проекта Supabase (без завершающего слэша),
-        если он указан в settings.SUPABASE_URL.
+        Возвращает базовый URL Supabase (без завершающего /).
         """
         base = getattr(settings, "SUPABASE_URL", None)
-        if not base:
-            return None
-        return base.rstrip("/")
+        return base.rstrip("/") if base else None
 
     def _is_public_bucket(self) -> bool:
         """
-        Флаг: бакет публичный? (по умолчанию True).
-        Можно переопределить в settings: SUPABASE_PUBLIC_BUCKET = False
+        По умолчанию считаем бакет публичным, если явно не указано иное.
         """
         return getattr(settings, "SUPABASE_PUBLIC_BUCKET", True)
 
     def url(self, name: str, expire: Optional[int] = None) -> str:
         """
-        Возвращает URL для объекта:
-        - Если SUPABASE_URL определён и SUPABASE_PUBLIC_BUCKET=True — строим
-          public URL в формате Supabase.
-        - Иначе — делегируем реализации S3Boto3Storage (signed URL / presigned).
+        Возвращает URL для объекта в бакете Supabase.
         """
-        # Нормализуем имя
         if not name:
             return super().url(name, expire)
 
@@ -66,9 +49,8 @@ class SupabaseStorage(S3Boto3Storage):
 
         public_base = self._public_base()
         if public_base and self._is_public_bucket() and self.bucket_name:
-            # Формируем публичный URL Supabase Storage
-            # Пример: https://<project>.supabase.co/storage/v1/object/public/<bucket>/<path>
+            # Прямой public URL (без двойного добавления bucket или upload_to)
             return f"{public_base}/storage/v1/object/public/{self.bucket_name}/{normalized}"
 
-        # fallback на стандартный сервис (вернёт presigned URL, если настроено)
+        # fallback — стандартное поведение S3Boto3Storage
         return super().url(name, expire)

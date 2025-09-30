@@ -19,8 +19,8 @@ def build_media_url(att):
 
 # ---------- Helper: сериализация
 def serialize_attachment(att):
-    file_url = build_media_url(att)
-    file_name = os.path.basename(att.file.name) if att.file else ""
+    file_url = f"{settings.MEDIA_URL}{att.file.name}" if att.file else ''
+    file_name = os.path.basename(att.file.name) if att.file else ''
     return {
         "id": att.id,
         "title": att.title,
