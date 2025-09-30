@@ -1,108 +1,162 @@
-{# backend/templates/admin/blog/post/change_form.html #}
+{# backend/templates/admin/blog/post/change_form.html - REPLACE ENTIRE FILE #}
 {% extends "admin/change_form.html" %}
 {% load static i18n %}
 
-{% block extrastyle %}
-<link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
-<link rel="stylesheet" href="{% static 'admin/admin-post-form.css' %}">
+{# Подключаем наши стили/скрипты через стандартные блоки админки. #}
+{% block extrahead %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
 {% endblock %}
 
 {% block content %}
-<form method="post" enctype="multipart/form-data" id="post-edit-form" novalidate>
-  {% csrf_token %}
-  <div class="post-edit-page">
-    <div class="post-edit-grid">
-      <section class="post-main card">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-          <div style="flex:1">
-            {{ adminform.form.title.errors }}
-            {{ adminform.form.title }}
-          </div>
+    {{ block.super }}
+{% endblock %}
 
-          <div style="display:flex;gap:8px">
-            <button class="button" type="submit" name="_save">Сохранить</button>
-            <button class="button button-secondary" id="preview-button" type="button">Предпросмотр</button>
-            <button class="button button-primary" type="submit" name="_publish">Опубликовать</button>
-          </div>
-        </div>
+{# вставляем безопасный JS внизу страницы (после загрузки админ-формы) #}
+{% block footer_extra %}
+    {{ block.super }}
+    <script>
+    (function () {
+        'use strict';
 
-        <div style="display:flex;gap:18px;align-items:flex-start">
-          <div style="flex:1;display:flex;flex-direction:column;gap:12px">
-            <div class="card">
-              <label class="field-label">Краткое описание</label>
-              {{ adminform.form.excerpt }}
-            </div>
+        // Защита от ReferenceError 'grp is not defined' — если где-то на странице используется grp.
+        if (typeof grp === 'undefined') {
+            window.grp = null;
+        }
 
-            <div class="card">
-              <label class="field-label">Содержимое</label>
-              {{ adminform.form.content }}
-            </div>
-          </div>
+        // Текущий post id — null если создаём новый объект (add view)
+        var CURRENT_POST_ID = {% if object %}{{ object.id }}{% else %}null{% endif %};
+        window.ADMIN_CURRENT_POST_ID = CURRENT_POST_ID;
 
-          <aside class="post-sidebar">
-            <div class="card">
-              <label class="field-label">Featured image</label>
-              <div id="featured-preview" class="featured-preview">
-                {% if adminform.form.featured_image.value %}
-                  <img id="featured-preview-img" src="{{ adminform.form.featured_image.value }}" alt="featured" />
-                {% else %}
-                  <div class="featured-placeholder">Нет изображения</div>
-                {% endif %}
-              </div>
-              <div style="margin-top:8px">
-                {{ adminform.form.featured_image }}
-                <div style="display:flex;gap:8px;margin-top:8px">
-                  <button class="small-btn" type="button" id="open-media-btn">Открыть медиабиблиотеку</button>
-                  <button class="small-btn" type="button" id="clear-featured-btn">Очистить</button>
-                </div>
-              </div>
-            </div>
+        // Вспомогательная функция: получить CSRF-token из cookie (Django default)
+        function getCsrf() {
+            var m = document.cookie.match(/(^|;)\\s*csrftoken=([^;]+)/);
+            return m ? decodeURIComponent(m[2]) : '';
+        }
 
-            <div class="card">
-              <label class="field-label">Статус</label>
-              {{ adminform.form.status }}
-            </div>
+        // Отправка запроса привязки attachment -> post
+        function attachToPost(attachmentId, postId) {
+            if (!attachmentId) return Promise.resolve(null);
+            if (!postId) return Promise.resolve(null);
 
-            <div class="card">
-              <label class="field-label">Автор</label>
-              {{ adminform.form.author }}
-            </div>
+            return fetch('/api/blog/media/attach/', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrf()
+                },
+                body: JSON.stringify({
+                    attachment_id: Number(attachmentId),
+                    post_id: Number(postId)
+                })
+            }).then(function (r) {
+                if (!r.ok) return r.json().catch(function(){return {success:false, status:r.status};});
+                return r.json();
+            }).catch(function (err) {
+                console.error('attachToPost network error', err);
+                return { success: false, message: 'network error' };
+            });
+        }
 
-            <div class="card">
-              <label class="field-label">Категории</label>
-              {{ adminform.form.categories }}
-            </div>
+        // Обработчик сообщений от медиатеки
+        window.addEventListener('message', function (ev) {
+            try {
+                var data = ev.data;
+                if (!data || data.source !== 'media-library' || data.action !== 'select') {
+                    return;
+                }
+                var att = data.attachment;
+                if (!att) return;
 
-            <div class="card">
-              <label class="field-label">Теги</label>
-              {{ adminform.form.tags }}
-            </div>
-          </aside>
-        </div>
-      </section>
+                // Если есть поле featured_image — заполняем его
+                try {
+                    var featuredInput = document.querySelector('input[name="featured_image"]');
+                    if (featuredInput) {
+                        featuredInput.value = att.url || '';
+                        // генерируем событие change (некоторые виджеты могут слушать)
+                        var evt;
+                        try { evt = new Event('change', { bubbles: true }); } catch(e) { evt = document.createEvent('HTMLEvents'); evt.initEvent('change', true, false); }
+                        featuredInput.dispatchEvent(evt);
+                    }
+                } catch (e) {
+                    console.warn('Error setting featured_image value', e);
+                }
 
-      <section class="post-preview card" id="post-preview">
-        <div class="preview-inner">
-          <div class="preview-header" style="display:flex;gap:12px;align-items:center">
-            <div class="preview-thumb" id="preview-thumb"></div>
-            <div>
-              <h2 id="preview-title">Заголовок поста</h2>
-              <div id="preview-excerpt">Краткое описание появится здесь</div>
-              <div id="preview-reading" style="color:#6b7280;margin-top:6px">~1 мин чтения</div>
-            </div>
-          </div>
-          <div id="preview-body" style="margin-top:12px;color:#111">Здесь будет отрывок содержимого</div>
-          <div style="margin-top:12px"><a id="preview-link" class="button button-secondary" target="_blank">Открыть на сайте</a></div>
-        </div>
-      </section>
-    </div>
-  </div>
+                // Обновляем превью, если такой контейнер есть в шаблоне
+                try {
+                    var preview = document.getElementById('featured-image-preview');
+                    if (preview && att.url) {
+                        preview.innerHTML = '<img src="' + att.url + '" alt="" style="max-width:100%;height:auto;object-fit:cover;border-radius:6px;">';
+                    }
+                } catch (e) { /* ignore */ }
 
-  {# Hidden admin inputs (required) #}
-  {% for hidden in adminform.hidden_fields %}
-    {{ hidden }}
-  {% endfor %}
-</form>
+                // Если у записи уже есть id -> прикрепляем немедленно
+                if (CURRENT_POST_ID) {
+                    attachToPost(att.id, CURRENT_POST_ID).then(function (resp) {
+                        if (resp && resp.success) {
+                            console.log('Attachment attached immediately', resp);
+                        } else {
+                            console.warn('Immediate attach failed', resp);
+                        }
+                    });
+                } else {
+                    // Если мы создаём новый пост — сохраняем в localStorage для автопривязки после сохранения поста
+                    try {
+                        localStorage.setItem('pending_attachment_id', String(att.id));
+                        if (att.url) localStorage.setItem('pending_attachment_url', att.url);
+                        // дополнительный маркер для debug
+                        localStorage.setItem('pending_attachment_saved_at', String(Date.now()));
+                        console.log('Saved pending attachment to localStorage', att.id);
+                    } catch (e) {
+                        console.warn('localStorage not available', e);
+                    }
+                }
+            } catch (err) {
+                console.error('media-library message handler error', err);
+            }
+        }, false);
 
-<script src="{% static 'admin/admin-post-form.js' %}"></script>
+        // При загрузке страницы: если у нас есть pending_attachment и текущий post id - выполнить привязку
+        document.addEventListener('DOMContentLoaded', function () {
+            try {
+                var pending = null;
+                try { pending = localStorage.getItem('pending_attachment_id'); } catch(e){ pending = null; }
+                var pendingUrl = null;
+                try { pendingUrl = localStorage.getItem('pending_attachment_url'); } catch(e){ pendingUrl = null; }
+                if (pending && CURRENT_POST_ID) {
+                    // привязываем и очищаем маркеры
+                    attachToPost(Number(pending), Number(CURRENT_POST_ID)).then(function (resp) {
+                        if (resp && resp.success) {
+                            console.log('Pending attachment attached after save', resp);
+                            try { localStorage.removeItem('pending_attachment_id'); localStorage.removeItem('pending_attachment_url'); localStorage.removeItem('pending_attachment_saved_at'); } catch(e){}
+                        } else {
+                            console.warn('Failed to attach pending attachment', resp);
+                        }
+                    });
+                    // установим значение featured_image если нужно
+                    if (pendingUrl) {
+                        var featuredInput = document.querySelector('input[name="featured_image"]');
+                        if (featuredInput) featuredInput.value = pendingUrl;
+                    }
+                }
+            } catch (e) {
+                console.error('post-load pending attach handler error', e);
+            }
+        });
+
+        // Защита: при выгрузке страницы удаляем устаревшие маркеры старше 10 минут
+        (function cleanupOldPending() {
+            try {
+                var ts = localStorage.getItem('pending_attachment_saved_at');
+                if (!ts) return;
+                var age = Date.now() - Number(ts || 0);
+                if (age > 1000 * 60 * 10) { // 10 минут
+                    try { localStorage.removeItem('pending_attachment_id'); localStorage.removeItem('pending_attachment_url'); localStorage.removeItem('pending_attachment_saved_at'); } catch (e) {}
+                }
+            } catch (e) {}
+        })();
+
+    })();
+    </script>
 {% endblock %}
