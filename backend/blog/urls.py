@@ -15,7 +15,8 @@ from .views import (
     media_list,
     media_upload,
     media_delete,
-    media_proxy,  # <- new
+    media_proxy,        # <- existing
+    media_attach_to_post,  # <- new: attach/unlink endpoint
 )
 
 app_name = 'blog'
@@ -48,8 +49,10 @@ urlpatterns = [
     # POST /api/blog/media/upload/                     -> media_upload (multipart/form-data)
     # POST /api/blog/media/delete/                     -> media_delete (JSON { ids: [...] })
     # GET  /api/blog/media/proxy/<pk>/                 -> media_proxy (streams file via Django)
+    # POST /api/blog/media/attach/                     -> media_attach_to_post (attach/unlink)
     path('media/list/', media_list, name='media-list'),
     path('media/upload/', media_upload, name='media-upload'),
     path('media/delete/', media_delete, name='media-delete'),
     path('media/proxy/<int:pk>/', media_proxy, name='media-proxy'),
+    path('media/attach/', media_attach_to_post, name='media-attach'),
 ]

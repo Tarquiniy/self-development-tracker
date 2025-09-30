@@ -3,10 +3,12 @@ import json
 import os
 import logging
 import mimetypes
+
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny, IsAdminUser
 from rest_framework.response import Response
+
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.db import transaction
@@ -34,7 +36,6 @@ logger = logging.getLogger(__name__)
 
 
 class PostViewSet(viewsets.ModelViewSet):
-    # (ваша существующая реализация — оставил без изменений)
     queryset = Post.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -97,7 +98,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         serializer.save(user=user)
 
 
-# Reactions endpoints (оставил без изменений)
+# Reactions endpoints
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def reaction_detail(request):
@@ -182,7 +183,7 @@ def dashboard_stats(request):
 
 
 # ---------------------------
-# Media Library view + API (устойчивый к ошибкам)
+# Media Library view + API
 # ---------------------------
 
 @method_decorator(staff_member_required(login_url='/admin/login/'), name='dispatch')
@@ -190,30 +191,25 @@ class MediaLibraryView(TemplateView):
     template_name = 'admin/media_library.html'
 
     def dispatch(self, request, *args, **kwargs):
-        # Перехватываем исключения, логируем и показываем аккуратную страницу ошибки
         try:
             return super().dispatch(request, *args, **kwargs)
         except Exception as e:
             logger.exception("MediaLibraryView dispatch error")
-            # В production не выводим полный трейс в шаблон — показываем аккуратное сообщение.
             return render(request, 'admin/media_library_error.html', {'error': str(e)}, status=500)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         attachments = []
         try:
-            # Безопасно формируем queryset и поля
             qs = PostAttachment.objects.all().order_by('-uploaded_at')[:1000]
             for a in qs:
                 try:
                     file_field = getattr(a, 'file', None)
                     url = ''
                     if file_field:
-                        # безопасный доступ к storage url
                         try:
                             url = file_field.url
                         except Exception:
-                            # возможно файл отсутствует в storage
                             url = ''
                     title = a.title if getattr(a, 'title', None) else (os.path.basename(file_field.name) if file_field and getattr(file_field, 'name', None) else '')
                     filename = os.path.basename(file_field.name) if file_field and getattr(file_field, 'name', None) else ''
@@ -231,7 +227,10 @@ class MediaLibraryView(TemplateView):
                     continue
         except Exception:
             logger.exception("Error fetching PostAttachment queryset")
+
         ctx['attachments'] = attachments
+        # Support passing current post id to media library via ?post_id=123
+        ctx['current_post_id'] = self.request.GET.get('post_id') or None
         return ctx
 
 
@@ -253,7 +252,6 @@ def media_list(request):
         start = (page - 1) * page_size
         end = start + page_size
         items = []
-        # Use proxy by default to avoid ORB/CORS issues in browser (can be toggled via settings)
         use_proxy = bool(getattr(settings, 'SUPABASE_USE_PROXY', True))
         for a in qs[start:end]:
             file_field = getattr(a, 'file', None)
@@ -261,7 +259,6 @@ def media_list(request):
             filename = ''
             if file_field:
                 try:
-                    # Prefer proxy URL when enabled (served from our domain)
                     if use_proxy:
                         try:
                             proxy_path = reverse('blog:media-proxy', args=[a.id])
@@ -342,29 +339,83 @@ def media_delete(request):
 @staff_member_required
 @require_GET
 def media_proxy(request, pk):
-    """
-    Serve attachment content through Django so the browser loads the asset from
-    the same origin (avoids ORB/CORS/opaque-response blocking).
-    """
     att = get_object_or_404(PostAttachment, pk=pk)
     file_field = getattr(att, 'file', None)
     if not file_field:
         raise Http404("Attachment has no file")
 
-    # Try to open the file; if storage is remote (Supabase) S3Boto3Storage.file.open works
     try:
         file_obj = file_field.open('rb')
     except Exception:
         logger.exception("media_proxy: failed to open file for attachment id=%s", pk)
         raise Http404("File not available")
 
-    # Guess content type from extension
     mime_type, _ = mimetypes.guess_type(file_field.name or '')
     content_type = mime_type or 'application/octet-stream'
 
     response = FileResponse(file_obj, filename=os.path.basename(file_field.name), content_type=content_type)
     response['Content-Disposition'] = f'inline; filename=\"{os.path.basename(file_field.name)}\"'
-    # Allow cross-origin embedding (if needed); since we serve from same origin admin UI should be fine.
     response['Access-Control-Allow-Origin'] = '*'
     response['Cache-Control'] = 'public, max-age=31536000'
     return response
+
+
+# ----- NEW: attach an existing PostAttachment to a Post -----
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def media_attach_to_post(request):
+    """
+    POST JSON: { "attachment_id": 123, "post_id": 456 }  (post_id may be null to unlink)
+    Returns: { "success": True, "attachment": { ... } }
+    """
+    try:
+        data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8') or '{}')
+    except Exception:
+        data = {}
+
+    aid = data.get('attachment_id')
+    pid = data.get('post_id', None)
+
+    if not aid:
+        return Response({'success': False, 'message': 'attachment_id required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        att = PostAttachment.objects.get(pk=int(aid))
+    except PostAttachment.DoesNotExist:
+        return Response({'success': False, 'message': 'Attachment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if pid is None or pid == '' or str(pid).lower() == 'null':
+        att.post = None
+    else:
+        try:
+            post = Post.objects.get(pk=int(pid))
+        except Post.DoesNotExist:
+            return Response({'success': False, 'message': 'Post not found'}, status=status.HTTP_400_BAD_REQUEST)
+        att.post = post
+
+    try:
+        att.save()
+    except Exception as e:
+        logger.exception("media_attach_to_post save error")
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # simple serializer
+    file_field = getattr(att, 'file', None)
+    file_url = ''
+    filename = ''
+    if file_field:
+        try:
+            file_url = file_field.url
+        except Exception:
+            file_url = ''
+        filename = os.path.basename(file_field.name) if getattr(file_field, 'name', None) else ''
+
+    attachment_data = {
+        'id': att.id,
+        'title': att.title or filename,
+        'filename': filename,
+        'url': request.build_absolute_uri(reverse('blog:media-proxy', args=[att.id])) if bool(getattr(settings, 'SUPABASE_USE_PROXY', True)) else file_url,
+        'uploaded_at': att.uploaded_at.isoformat() if getattr(att, 'uploaded_at', None) else None,
+        'post_id': att.post.id if getattr(att, 'post', None) else None,
+    }
+    return Response({'success': True, 'attachment': attachment_data})
