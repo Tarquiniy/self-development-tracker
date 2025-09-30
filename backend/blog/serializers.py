@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Post, Category, Tag, Comment, PostReaction
+from .models import Post, Category, Tag, Comment, PostReaction, PostAttachment
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -44,30 +44,61 @@ class PostListSerializer(serializers.ModelSerializer):
 
     def get_url(self, obj):
         return obj.get_absolute_url()
+    
+class PostAttachmentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PostAttachment
+        fields = ["id", "title", "url", "uploaded_at"]
+
+    def get_url(self, obj):
+        try:
+            return obj.file.url  # ✅ вернёт прямой Supabase public URL
+        except Exception:
+            return None
 
 
-class PostDetailSerializer(serializers.ModelSerializer):
-    author = serializers.StringRelatedField(read_only=True)
-    categories = CategorySerializer(many=True, read_only=True)
-    tags = TagSerializer(many=True, read_only=True)
-    comments = CommentSerializer(many=True, read_only=True)
-    likes_count = serializers.SerializerMethodField()
+class PostListSerializer(serializers.ModelSerializer):
+    featured_image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
-        fields = (
-            'id', 'title', 'slug', 'excerpt', 'content', 'featured_image',
-            'categories', 'tags', 'author', 'published_at', 'created_at', 'updated_at',
-            'meta_title', 'meta_description', 'og_image', 'status', 'comments', 'likes_count'
-        )
+        fields = ["id", "title", "slug", "excerpt", "published_at", "featured_image_url"]
 
-    def get_likes_count(self, obj):
-        try:
-            reaction = obj.reactions.get()
-            return reaction.likes_count()
-        except PostReaction.DoesNotExist:
-            return 0
+    def get_featured_image_url(self, obj):
+        if obj.featured_image:
+            try:
+                return obj.featured_image.url  # ✅ прямая ссылка
+            except Exception:
+                return None
+        return None
 
+
+class PostDetailSerializer(serializers.ModelSerializer):
+    featured_image_url = serializers.SerializerMethodField()
+    attachments = PostAttachmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Post
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "excerpt",
+            "content",
+            "published_at",
+            "featured_image_url",
+            "attachments",
+        ]
+
+    def get_featured_image_url(self, obj):
+        if obj.featured_image:
+            try:
+                return obj.featured_image.url 
+            except Exception:
+                return None
+        return None
 
 class PostCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
