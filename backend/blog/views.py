@@ -238,6 +238,11 @@ class MediaLibraryView(TemplateView):
 @api_view(['GET'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def media_list(request):
+    """
+    Возвращает список вложений. Для staff-пользователей (админки) возвращаем
+    proxy-URL (чтобы избежать CORS/ORB при fetch/XHR). Для анонимных / фронтенда
+    возвращаем прямой storage URL (Supabase public URL) — чтобы <img src=""> работал.
+    """
     try:
         q = request.GET.get('q', '').strip()
         unattached = request.GET.get('unattached_only') == '1'
@@ -252,24 +257,31 @@ def media_list(request):
         start = (page - 1) * page_size
         end = start + page_size
         items = []
-        use_proxy = bool(getattr(settings, 'SUPABASE_USE_PROXY', True))
+
+        # Настройка поведения: proxy только для staff, иначе прямой URL
+        prefer_proxy_for_staff = bool(getattr(settings, 'SUPABASE_USE_PROXY', True))
         for a in qs[start:end]:
             file_field = getattr(a, 'file', None)
             url = ''
             filename = ''
             if file_field:
                 try:
-                    if use_proxy:
+                    filename = os.path.basename(file_field.name) if getattr(file_field, 'name', None) else ''
+                    # Если текущий пользователь — staff и proxy разрешён — даём proxy
+                    if request.user.is_authenticated and request.user.is_staff and prefer_proxy_for_staff:
                         try:
                             proxy_path = reverse('blog:media-proxy', args=[a.id])
                             url = request.build_absolute_uri(proxy_path)
                         except Exception:
-                            url = ''
+                            url = file_field.url if getattr(file_field, 'url', None) else ''
                     else:
-                        url = file_field.url
+                        # Для публичного фронтенда — возвращаем прямой URL (если доступен)
+                        try:
+                            url = file_field.url
+                        except Exception:
+                            url = ''
                 except Exception:
                     url = ''
-                filename = os.path.basename(file_field.name) if getattr(file_field, 'name', None) else ''
             items.append({
                 'id': getattr(a, 'id', None),
                 'title': a.title or filename,
@@ -282,7 +294,6 @@ def media_list(request):
     except Exception as e:
         logger.exception("media_list error")
         return Response({'results': []})
-
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
@@ -339,26 +350,49 @@ def media_delete(request):
 @staff_member_required
 @require_GET
 def media_proxy(request, pk):
+    """
+    Serve attachment content through Django **only for staff users** (or when forced).
+    For anonymous/public requests we redirect to the storage file URL (public Supabase URL)
+    so public frontend and <img src=""> work without auth and without redirect to login.
+    """
     att = get_object_or_404(PostAttachment, pk=pk)
     file_field = getattr(att, 'file', None)
     if not file_field:
         raise Http404("Attachment has no file")
 
+    # try to get direct storage URL if available
+    direct_url = ''
+    try:
+        direct_url = file_field.url
+    except Exception:
+        direct_url = ''
+
+    # If request is NOT by staff user -> redirect to direct_url (if available)
+    # This prevents redirect-to-login HTML for anonymous <img src> requests.
+    if not (request.user.is_authenticated and request.user.is_staff):
+        if direct_url:
+            return redirect(direct_url)
+        # If direct URL not available, fall through and attempt to stream (may fail)
+        # but do NOT redirect to login — return 404 instead for public callers.
+        raise Http404("File not available")
+
+    # At this point request.user is staff -> stream file from storage (proxy)
     try:
         file_obj = file_field.open('rb')
     except Exception:
         logger.exception("media_proxy: failed to open file for attachment id=%s", pk)
         raise Http404("File not available")
 
+    # Guess content type from extension
     mime_type, _ = mimetypes.guess_type(file_field.name or '')
     content_type = mime_type or 'application/octet-stream'
 
     response = FileResponse(file_obj, filename=os.path.basename(file_field.name), content_type=content_type)
     response['Content-Disposition'] = f'inline; filename=\"{os.path.basename(file_field.name)}\"'
+    # Allow cross-origin embedding (if needed); admin UI served from same origin but keep header
     response['Access-Control-Allow-Origin'] = '*'
     response['Cache-Control'] = 'public, max-age=31536000'
     return response
-
 
 # ----- NEW: attach an existing PostAttachment to a Post -----
 @api_view(['POST'])
