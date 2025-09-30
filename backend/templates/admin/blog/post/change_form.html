@@ -2,42 +2,43 @@
 {% extends "admin/change_form.html" %}
 {% load static i18n %}
 
-{# Подключаем наши стили/скрипты через стандартные блоки админки. #}
+{# Подключаем наши стили поверх стандартных (не ломая default admin) #}
 {% block extrahead %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
 {% endblock %}
 
+{# Содержимое — оставляем стандартное admin change_form #}
 {% block content %}
     {{ block.super }}
 {% endblock %}
 
-{# вставляем безопасный JS внизу страницы (после загрузки админ-формы) #}
+{# Скрипты внизу страницы: обработка медиатеки и кнопка открытия #}
 {% block footer_extra %}
     {{ block.super }}
     <script>
     (function () {
         'use strict';
 
-        // Защита от ReferenceError 'grp is not defined' — если где-то на странице используется grp.
+        // --- Safety: prevent ReferenceError from third-party inline scripts expecting grp ---
         if (typeof grp === 'undefined') {
             window.grp = null;
         }
 
-        // Текущий post id — null если создаём новый объект (add view)
+        // Current post id: null on add view
         var CURRENT_POST_ID = {% if object %}{{ object.id }}{% else %}null{% endif %};
         window.ADMIN_CURRENT_POST_ID = CURRENT_POST_ID;
 
-        // Вспомогательная функция: получить CSRF-token из cookie (Django default)
+        // CSRF helper
         function getCsrf() {
-            var m = document.cookie.match(/(^|;)\\s*csrftoken=([^;]+)/);
+            var m = document.cookie.match(/(^|;)\s*csrftoken=([^;]+)/);
             return m ? decodeURIComponent(m[2]) : '';
         }
 
-        // Отправка запроса привязки attachment -> post
+        // Attach attachment to post via API
         function attachToPost(attachmentId, postId) {
-            if (!attachmentId) return Promise.resolve(null);
-            if (!postId) return Promise.resolve(null);
+            if (!attachmentId) return Promise.resolve({ success: false, message: 'no attachmentId' });
+            if (!postId) return Promise.resolve({ success: false, message: 'no postId' });
 
             return fetch('/api/blog/media/attach/', {
                 method: 'POST',
@@ -51,47 +52,50 @@
                     post_id: Number(postId)
                 })
             }).then(function (r) {
-                if (!r.ok) return r.json().catch(function(){return {success:false, status:r.status};});
-                return r.json();
+                return r.json().catch(function () { return { success: false, status: r.status }; });
             }).catch(function (err) {
                 console.error('attachToPost network error', err);
                 return { success: false, message: 'network error' };
             });
         }
 
-        // Обработчик сообщений от медиатеки
+        // Message handler for postMessage from media library
         window.addEventListener('message', function (ev) {
             try {
                 var data = ev.data;
-                if (!data || data.source !== 'media-library' || data.action !== 'select') {
-                    return;
-                }
+                if (!data || data.source !== 'media-library' || data.action !== 'select') return;
                 var att = data.attachment;
                 if (!att) return;
 
-                // Если есть поле featured_image — заполняем его
+                // Fill featured_image input if present
                 try {
                     var featuredInput = document.querySelector('input[name="featured_image"]');
                     if (featuredInput) {
                         featuredInput.value = att.url || '';
-                        // генерируем событие change (некоторые виджеты могут слушать)
-                        var evt;
-                        try { evt = new Event('change', { bubbles: true }); } catch(e) { evt = document.createEvent('HTMLEvents'); evt.initEvent('change', true, false); }
-                        featuredInput.dispatchEvent(evt);
+                        // dispatch change event
+                        try { featuredInput.dispatchEvent(new Event('change', { bubbles: true })); }
+                        catch (e) { var evt = document.createEvent('HTMLEvents'); evt.initEvent('change', true, false); featuredInput.dispatchEvent(evt); }
                     }
-                } catch (e) {
-                    console.warn('Error setting featured_image value', e);
-                }
+                } catch (e) { console.warn('Error setting featured_image', e); }
 
-                // Обновляем превью, если такой контейнер есть в шаблоне
+                // Update preview area if present
                 try {
                     var preview = document.getElementById('featured-image-preview');
-                    if (preview && att.url) {
-                        preview.innerHTML = '<img src="' + att.url + '" alt="" style="max-width:100%;height:auto;object-fit:cover;border-radius:6px;">';
+                    if (preview) {
+                        preview.innerHTML = '';
+                        if (att.url) {
+                            var img = document.createElement('img');
+                            img.src = att.url;
+                            img.alt = att.title || '';
+                            img.style.maxWidth = '100%';
+                            img.style.borderRadius = '6px';
+                            img.style.display = 'block';
+                            preview.appendChild(img);
+                        }
                     }
                 } catch (e) { /* ignore */ }
 
-                // Если у записи уже есть id -> прикрепляем немедленно
+                // Immediate attach if editing existing post
                 if (CURRENT_POST_ID) {
                     attachToPost(att.id, CURRENT_POST_ID).then(function (resp) {
                         if (resp && resp.success) {
@@ -101,61 +105,117 @@
                         }
                     });
                 } else {
-                    // Если мы создаём новый пост — сохраняем в localStorage для автопривязки после сохранения поста
+                    // Save for later attach after post creation
                     try {
                         localStorage.setItem('pending_attachment_id', String(att.id));
                         if (att.url) localStorage.setItem('pending_attachment_url', att.url);
-                        // дополнительный маркер для debug
                         localStorage.setItem('pending_attachment_saved_at', String(Date.now()));
                         console.log('Saved pending attachment to localStorage', att.id);
-                    } catch (e) {
-                        console.warn('localStorage not available', e);
-                    }
+                    } catch (e) { console.warn('localStorage unavailable', e); }
                 }
             } catch (err) {
                 console.error('media-library message handler error', err);
             }
         }, false);
 
-        // При загрузке страницы: если у нас есть pending_attachment и текущий post id - выполнить привязку
+        // On DOMContentLoaded: if pending attachment exists and now we have a post id -> attach
         document.addEventListener('DOMContentLoaded', function () {
             try {
                 var pending = null;
-                try { pending = localStorage.getItem('pending_attachment_id'); } catch(e){ pending = null; }
+                try { pending = localStorage.getItem('pending_attachment_id'); } catch (e) { pending = null; }
                 var pendingUrl = null;
-                try { pendingUrl = localStorage.getItem('pending_attachment_url'); } catch(e){ pendingUrl = null; }
+                try { pendingUrl = localStorage.getItem('pending_attachment_url'); } catch (e) { pendingUrl = null; }
+
                 if (pending && CURRENT_POST_ID) {
-                    // привязываем и очищаем маркеры
                     attachToPost(Number(pending), Number(CURRENT_POST_ID)).then(function (resp) {
                         if (resp && resp.success) {
                             console.log('Pending attachment attached after save', resp);
-                            try { localStorage.removeItem('pending_attachment_id'); localStorage.removeItem('pending_attachment_url'); localStorage.removeItem('pending_attachment_saved_at'); } catch(e){}
+                            try { localStorage.removeItem('pending_attachment_id'); localStorage.removeItem('pending_attachment_url'); localStorage.removeItem('pending_attachment_saved_at'); } catch (e) {}
                         } else {
                             console.warn('Failed to attach pending attachment', resp);
                         }
                     });
-                    // установим значение featured_image если нужно
+                    // populate featured_image input if present
                     if (pendingUrl) {
                         var featuredInput = document.querySelector('input[name="featured_image"]');
-                        if (featuredInput) featuredInput.value = pendingUrl;
+                        if (featuredInput) {
+                            featuredInput.value = pendingUrl;
+                            try { featuredInput.dispatchEvent(new Event('change', { bubbles: true })); }
+                            catch (e) { var evt = document.createEvent('HTMLEvents'); evt.initEvent('change', true, false); featuredInput.dispatchEvent(evt); }
+                        }
                     }
                 }
             } catch (e) {
                 console.error('post-load pending attach handler error', e);
             }
-        });
 
-        // Защита: при выгрузке страницы удаляем устаревшие маркеры старше 10 минут
-        (function cleanupOldPending() {
+            // Insert "Open media library" button next to featured_image input
+            try {
+                var input = document.querySelector('input[name="featured_image"]');
+                if (input && !document.getElementById('open-media-btn')) {
+                    // Create button
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.id = 'open-media-btn';
+                    btn.textContent = 'Открыть медиатеку';
+                    btn.className = 'small-btn';
+                    btn.style.marginLeft = '8px';
+
+                    // Try to place the button next to the input (best effort)
+                    // Input may be inside <div class="form-row"> or similar
+                    var wrapper = input.parentNode;
+                    // If the input is inside label, place after the label
+                    if (wrapper && wrapper.parentNode) {
+                        // Insert button after input
+                        if (input.nextSibling) wrapper.insertBefore(btn, input.nextSibling);
+                        else wrapper.appendChild(btn);
+                    } else {
+                        input.parentNode.appendChild(btn);
+                    }
+
+                    // Preview container
+                    var preview = document.createElement('div');
+                    preview.id = 'featured-image-preview';
+                    preview.style.marginTop = '8px';
+                    preview.style.maxWidth = '360px';
+                    preview.style.display = 'block';
+                    if (input.value) {
+                        var img = document.createElement('img');
+                        img.src = input.value;
+                        img.style.maxWidth = '100%';
+                        img.style.borderRadius = '6px';
+                        preview.appendChild(img);
+                    }
+                    // Insert preview after wrapper
+                    if (wrapper && wrapper.parentNode) {
+                        if (wrapper.nextSibling) wrapper.parentNode.insertBefore(preview, wrapper.nextSibling);
+                        else wrapper.parentNode.appendChild(preview);
+                    }
+
+                    // Click handler: open media library in new window with optional post_id
+                    btn.addEventListener('click', function () {
+                        var postId = window.ADMIN_CURRENT_POST_ID || null;
+                        var url = '/admin/media-library/';
+                        if (postId) url += '?post_id=' + encodeURIComponent(postId);
+                        // open as popup so selected file can postMessage back
+                        window.open(url, '_blank', 'width=1100,height=700');
+                    });
+                }
+            } catch (e) {
+                console.warn('Failed to inject Open media button', e);
+            }
+
+            // Cleanup old pending markers older than 10 minutes
             try {
                 var ts = localStorage.getItem('pending_attachment_saved_at');
-                if (!ts) return;
-                var age = Date.now() - Number(ts || 0);
-                if (age > 1000 * 60 * 10) { // 10 минут
-                    try { localStorage.removeItem('pending_attachment_id'); localStorage.removeItem('pending_attachment_url'); localStorage.removeItem('pending_attachment_saved_at'); } catch (e) {}
+                if (ts) {
+                    var age = Date.now() - Number(ts || 0);
+                    if (age > 1000 * 60 * 10) {
+                        try { localStorage.removeItem('pending_attachment_id'); localStorage.removeItem('pending_attachment_url'); localStorage.removeItem('pending_attachment_saved_at'); } catch (e) {}
+                    }
                 }
-            } catch (e) {}
-        })();
+            } catch (e) { /* ignore */ }
+        });
 
     })();
     </script>
