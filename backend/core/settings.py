@@ -13,6 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ========== SUPABASE / S3 переменные (определяем ДО того, как они используются) ==========
 # Читаем из окружения — безопасные значения по умолчанию (пустая строка / None)
+SUPABASE_USE_PROXY = True
 SUPABASE_URL = env("SUPABASE_URL", "").strip() or None
 SUPABASE_KEY = env("SUPABASE_KEY", "").strip() or None
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "post_attachments")  # имя бакета, например media
@@ -23,10 +24,10 @@ AWS_ACCESS_KEY_ID = env("SUPABASE_S3_KEY", "").strip() or None
 AWS_SECRET_ACCESS_KEY = env("SUPABASE_S3_SECRET", "").strip() or None
 
 # Имя бакета (bucket)
-AWS_STORAGE_BUCKET_NAME = env("SUPABASE_BUCKET", "post_attachments").strip() or None
+AWS_STORAGE_BUCKET_NAME = "post_attachments"
 
 # Флаг: бакет публичный? (True по умолчанию). Можно переопределить через env:
-SUPABASE_PUBLIC_BUCKET = env("SUPABASE_PUBLIC_BUCKET", "1") in ("1", "true", "True")
+SUPABASE_PUBLIC_BUCKET = True
 
 # Конфигурация endpoint для S3 (подставьте реальный endpoint, если Supabase дал S3-совместимую ссылку)
 # Чаще всего можно использовать: https://<project>.supabase.co/storage/v1
@@ -314,7 +315,7 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
 
 # ========== DEFAULT FILE STORAGE (использует blog/storages.SupabaseStorage) ==========
-DEFAULT_FILE_STORAGE = env('DEFAULT_FILE_STORAGE', 'blog.storages.SupabaseStorage')
+DEFAULT_FILE_STORAGE = "backend.blog.storages.SupabaseStorage"
 
 # ========== Email ==========
 if not DEBUG:

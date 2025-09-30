@@ -2,6 +2,7 @@
 import json
 import os
 import logging
+import mimetypes
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny, IsAdminUser
@@ -11,8 +12,8 @@ from django.utils import timezone
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import models as dj_models
-from django.http import JsonResponse
-from django.views.decorators.http import require_POST
+from django.http import JsonResponse, FileResponse, Http404
+from django.views.decorators.http import require_POST, require_GET
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Count
@@ -21,6 +22,7 @@ from django.utils.decorators import method_decorator
 from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
 from rest_framework.parsers import MultiPartParser, FormParser
+from django.urls import reverse
 
 from .models import Post, Category, PostView, Tag, Comment, PostReaction, PostAttachment
 from .serializers import (
@@ -225,7 +227,6 @@ class MediaLibraryView(TemplateView):
                         'post_id': a.post.id if getattr(a, 'post', None) else None,
                     })
                 except Exception:
-                    # безопасно продолжаем — не даём одному объекту сломать страницу
                     logger.exception("Error serializing PostAttachment id=%s", getattr(a, 'id', None))
                     continue
         except Exception:
@@ -252,13 +253,23 @@ def media_list(request):
         start = (page - 1) * page_size
         end = start + page_size
         items = []
+        # Use proxy by default to avoid ORB/CORS issues in browser (can be toggled via settings)
+        use_proxy = bool(getattr(settings, 'SUPABASE_USE_PROXY', True))
         for a in qs[start:end]:
             file_field = getattr(a, 'file', None)
             url = ''
             filename = ''
             if file_field:
                 try:
-                    url = file_field.url
+                    # Prefer proxy URL when enabled (served from our domain)
+                    if use_proxy:
+                        try:
+                            proxy_path = reverse('blog:media-proxy', args=[a.id])
+                            url = request.build_absolute_uri(proxy_path)
+                        except Exception:
+                            url = ''
+                    else:
+                        url = file_field.url
                 except Exception:
                     url = ''
                 filename = os.path.basename(file_field.name) if getattr(file_field, 'name', None) else ''
@@ -325,3 +336,35 @@ def media_delete(request):
     except Exception as e:
         logger.exception("media_delete error")
         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ----- NEW: media proxy endpoint to avoid ORB/CORS problems in browser -----
+@staff_member_required
+@require_GET
+def media_proxy(request, pk):
+    """
+    Serve attachment content through Django so the browser loads the asset from
+    the same origin (avoids ORB/CORS/opaque-response blocking).
+    """
+    att = get_object_or_404(PostAttachment, pk=pk)
+    file_field = getattr(att, 'file', None)
+    if not file_field:
+        raise Http404("Attachment has no file")
+
+    # Try to open the file; if storage is remote (Supabase) S3Boto3Storage.file.open works
+    try:
+        file_obj = file_field.open('rb')
+    except Exception:
+        logger.exception("media_proxy: failed to open file for attachment id=%s", pk)
+        raise Http404("File not available")
+
+    # Guess content type from extension
+    mime_type, _ = mimetypes.guess_type(file_field.name or '')
+    content_type = mime_type or 'application/octet-stream'
+
+    response = FileResponse(file_obj, filename=os.path.basename(file_field.name), content_type=content_type)
+    response['Content-Disposition'] = f'inline; filename=\"{os.path.basename(file_field.name)}\"'
+    # Allow cross-origin embedding (if needed); since we serve from same origin admin UI should be fine.
+    response['Access-Control-Allow-Origin'] = '*'
+    response['Cache-Control'] = 'public, max-age=31536000'
+    return response

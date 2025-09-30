@@ -15,6 +15,7 @@ from .views import (
     media_list,
     media_upload,
     media_delete,
+    media_proxy,  # <- new
 )
 
 app_name = 'blog'
@@ -46,7 +47,9 @@ urlpatterns = [
     # GET  /api/blog/media/list/?q=...&page=...        -> media_list
     # POST /api/blog/media/upload/                     -> media_upload (multipart/form-data)
     # POST /api/blog/media/delete/                     -> media_delete (JSON { ids: [...] })
+    # GET  /api/blog/media/proxy/<pk>/                 -> media_proxy (streams file via Django)
     path('media/list/', media_list, name='media-list'),
     path('media/upload/', media_upload, name='media-upload'),
     path('media/delete/', media_delete, name='media-delete'),
+    path('media/proxy/<int:pk>/', media_proxy, name='media-proxy'),
 ]

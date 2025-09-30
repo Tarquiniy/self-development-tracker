@@ -113,5 +113,4 @@ class SupabaseStorage(S3Boto3Storage):
             logger.exception("SupabaseStorage.url: fallback failed for %s: %s", name, e)
             return f"{normalized}"
 
-
 __all__ = ("SupabaseStorage",)
