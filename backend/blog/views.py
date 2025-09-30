@@ -240,9 +240,9 @@ class MediaLibraryView(TemplateView):
 @permission_classes([IsAuthenticatedOrReadOnly])
 def media_list(request):
     """
-    Возвращает список вложений. Для staff-пользователей (админки) возвращаем
-    proxy-URL (чтобы избежать CORS/ORB при fetch/XHR). Для анонимных / фронтенда
-    возвращаем прямой storage URL (Supabase public URL) — чтобы <img src=""> работал.
+    Возвращает список вложений. Для staff-пользователей возвращаем proxy-URL
+    (чтобы избежать CORS/ORB при fetch/XHR). Для анонимных/фронтенда возвращаем
+    прямой storage URL (Supabase public URL).
     """
     try:
         q = request.GET.get('q', '').strip()
@@ -259,8 +259,8 @@ def media_list(request):
         end = start + page_size
         items = []
 
-        # Настройка поведения: proxy только для staff, иначе прямой URL
         prefer_proxy_for_staff = bool(getattr(settings, 'SUPABASE_USE_PROXY', True))
+
         for a in qs[start:end]:
             file_field = getattr(a, 'file', None)
             url = ''
@@ -268,15 +268,15 @@ def media_list(request):
             if file_field:
                 try:
                     filename = os.path.basename(file_field.name) if getattr(file_field, 'name', None) else ''
-                    # Если текущий пользователь — staff и proxy разрешён — даём proxy
                     if request.user.is_authenticated and request.user.is_staff and prefer_proxy_for_staff:
+                        # staff -> proxy URL (stream through Django)
                         try:
                             proxy_path = reverse('blog:media-proxy', args=[a.id])
                             url = request.build_absolute_uri(proxy_path)
                         except Exception:
                             url = file_field.url if getattr(file_field, 'url', None) else ''
                     else:
-                        # Для публичного фронтенда — возвращаем прямой URL (если доступен)
+                        # public -> direct storage URL
                         try:
                             url = file_field.url
                         except Exception:
@@ -352,45 +352,49 @@ def media_delete(request):
 @require_GET
 def media_proxy(request, pk):
     """
-    Serve attachment content through Django **only for staff users** (or when forced).
-    For anonymous/public requests we redirect to the storage file URL (public Supabase URL)
-    so public frontend and <img src=""> work without auth and without redirect to login.
+    Serve file to staff via streaming proxy. For anonymous/public requests redirect to the
+    storage URL (so <img src> works and doesn't get HTML login page).
     """
     att = get_object_or_404(PostAttachment, pk=pk)
     file_field = getattr(att, 'file', None)
-    if not file_field:
+    if not file_field or not getattr(file_field, 'name', None):
+        logger.warning("media_proxy: attachment %s has no file", pk)
         raise Http404("Attachment has no file")
 
-    # try to get direct storage URL if available
+    # Try to obtain direct storage URL (this should be public for images)
     direct_url = ''
     try:
         direct_url = file_field.url
-    except Exception:
+    except Exception as e:
+        logger.exception("media_proxy: error getting file.url for %s: %s", pk, e)
         direct_url = ''
 
-    # If request is NOT by staff user -> redirect to direct_url (if available)
-    # This prevents redirect-to-login HTML for anonymous <img src> requests.
+    # If caller is not staff — redirect to direct_url (so browser fetches image directly)
     if not (request.user.is_authenticated and request.user.is_staff):
         if direct_url:
+            logger.debug("media_proxy: redirecting anonymous to direct_url for %s", pk)
             return redirect(direct_url)
-        # If direct URL not available, fall through and attempt to stream (may fail)
-        # but do NOT redirect to login — return 404 instead for public callers.
+        # no direct url available => respond 404 (do not redirect to login page)
+        logger.warning("media_proxy: no direct_url for anonymous request for %s", pk)
         raise Http404("File not available")
 
-    # At this point request.user is staff -> stream file from storage (proxy)
+    # At this point caller is staff -> attempt to stream file via storage
     try:
         file_obj = file_field.open('rb')
-    except Exception:
-        logger.exception("media_proxy: failed to open file for attachment id=%s", pk)
+    except Exception as e:
+        logger.exception("media_proxy: failed to open file for attachment id=%s: %s", pk, e)
+        # fallback: if direct_url exists, redirect staff to it instead of 404
+        if direct_url:
+            logger.debug("media_proxy: fallback redirect to direct_url for staff for %s", pk)
+            return redirect(direct_url)
         raise Http404("File not available")
 
-    # Guess content type from extension
+    # stream
     mime_type, _ = mimetypes.guess_type(file_field.name or '')
     content_type = mime_type or 'application/octet-stream'
 
     response = FileResponse(file_obj, filename=os.path.basename(file_field.name), content_type=content_type)
     response['Content-Disposition'] = f'inline; filename=\"{os.path.basename(file_field.name)}\"'
-    # Allow cross-origin embedding (if needed); admin UI served from same origin but keep header
     response['Access-Control-Allow-Origin'] = '*'
     response['Cache-Control'] = 'public, max-age=31536000'
     return response
