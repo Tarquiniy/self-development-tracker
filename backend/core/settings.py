@@ -6,9 +6,46 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_DIR = Path(__file__).resolve().parent.parent 
+# Удобный сокращённый доступ к env
+env = os.environ.get
 
-MEDIA_URL = "/media/"
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# ========== SUPABASE / S3 переменные (определяем ДО того, как они используются) ==========
+# Читаем из окружения — безопасные значения по умолчанию (пустая строка / None)
+SUPABASE_URL = env("SUPABASE_URL", "").strip() or None
+SUPABASE_KEY = env("SUPABASE_KEY", "").strip() or None
+SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", "").strip() or None
+
+# S3-совместимые ключи (Supabase может выдавать S3-ключи)
+AWS_ACCESS_KEY_ID = env("SUPABASE_S3_KEY", "").strip() or None
+AWS_SECRET_ACCESS_KEY = env("SUPABASE_S3_SECRET", "").strip() or None
+
+# Имя бакета (bucket)
+AWS_STORAGE_BUCKET_NAME = env("SUPABASE_BUCKET", "").strip() or None
+
+# Флаг: бакет публичный? (True по умолчанию). Можно переопределить через env:
+SUPABASE_PUBLIC_BUCKET = env("SUPABASE_PUBLIC_BUCKET", "1") in ("1", "true", "True")
+
+# Конфигурация endpoint для S3 (подставьте реальный endpoint, если Supabase дал S3-совместимую ссылку)
+# Чаще всего можно использовать: https://<project>.supabase.co/storage/v1
+AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL", SUPABASE_URL.rstrip("/") + "/storage/v1" if SUPABASE_URL else "")  # S3 endpoint
+AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', 'us-east-1')
+AWS_S3_SIGNATURE_VERSION = 's3v4'
+AWS_S3_ADDRESSING_STYLE = "path"
+AWS_DEFAULT_ACL = None  # управляем ACL через bucket policy на стороне Supabase
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=86400, public',
+}
+
+# ========== MEDIA (MEDIA_URL) ==========
+# Формируем MEDIA_URL только если есть SUPABASE_URL и имя бакета; иначе — локальный fallback.
+if SUPABASE_URL and AWS_STORAGE_BUCKET_NAME:
+    MEDIA_URL = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/{AWS_STORAGE_BUCKET_NAME}/"
+else:
+    # fallback — локальная директория (для разработки)
+    MEDIA_URL = os.environ.get('MEDIA_URL', '/media/')
+
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 # ========== НАСТРОЙКИ ADMIN И GRAPPELLI ==========
@@ -47,8 +84,8 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") + [
     "sdtracker.vercel.app",
     ".vercel.app",
     ".onrender.com",
-    "https://sdracker.onrender.com/",
-    "https://cs88500-wordpress-o0a99.tw1.ru"
+    "sdracker.onrender.com",
+    "cs88500-wordpress-o0a99.tw1.ru",
 ]
 
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
@@ -62,7 +99,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.vercel.app",
     "https://*.onrender.com",
     "https://*.supabase.co",
-    "https://sdracker.onrender.com/",
+    "https://sdracker.onrender.com",
     "https://sdtracker.vercel.app",
     "https://positive-theta.vercel.app",
     "https://cs88500-wordpress-o0a99.tw1.ru",
@@ -112,7 +149,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 # Важно: правильный порядок для статических файлов
 STATICFILES_DIRS = [
-    BASE_DIR / 'blog' / 'static',   # <-- проверь путь, убери лишний 'backend'
+    BASE_DIR / 'blog' / 'static',   # <-- проверь этот путь локально
 ]
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
@@ -166,6 +203,7 @@ INSTALLED_APPS = [
     "whitenoise.runserver_nostatic",
     'django_filters',
     'django_summernote',
+    'storages',
 
     # Local apps
     "users",
@@ -274,12 +312,10 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
-# ========== ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ ==========
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+# ========== DEFAULT FILE STORAGE (использует blog/storages.SupabaseStorage) ==========
+DEFAULT_FILE_STORAGE = env('DEFAULT_FILE_STORAGE', 'blog.storages.SupabaseStorage')
 
-# Email
+# ========== Email ==========
 if not DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = os.getenv('EMAIL_HOST')
@@ -291,7 +327,7 @@ if not DEBUG:
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# ========== НАСТРОЙКИ ЛОГГИРОВАНИЯ ==========
+# ========== ЛОГГИРОВАНИЕ ==========
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
