@@ -6,6 +6,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django_summernote.models import AbstractAttachment
 
+from backend.blog.storages import SupabaseStorage
+
 
 class Category(models.Model):
     title = models.CharField(max_length=120, unique=True)
@@ -62,7 +64,10 @@ class PostAttachment(AbstractAttachment):
     File attachments for posts — can be unattached (post nullable) to support media library.
     """
     post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
-    file = models.FileField(upload_to="%Y/%m/%d")
+    file = models.FileField(
+    storage=SupabaseStorage(),
+    upload_to="post_attachments"
+)
     title = models.CharField(max_length=255, blank=True)
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)

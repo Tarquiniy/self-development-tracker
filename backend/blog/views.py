@@ -239,62 +239,26 @@ class MediaLibraryView(TemplateView):
 @api_view(['GET'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def media_list(request):
-    """
-    Возвращает список вложений. Для staff-пользователей возвращаем proxy-URL
-    (чтобы избежать CORS/ORB при fetch/XHR). Для анонимных/фронтенда возвращаем
-    прямой storage URL (Supabase public URL).
-    """
-    try:
-        q = request.GET.get('q', '').strip()
-        unattached = request.GET.get('unattached_only') == '1'
-        qs = PostAttachment.objects.all().order_by('-uploaded_at')
-        if unattached:
-            qs = qs.filter(post__isnull=True)
-        if q:
-            qs = qs.filter(dj_models.Q(title__icontains=q) | dj_models.Q(file__icontains=q))
+    qs = PostAttachment.objects.all().order_by('-uploaded_at')
 
-        page_size = min(int(request.GET.get('page_size', 24)), 200)
-        page = max(int(request.GET.get('page', 1)), 1)
-        start = (page - 1) * page_size
-        end = start + page_size
-        items = []
-
-        prefer_proxy_for_staff = bool(getattr(settings, 'SUPABASE_USE_PROXY', True))
-
-        for a in qs[start:end]:
-            file_field = getattr(a, 'file', None)
+    items = []
+    for a in qs:
+        file_field = a.file
+        filename = os.path.basename(file_field.name) if file_field and file_field.name else ''
+        try:
+            url = file_field.url if file_field else ''
+        except Exception:
             url = ''
-            filename = ''
-            if file_field:
-                try:
-                    filename = os.path.basename(file_field.name) if getattr(file_field, 'name', None) else ''
-                    if request.user.is_authenticated and request.user.is_staff and prefer_proxy_for_staff:
-                        # staff -> proxy URL (stream through Django)
-                        try:
-                            proxy_path = reverse('blog:media-proxy', args=[a.id])
-                            url = request.build_absolute_uri(proxy_path)
-                        except Exception:
-                            url = file_field.url if getattr(file_field, 'url', None) else ''
-                    else:
-                        # public -> direct storage URL
-                        try:
-                            url = file_field.url
-                        except Exception:
-                            url = ''
-                except Exception:
-                    url = ''
-            items.append({
-                'id': getattr(a, 'id', None),
-                'title': a.title or filename,
-                'filename': filename,
-                'url': url,
-                'uploaded_at': a.uploaded_at.isoformat() if getattr(a, 'uploaded_at', None) else None,
-                'post_id': a.post.id if getattr(a, 'post', None) else None,
-            })
-        return Response({'results': items})
-    except Exception as e:
-        logger.exception("media_list error")
-        return Response({'results': []})
+        items.append({
+            'id': a.id,
+            'title': a.title or filename,
+            'filename': filename,
+            'url': url,
+            'uploaded_at': a.uploaded_at.isoformat() if a.uploaded_at else None,
+            'post_id': a.post.id if a.post else None,
+        })
+    return Response({'results': items})
+
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
@@ -351,53 +315,33 @@ def media_delete(request):
 @staff_member_required
 @require_GET
 def media_proxy(request, pk):
-    """
-    Serve file to staff via streaming proxy. For anonymous/public requests redirect to the
-    storage URL (so <img src> works and doesn't get HTML login page).
-    """
     att = get_object_or_404(PostAttachment, pk=pk)
-    file_field = getattr(att, 'file', None)
-    if not file_field or not getattr(file_field, 'name', None):
-        logger.warning("media_proxy: attachment %s has no file", pk)
+    file_field = att.file
+    if not file_field or not file_field.name:
         raise Http404("Attachment has no file")
 
-    # Try to obtain direct storage URL (this should be public for images)
-    direct_url = ''
     try:
         direct_url = file_field.url
-    except Exception as e:
-        logger.exception("media_proxy: error getting file.url for %s: %s", pk, e)
+    except Exception:
         direct_url = ''
 
-    # If caller is not staff — redirect to direct_url (so browser fetches image directly)
+    # если аноним — редиректим на Supabase
     if not (request.user.is_authenticated and request.user.is_staff):
         if direct_url:
-            logger.debug("media_proxy: redirecting anonymous to direct_url for %s", pk)
             return redirect(direct_url)
-        # no direct url available => respond 404 (do not redirect to login page)
-        logger.warning("media_proxy: no direct_url for anonymous request for %s", pk)
         raise Http404("File not available")
 
-    # At this point caller is staff -> attempt to stream file via storage
+    # staff → стримим через Django
     try:
         file_obj = file_field.open('rb')
-    except Exception as e:
-        logger.exception("media_proxy: failed to open file for attachment id=%s: %s", pk, e)
-        # fallback: if direct_url exists, redirect staff to it instead of 404
+    except Exception:
         if direct_url:
-            logger.debug("media_proxy: fallback redirect to direct_url for staff for %s", pk)
             return redirect(direct_url)
         raise Http404("File not available")
 
-    # stream
     mime_type, _ = mimetypes.guess_type(file_field.name or '')
     content_type = mime_type or 'application/octet-stream'
-
-    response = FileResponse(file_obj, filename=os.path.basename(file_field.name), content_type=content_type)
-    response['Content-Disposition'] = f'inline; filename=\"{os.path.basename(file_field.name)}\"'
-    response['Access-Control-Allow-Origin'] = '*'
-    response['Cache-Control'] = 'public, max-age=31536000'
-    return response
+    return FileResponse(file_obj, content_type=content_type)
 
 # ----- NEW: attach an existing PostAttachment to a Post -----
 @api_view(['POST'])
