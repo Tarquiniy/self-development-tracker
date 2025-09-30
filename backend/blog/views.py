@@ -23,6 +23,7 @@ from django.views.generic import TemplateView
 from django.utils.decorators import method_decorator
 from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
+from django.shortcuts import redirect
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.urls import reverse
 
