@@ -62,7 +62,7 @@ class PostAttachment(AbstractAttachment):
     File attachments for posts — can be unattached (post nullable) to support media library.
     """
     post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
-    file = models.FileField(upload_to='post_attachments/%Y/%m/%d/')
+    file = models.FileField(upload_to="%Y/%m/%d")
     title = models.CharField(max_length=255, blank=True)
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
