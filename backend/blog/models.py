@@ -5,9 +5,7 @@ from django.utils.text import slugify
 from django.urls import reverse
 from django.utils import timezone
 from django_summernote.models import AbstractAttachment
-
-from backend.blog.storages import SupabaseStorage
-
+from .storages import SupabaseStorage
 
 class Category(models.Model):
     title = models.CharField(max_length=120, unique=True)
