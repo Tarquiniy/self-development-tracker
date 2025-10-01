@@ -31,7 +31,7 @@ SUPABASE_PUBLIC_BUCKET = True
 
 # Конфигурация endpoint для S3 (подставьте реальный endpoint, если Supabase дал S3-совместимую ссылку)
 # Чаще всего можно использовать: https://<project>.supabase.co/storage/v1
-AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL", SUPABASE_URL.rstrip("/") + "/storage/v1" if SUPABASE_URL else "")  # S3 endpoint
+AWS_S3_ENDPOINT_URL = os.environ.get("AWS_S3_ENDPOINT_URL", SUPABASE_URL)
 AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', 'us-east-1')
 AWS_S3_SIGNATURE_VERSION = 's3v4'
 AWS_S3_ADDRESSING_STYLE = "path"
