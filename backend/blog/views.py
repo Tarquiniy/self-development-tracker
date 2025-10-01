@@ -239,23 +239,34 @@ class MediaLibraryView(TemplateView):
 @api_view(['GET'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def media_list(request):
+    q = request.GET.get('q', '').strip()
+    unattached = request.GET.get('unattached_only') == '1'
     qs = PostAttachment.objects.all().order_by('-uploaded_at')
+    if unattached:
+        qs = qs.filter(post__isnull=True)
+    if q:
+        from django.db import models as dj_models
+        qs = qs.filter(dj_models.Q(title__icontains=q) | dj_models.Q(file__icontains=q))
+
+    page_size = min(int(request.GET.get('page_size', 48)), 200)
+    page = max(int(request.GET.get('page', 1)), 1)
+    start = (page - 1) * page_size
+    end = start + page_size
 
     items = []
-    for a in qs:
-        file_field = a.file
-        filename = os.path.basename(file_field.name) if file_field and file_field.name else ''
+    for a in qs[start:end]:
+        file_field = getattr(a, 'file', None)
+        url = ''
         try:
-            url = file_field.url if file_field else ''
+            if file_field:
+                url = file_field.url
         except Exception:
             url = ''
+        filename = os.path.basename(file_field.name) if file_field and getattr(file_field, 'name', None) else ''
         items.append({
-            'id': a.id,
-            'title': a.title or filename,
-            'filename': filename,
-            'url': url,
-            'uploaded_at': a.uploaded_at.isoformat() if a.uploaded_at else None,
-            'post_id': a.post.id if a.post else None,
+            'id': a.id, 'title': a.title or filename, 'filename': filename,
+            'url': url, 'uploaded_at': a.uploaded_at.isoformat() if a.uploaded_at else None,
+            'post_id': a.post.id if getattr(a, 'post', None) else None
         })
     return Response({'results': items})
 
@@ -270,93 +281,49 @@ from rest_framework.permissions import IsAdminUser
 @permission_classes([IsAdminUser])
 @parser_classes([MultiPartParser, FormParser])
 def media_upload(request):
-    """
-    Надёжный endpoint загрузки файлов с подробной диагностикой ошибок.
-    Возвращает полезную ошибку в JSON (в DEBUG — полный traceback).
-    """
     try:
         files = request.FILES.getlist('file') or []
         if not files:
             return Response({'success': False, 'message': 'No files provided'}, status=400)
 
         uploaded = []
-        # quick pre-check: can we write a tiny test object to storage?
-        from .models import PostAttachment  # локальный импорт для безопасности
-
-        # test write to storage (one-file-per-request, so we won't pollute storage)
-        try:
-            # pick first file to test saving
-            test_file = files[0]
-            # Save to a temporary attachment instance to validate storage config
-            tmp = PostAttachment(title=f"__upload_test_{test_file.name}")
-            # Save without commit to storage: use FieldFile.save + delete after
-            tmp.file.save(f"__upload_test_{test_file.name}", test_file, save=False)
-            # We won't call tmp.save() - but ensure storage accepted the write by trying to open url (if supported)
-            # If storage doesn't allow preview access, just remove the saved file afterwards.
-            try:
-                # attempt to read small chunk to confirm storage write
-                fobj = tmp.file.open('rb')
-                try:
-                    _ = fobj.read(1)
-                finally:
-                    fobj.close()
-            except Exception:
-                # ignore read errors; write success is good enough
-                pass
-            # cleanup test file from storage (delete immediately)
-            try:
-                tmp.file.delete(save=False)
-            except Exception:
-                # if delete fails — log, but continue
-                pass
-        except Exception as ex_test:
-            # If test write failed, raise a clearer exception for debugging
-            raise RuntimeError("Storage write test failed: " + str(ex_test))
-
-        # Now proceed to save actual files
         for f in files:
             att = PostAttachment()
-            # save file to storage backend and model instance
             try:
+                # save file via storage
                 att.file.save(f.name, f, save=False)
             except Exception as e:
-                # include filename in context
-                raise RuntimeError(f"Failed to save file data for '{f.name}': {e}")
+                logger.exception("media_upload: file.save failed for %s: %s", f.name, e)
+                return Response({'success': False, 'message': f'file.save failed: {e}'}, status=500)
 
             att.title = request.data.get('title') or f.name
             att.uploaded_by = request.user if request.user.is_authenticated else None
             try:
                 att.save()
             except Exception as e:
-                # if model save fails, try to cleanup the file we just uploaded
+                # cleanup
                 try:
                     if att.file:
                         att.file.delete(save=False)
                 except Exception:
-                    pass
-                raise
+                    logger.exception("media_upload: cleanup failed for %s", f.name)
+                logger.exception("media_upload: saving PostAttachment failed: %s", e)
+                return Response({'success': False, 'message': f'attachment save failed: {e}'}, status=500)
 
             uploaded.append({
                 'id': att.id,
                 'url': getattr(att.file, 'url', ''),
-                'filename': att.file.name if getattr(att.file, 'name', None) else f.name,
+                'filename': getattr(att.file, 'name', f.name),
                 'title': att.title,
             })
 
         return Response({'success': True, 'uploaded': uploaded})
     except Exception as e:
-        # Log full traceback to server logs
-        import logging
-        logger = logging.getLogger(__name__)
         tb = traceback.format_exc()
         logger.exception("media_upload error: %s", tb)
-
-        # return detailed message only in DEBUG (be careful in production)
         if getattr(settings, 'DEBUG', False):
             return Response({'success': False, 'message': str(e), 'traceback': tb}, status=500)
-        else:
-            return Response({'success': False, 'message': 'Internal server error'}, status=500)
-
+        return Response({'success': False, 'message': 'Internal server error'}, status=500)
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
@@ -385,12 +352,11 @@ def media_delete(request):
 
 
 # ----- NEW: media proxy endpoint to avoid ORB/CORS problems in browser -----
-@staff_member_required
 @require_GET
 def media_proxy(request, pk):
     att = get_object_or_404(PostAttachment, pk=pk)
-    file_field = att.file
-    if not file_field or not file_field.name:
+    file_field = getattr(att, 'file', None)
+    if not file_field or not getattr(file_field, 'name', None):
         raise Http404("Attachment has no file")
 
     try:
@@ -398,80 +364,57 @@ def media_proxy(request, pk):
     except Exception:
         direct_url = ''
 
-    # если аноним — редиректим на Supabase
+    # If request is not by staff -> redirect to direct_url for frontend images
     if not (request.user.is_authenticated and request.user.is_staff):
         if direct_url:
             return redirect(direct_url)
         raise Http404("File not available")
 
-    # staff → стримим через Django
+    # Staff -> attempt streaming
     try:
         file_obj = file_field.open('rb')
-    except Exception:
+    except Exception as e:
+        logger.exception("media_proxy: failed to open file %s: %s", pk, e)
         if direct_url:
             return redirect(direct_url)
         raise Http404("File not available")
 
     mime_type, _ = mimetypes.guess_type(file_field.name or '')
     content_type = mime_type or 'application/octet-stream'
-    return FileResponse(file_obj, content_type=content_type)
+    response = FileResponse(file_obj, filename=os.path.basename(file_field.name), content_type=content_type)
+    response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_field.name)}"'
+    response['Access-Control-Allow-Origin'] = '*'
+    response['Cache-Control'] = 'public, max-age=31536000'
+    return response
 
 # ----- NEW: attach an existing PostAttachment to a Post -----
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def media_attach_to_post(request):
-    """
-    POST JSON: { "attachment_id": 123, "post_id": 456 }  (post_id may be null to unlink)
-    Returns: { "success": True, "attachment": { ... } }
-    """
     try:
         data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8') or '{}')
     except Exception:
         data = {}
-
     aid = data.get('attachment_id')
     pid = data.get('post_id', None)
-
     if not aid:
-        return Response({'success': False, 'message': 'attachment_id required'}, status=status.HTTP_400_BAD_REQUEST)
-
+        return Response({'success': False, 'message': 'attachment_id required'}, status=400)
     try:
         att = PostAttachment.objects.get(pk=int(aid))
     except PostAttachment.DoesNotExist:
-        return Response({'success': False, 'message': 'Attachment not found'}, status=status.HTTP_404_NOT_FOUND)
-
+        return Response({'success': False, 'message': 'Attachment not found'}, status=404)
     if pid is None or pid == '' or str(pid).lower() == 'null':
         att.post = None
     else:
         try:
             post = Post.objects.get(pk=int(pid))
         except Post.DoesNotExist:
-            return Response({'success': False, 'message': 'Post not found'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'success': False, 'message': 'Post not found'}, status=400)
         att.post = post
-
+    att.save()
     try:
-        att.save()
-    except Exception as e:
-        logger.exception("media_attach_to_post save error")
-        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        url = att.file.url
+    except Exception:
+        url = ''
+    return Response({'success': True, 'attachment': {'id': att.id, 'url': url, 'post_id': att.post.id if att.post else None}})
 
-    # simple serializer
-    file_field = getattr(att, 'file', None)
-    file_url = ''
-    filename = ''
-    if file_field:
-        try:
-            file_url = file_field.url
-        except Exception:
-            file_url = ''
-        filename = os.path.basename(file_field.name) if getattr(file_field, 'name', None) else ''
-
-    attachment_data = {
-        'id': att.id,
-        'title': att.title or filename,
-        'filename': filename,
-        'url': request.build_absolute_uri(reverse('blog:media-proxy', args=[att.id])) if bool(getattr(settings, 'SUPABASE_USE_PROXY', True)) else file_url,
-        'uploaded_at': att.uploaded_at.isoformat() if getattr(att, 'uploaded_at', None) else None,
-        'post_id': att.post.id if getattr(att, 'post', None) else None,
-    }
-    return Response({'success': True, 'attachment': attachment_data})

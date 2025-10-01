@@ -1,6 +1,6 @@
 # backend/blog/serializers.py
 from rest_framework import serializers
-from .models import Post, Category, Tag, Comment, PostReaction
+from .models import Post, Category, Tag, Comment, PostReaction, PostAttachment
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -11,12 +11,10 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = ('id', 'title', 'slug', 'description')
 
-
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
         fields = ('id', 'title', 'slug')
-
 
 class CommentSerializer(serializers.ModelSerializer):
     replies = serializers.SerializerMethodField()
@@ -30,16 +28,32 @@ class CommentSerializer(serializers.ModelSerializer):
     def get_replies(self, obj):
         qs = obj.replies.filter(is_public=True)
         return CommentSerializer(qs, many=True).data
+    
+class AttachmentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+    filename = serializers.SerializerMethodField()
+    class Meta:
+        model = PostAttachment
+        fields = ('id', 'title', 'filename', 'url', 'uploaded_at', 'post_id')
 
+    def get_url(self, obj):
+        try:
+            return obj.file.url
+        except Exception:
+            return None
+
+    def get_filename(self, obj):
+        try:
+            return obj.file.name and obj.file.name.split('/')[-1]
+        except Exception:
+            return None
 
 class PostListSerializer(serializers.ModelSerializer):
     excerpt = serializers.CharField()
-    # featured_image возвращаем через метод, чтобы гарантированно вернуть public URL (или raw value)
-    featured_image = serializers.SerializerMethodField(allow_null=True)
+    featured_image = serializers.SerializerMethodField()
     categories = CategorySerializer(many=True, read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     url = serializers.SerializerMethodField()
-
     class Meta:
         model = Post
         fields = ('id', 'title', 'slug', 'excerpt', 'featured_image', 'categories', 'tags', 'published_at', 'url')
@@ -47,20 +61,15 @@ class PostListSerializer(serializers.ModelSerializer):
     def get_url(self, obj):
         return obj.get_absolute_url()
 
-    def _resolve_file_url(self, file_like):
-        """
-        Вспомогательный метод: пытаемся корректно получить публичный URL из FileField-like объекта.
-        """
+    def _file_url(self, file_like):
         if not file_like:
             return None
-        # Если это FieldFile или похожий объект с .url
         try:
             url = getattr(file_like, 'url', None)
             if url:
                 return url
         except Exception:
             pass
-        # Если пришла строка (например уже URL), возвращаем её
         try:
             if isinstance(file_like, str) and file_like.strip():
                 return file_like
@@ -69,45 +78,34 @@ class PostListSerializer(serializers.ModelSerializer):
         return None
 
     def get_featured_image(self, obj):
-        # 1) Попытка: если поле featured_image — FileField-like
+        # Try featured_image field
         try:
             val = getattr(obj, 'featured_image', None)
-            url = self._resolve_file_url(val)
+            url = self._file_url(val)
             if url:
                 return url
         except Exception:
             pass
-
-        # 2) Fallback: если у модели есть attachments (related_name 'attachments'), используем первый
+        # fallback to first attachment
         try:
-            if hasattr(obj, 'attachments'):
-                first = obj.attachments.all().order_by('id').first()
-                if first and getattr(first, 'file', None):
-                    try:
-                        return first.file.url
-                    except Exception:
-                        return None
+            first = getattr(obj, 'attachments', None)
+            if first:
+                first_obj = obj.attachments.all().order_by('id').first()
+                if first_obj and getattr(first_obj, 'file', None):
+                    return first_obj.file.url
         except Exception:
             pass
-
         return None
 
-
-class PostDetailSerializer(serializers.ModelSerializer):
+class PostDetailSerializer(PostListSerializer):
     author = serializers.StringRelatedField(read_only=True)
-    categories = CategorySerializer(many=True, read_only=True)
-    tags = TagSerializer(many=True, read_only=True)
     comments = CommentSerializer(many=True, read_only=True)
     likes_count = serializers.SerializerMethodField()
-    featured_image = serializers.SerializerMethodField(allow_null=True)
+    attachments = AttachmentSerializer(many=True, read_only=True)
 
-    class Meta:
+    class Meta(PostListSerializer.Meta):
         model = Post
-        fields = (
-            'id', 'title', 'slug', 'excerpt', 'content', 'featured_image',
-            'categories', 'tags', 'author', 'published_at', 'created_at', 'updated_at',
-            'meta_title', 'meta_description', 'og_image', 'status', 'comments', 'likes_count'
-        )
+        fields = PostListSerializer.Meta.fields + ('content', 'author', 'created_at', 'updated_at', 'meta_title', 'meta_description', 'og_image', 'status', 'comments', 'likes_count', 'attachments')
 
     def get_likes_count(self, obj):
         try:
@@ -115,47 +113,6 @@ class PostDetailSerializer(serializers.ModelSerializer):
             return reaction.likes_count()
         except PostReaction.DoesNotExist:
             return 0
-
-    def _resolve_file_url(self, file_like):
-        # тот же helper как в списковом сериализаторе
-        if not file_like:
-            return None
-        try:
-            url = getattr(file_like, 'url', None)
-            if url:
-                return url
-        except Exception:
-            pass
-        try:
-            if isinstance(file_like, str) and file_like.strip():
-                return file_like
-        except Exception:
-            pass
-        return None
-
-    def get_featured_image(self, obj):
-        # 1) Попытка: FileField-like или строка
-        try:
-            val = getattr(obj, 'featured_image', None)
-            url = self._resolve_file_url(val)
-            if url:
-                return url
-        except Exception:
-            pass
-
-        # 2) Fallback на первое вложение
-        try:
-            if hasattr(obj, 'attachments'):
-                first = obj.attachments.all().order_by('id').first()
-                if first and getattr(first, 'file', None):
-                    try:
-                        return first.file.url
-                    except Exception:
-                        return None
-        except Exception:
-            pass
-
-        return None
 
 
 class PostCreateUpdateSerializer(serializers.ModelSerializer):
