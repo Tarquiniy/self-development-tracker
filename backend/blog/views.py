@@ -260,29 +260,102 @@ def media_list(request):
     return Response({'results': items})
 
 
+import io
+import traceback
+from django.conf import settings
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import IsAdminUser
+
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 @parser_classes([MultiPartParser, FormParser])
 def media_upload(request):
+    """
+    Надёжный endpoint загрузки файлов с подробной диагностикой ошибок.
+    Возвращает полезную ошибку в JSON (в DEBUG — полный traceback).
+    """
     try:
         files = request.FILES.getlist('file') or []
+        if not files:
+            return Response({'success': False, 'message': 'No files provided'}, status=400)
+
         uploaded = []
+        # quick pre-check: can we write a tiny test object to storage?
+        from .models import PostAttachment  # локальный импорт для безопасности
+
+        # test write to storage (one-file-per-request, so we won't pollute storage)
+        try:
+            # pick first file to test saving
+            test_file = files[0]
+            # Save to a temporary attachment instance to validate storage config
+            tmp = PostAttachment(title=f"__upload_test_{test_file.name}")
+            # Save without commit to storage: use FieldFile.save + delete after
+            tmp.file.save(f"__upload_test_{test_file.name}", test_file, save=False)
+            # We won't call tmp.save() - but ensure storage accepted the write by trying to open url (if supported)
+            # If storage doesn't allow preview access, just remove the saved file afterwards.
+            try:
+                # attempt to read small chunk to confirm storage write
+                fobj = tmp.file.open('rb')
+                try:
+                    _ = fobj.read(1)
+                finally:
+                    fobj.close()
+            except Exception:
+                # ignore read errors; write success is good enough
+                pass
+            # cleanup test file from storage (delete immediately)
+            try:
+                tmp.file.delete(save=False)
+            except Exception:
+                # if delete fails — log, but continue
+                pass
+        except Exception as ex_test:
+            # If test write failed, raise a clearer exception for debugging
+            raise RuntimeError("Storage write test failed: " + str(ex_test))
+
+        # Now proceed to save actual files
         for f in files:
             att = PostAttachment()
-            att.file.save(f.name, f, save=False)
+            # save file to storage backend and model instance
+            try:
+                att.file.save(f.name, f, save=False)
+            except Exception as e:
+                # include filename in context
+                raise RuntimeError(f"Failed to save file data for '{f.name}': {e}")
+
             att.title = request.data.get('title') or f.name
             att.uploaded_by = request.user if request.user.is_authenticated else None
-            att.save()
+            try:
+                att.save()
+            except Exception as e:
+                # if model save fails, try to cleanup the file we just uploaded
+                try:
+                    if att.file:
+                        att.file.delete(save=False)
+                except Exception:
+                    pass
+                raise
+
             uploaded.append({
                 'id': att.id,
-                'url': att.file.url if getattr(att, 'file', None) else '',
-                'filename': os.path.basename(att.file.name) if getattr(att, 'file', None) else '',
+                'url': getattr(att.file, 'url', ''),
+                'filename': att.file.name if getattr(att.file, 'name', None) else f.name,
                 'title': att.title,
             })
+
         return Response({'success': True, 'uploaded': uploaded})
     except Exception as e:
-        logger.exception("media_upload error")
-        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # Log full traceback to server logs
+        import logging
+        logger = logging.getLogger(__name__)
+        tb = traceback.format_exc()
+        logger.exception("media_upload error: %s", tb)
+
+        # return detailed message only in DEBUG (be careful in production)
+        if getattr(settings, 'DEBUG', False):
+            return Response({'success': False, 'message': str(e), 'traceback': tb}, status=500)
+        else:
+            return Response({'success': False, 'message': 'Internal server error'}, status=500)
 
 
 @api_view(['POST'])
