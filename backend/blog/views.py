@@ -239,6 +239,9 @@ class MediaLibraryView(TemplateView):
 @api_view(['GET'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def media_list(request):
+    """
+    Returns list of attachments with .url set to file.url (public Supabase URL when available).
+    """
     q = request.GET.get('q', '').strip()
     unattached = request.GET.get('unattached_only') == '1'
     qs = PostAttachment.objects.all().order_by('-uploaded_at')
@@ -262,10 +265,17 @@ def media_list(request):
                 url = file_field.url
         except Exception:
             url = ''
-        filename = os.path.basename(file_field.name) if file_field and getattr(file_field, 'name', None) else ''
+        filename = ''
+        try:
+            filename = file_field.name.split('/')[-1] if file_field and getattr(file_field, 'name', None) else ''
+        except Exception:
+            filename = ''
         items.append({
-            'id': a.id, 'title': a.title or filename, 'filename': filename,
-            'url': url, 'uploaded_at': a.uploaded_at.isoformat() if a.uploaded_at else None,
+            'id': a.id,
+            'title': a.title or filename,
+            'filename': filename,
+            'url': url,
+            'uploaded_at': a.uploaded_at.isoformat() if getattr(a, 'uploaded_at', None) else None,
             'post_id': a.post.id if getattr(a, 'post', None) else None
         })
     return Response({'results': items})
@@ -281,6 +291,10 @@ from rest_framework.permissions import IsAdminUser
 @permission_classes([IsAdminUser])
 @parser_classes([MultiPartParser, FormParser])
 def media_upload(request):
+    """
+    Upload files (admin-only). Saves file via storage and normalizes DB path if needed.
+    Returns uploaded items with their public URLs (if available).
+    """
     try:
         files = request.FILES.getlist('file') or []
         if not files:
@@ -289,26 +303,51 @@ def media_upload(request):
         uploaded = []
         for f in files:
             att = PostAttachment()
+            # Try save file (FileField will use upload_to on model)
             try:
-                # save file via storage
                 att.file.save(f.name, f, save=False)
             except Exception as e:
+                # log and return diagnostic info when DEBUG
                 logger.exception("media_upload: file.save failed for %s: %s", f.name, e)
-                return Response({'success': False, 'message': f'file.save failed: {e}'}, status=500)
+                if getattr(settings, 'DEBUG', False):
+                    return Response({'success': False, 'message': f'file.save failed: {e}', 'traceback': traceback.format_exc()}, status=500)
+                return Response({'success': False, 'message': 'file.save failed'}, status=500)
 
             att.title = request.data.get('title') or f.name
             att.uploaded_by = request.user if request.user.is_authenticated else None
+
+            # If storage created file at an unexpected path (e.g. duplicate prefix), try to normalize
             try:
+                # commit to DB (this will write file info)
                 att.save()
             except Exception as e:
-                # cleanup
+                # attempt cleanup and return error
                 try:
                     if att.file:
                         att.file.delete(save=False)
                 except Exception:
                     logger.exception("media_upload: cleanup failed for %s", f.name)
                 logger.exception("media_upload: saving PostAttachment failed: %s", e)
-                return Response({'success': False, 'message': f'attachment save failed: {e}'}, status=500)
+                if getattr(settings, 'DEBUG', False):
+                    return Response({'success': False, 'message': str(e), 'traceback': traceback.format_exc()}, status=500)
+                return Response({'success': False, 'message': 'attachment save failed'}, status=500)
+
+            # Normalize DB path if duplicate prefix exists but normalized path exists in storage
+            try:
+                name = getattr(att.file, 'name', '') or ''
+                normalized = name.replace('post_attachments/post_attachments/', 'post_attachments/')
+                if normalized != name:
+                    # If the normalized file actually exists in storage, point DB to it.
+                    try:
+                        if att.file.storage.exists(normalized):
+                            att.file.name = normalized
+                            att.save(update_fields=['file'])
+                            logger.debug("Normalized attachment name from %s -> %s", name, normalized)
+                    except Exception:
+                        # storage.exists may fail on some configs — ignore silently
+                        logger.debug("Could not check storage.exists for normalized path %s", normalized)
+            except Exception:
+                logger.exception("media_upload: normalization check failed")
 
             uploaded.append({
                 'id': att.id,
@@ -331,7 +370,7 @@ def media_delete(request):
     try:
         ids = request.data.get('ids') or []
         if not isinstance(ids, (list, tuple)):
-            return Response({'success': False, 'message': 'ids must be a list'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'success': False, 'message': 'ids must be a list'}, status=400)
         deleted = 0
         for pk in ids:
             try:
@@ -348,12 +387,17 @@ def media_delete(request):
         return Response({'success': True, 'deleted': deleted})
     except Exception as e:
         logger.exception("media_delete error")
-        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'success': False, 'message': str(e)}, status=500)
 
 
 # ----- NEW: media proxy endpoint to avoid ORB/CORS problems in browser -----
 @require_GET
 def media_proxy(request, pk):
+    """
+    Proxy endpoint:
+    - anonymous users: redirect to the direct public URL (file.url) so browser loads from Supabase
+    - staff: stream from storage (useful when file is private)
+    """
     att = get_object_or_404(PostAttachment, pk=pk)
     file_field = getattr(att, 'file', None)
     if not file_field or not getattr(file_field, 'name', None):
@@ -381,8 +425,8 @@ def media_proxy(request, pk):
 
     mime_type, _ = mimetypes.guess_type(file_field.name or '')
     content_type = mime_type or 'application/octet-stream'
-    response = FileResponse(file_obj, filename=os.path.basename(file_field.name), content_type=content_type)
-    response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_field.name)}"'
+    response = FileResponse(file_obj, filename=file_field.name.split('/')[-1], content_type=content_type)
+    response['Content-Disposition'] = f'inline; filename="{file_field.name.split("/")[-1]}"'
     response['Access-Control-Allow-Origin'] = '*'
     response['Cache-Control'] = 'public, max-age=31536000'
     return response
@@ -417,4 +461,3 @@ def media_attach_to_post(request):
     except Exception:
         url = ''
     return Response({'success': True, 'attachment': {'id': att.id, 'url': url, 'post_id': att.post.id if att.post else None}})
-

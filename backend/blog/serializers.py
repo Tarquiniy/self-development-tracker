@@ -1,10 +1,6 @@
 # backend/blog/serializers.py
 from rest_framework import serializers
 from .models import Post, Category, Tag, Comment, PostReaction, PostAttachment
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
-
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -28,7 +24,7 @@ class CommentSerializer(serializers.ModelSerializer):
     def get_replies(self, obj):
         qs = obj.replies.filter(is_public=True)
         return CommentSerializer(qs, many=True).data
-    
+
 class AttachmentSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
     filename = serializers.SerializerMethodField()
@@ -78,7 +74,7 @@ class PostListSerializer(serializers.ModelSerializer):
         return None
 
     def get_featured_image(self, obj):
-        # Try featured_image field
+        # If featured_image (string URL) provided — return it (may be full URL)
         try:
             val = getattr(obj, 'featured_image', None)
             url = self._file_url(val)
@@ -88,11 +84,14 @@ class PostListSerializer(serializers.ModelSerializer):
             pass
         # fallback to first attachment
         try:
-            first = getattr(obj, 'attachments', None)
-            if first:
+            if hasattr(obj, 'attachments'):
                 first_obj = obj.attachments.all().order_by('id').first()
                 if first_obj and getattr(first_obj, 'file', None):
-                    return first_obj.file.url
+                    try:
+                        return first_obj.file.url
+                    except Exception:
+                        # as very last resort, return name
+                        return getattr(first_obj.file, 'name', None)
         except Exception:
             pass
         return None
@@ -113,7 +112,6 @@ class PostDetailSerializer(PostListSerializer):
             return reaction.likes_count()
         except PostReaction.DoesNotExist:
             return 0
-
 
 class PostCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
