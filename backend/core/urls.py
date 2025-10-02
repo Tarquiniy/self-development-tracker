@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.urls import path, include
 from users.views import RegisterView, LoginView, ProfileView
 from django.conf.urls.static import static
+from .admin import custom_admin_site
 
 # Попытка импортировать админ-views из blog.admin (dashboard, stats, post update, media library)
 admin_dashboard_view = None
@@ -30,6 +31,7 @@ if admin_media_library_view is None:
 # Базовые маршруты API/авторизации и пр.
 urlpatterns = [
     path('grappelli/', include('grappelli.urls')),
+    path("admin/", custom_admin_site.urls),
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', LoginView.as_view(), name='login'),
     # подключаем API блога
