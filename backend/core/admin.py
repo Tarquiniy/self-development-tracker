@@ -1,31 +1,43 @@
 from django.contrib import admin
 from django.urls import path
-from django.template.response import TemplateResponse
-from blog.models import Post, Category, Comment
+from django.utils import timezone
+
+from blog.models import Post, Comment
 from users.models import CustomUser
 
+
 class CustomAdminSite(admin.AdminSite):
-    site_header = "Positive Theta — Админка"
-    site_title = "Админка Positive Theta"
-    index_title = "Добро пожаловать 👋"
+    site_header = "Positive Theta Admin"
+    site_title = "Positive Theta"
+    index_title = "Добро пожаловать в админку Positive Theta"
 
     def get_urls(self):
         urls = super().get_urls()
-        custom_urls = [
-            path("", self.admin_view(self.dashboard), name="index"),
-        ]
-        return custom_urls + urls
+        # можно добавить кастомные урлы при необходимости
+        return urls
 
-    def dashboard(self, request):
-        context = dict(
-            self.each_context(request),
-            title="Dashboard",
-            posts_count=Post.objects.count(),
-            categories_count=Category.objects.count(),
-            comments_count=Comment.objects.count(),
-            users_count=CustomUser.objects.count(),
-        )
-        return TemplateResponse(request, "admin/dashboard.html", context)
+    def each_context(self, request):
+        context = super().each_context(request)
 
-# Регистрируем кастомный сайт
+        # Подсчёты для дашборда
+        posts = Post.objects.all()
+        comments = Comment.objects.all()
+        users = CustomUser.objects.all()
+
+        context.update({
+            "posts_count": posts.count(),
+            "published_count": posts.filter(status="published").count(),
+            "draft_count": posts.filter(status="draft").count(),
+            "comments_count": comments.count(),
+            "pending_comments": comments.filter(approved=False).count(),
+            "users_count": users.count(),
+            "today_posts": users.filter(date_joined__date=timezone.now().date()).count(),
+            "total_views": posts.aggregate(total=admin.models.Sum("views"))["total"] or 0,
+
+            "recent_posts": posts.order_by("-published_at")[:5],
+            "recent_comments": comments.order_by("-created_at")[:5],
+        })
+        return context
+
+
 custom_admin_site = CustomAdminSite(name="custom_admin")
