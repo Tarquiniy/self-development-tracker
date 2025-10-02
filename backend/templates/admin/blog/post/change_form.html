@@ -1,276 +1,181 @@
-{# backend/templates/admin/blog/post/change_form.html - REPLACE ENTIRE FILE #}
 {% extends "admin/change_form.html" %}
 {% load static i18n %}
 
-{# --- Extra head: мини-инициализация глобальных переменных до выполнения других скриптов --- #}
-{% block extrahead %}
-    {{ block.super }}
-    {# Минимальная и безопасная инициализация, чтобы предотвратить ReferenceError в сторонних скриптах. #}
-    <script>
-      // Если другие библиотеки ожидают grp или django — инициализируем минимально, безопасно и idempotent.
-      window.grp = window.grp || {};
-      window.django = window.django || {
-        gettext: function(s){ return s; },
-        ngettext: function(s){ return s; },
-        // небольшая совместимость для старых вызовов
-        pluralidx: function(){ return 0; }
-      };
-    </script>
-
-    <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
+<style>
+.editor-wrapper {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+}
+@media (max-width: 1100px) {
+    .editor-wrapper { grid-template-columns: 1fr; }
+}
+.editor-main {
+    background: white;
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+.editor-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.sidebar-card {
+    background: white;
+    border-radius: 12px;
+    padding: 14px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+.sidebar-card h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    display:flex;
+    justify-content: space-between;
+    align-items:center;
+}
+.status-btn {
+    padding:6px 10px;
+    border-radius:6px;
+    font-size:13px;
+    color:white;
+    text-decoration:none;
+    margin-right:6px;
+}
+.status-btn.publish { background:#10b981; }
+.status-btn.draft { background:#f59e0b; }
+.status-btn.archive { background:#ef4444; }
+.featured-preview img {
+    max-width: 100%;
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+.seo-section input, .seo-section textarea {
+    width: 100%;
+    border: 1px solid #e5e7eb;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+.toast {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    background: #0f172a;
+    color: white;
+    padding: 10px 14px;
+    border-radius: 8px;
+    z-index: 99999;
+    opacity: 0.95;
+}
+</style>
 {% endblock %}
 
-{# --- Keep default admin content --- #}
 {% block content %}
-    {{ block.super }}
+<div class="editor-wrapper">
+    <div class="editor-main">
+        <h2 style="margin-bottom:14px">Редактор поста</h2>
+        {{ adminform.form.title }}
+        {{ adminform.form.excerpt }}
+        {{ adminform.form.content }}
+    </div>
+
+    <div class="editor-sidebar">
+        <div class="sidebar-card">
+            <h3>Статус публикации</h3>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <a href="#" class="status-btn publish" data-status="published">Опубликовать</a>
+                <a href="#" class="status-btn draft" data-status="draft">В черновики</a>
+                <a href="#" class="status-btn archive" data-status="archived">В архив</a>
+            </div>
+            <div style="margin-top:10px;font-size:13px;color:#6b7280">
+                Текущий статус: <strong id="current-status">{{ original.status|default:"draft" }}</strong>
+            </div>
+        </div>
+
+        <div class="sidebar-card">
+            <h3>Дата публикации</h3>
+            {{ adminform.form.published_at }}
+        </div>
+
+        <div class="sidebar-card">
+            <h3>Категории</h3>
+            {{ adminform.form.categories }}
+            <h3 style="margin-top:12px">Теги</h3>
+            {{ adminform.form.tags }}
+        </div>
+
+        <div class="sidebar-card">
+            <h3>Главное изображение</h3>
+            <div class="featured-preview" id="featured-image-preview">
+                {% if original.featured_image %}
+                    <img src="{{ original.featured_image }}" alt="">
+                {% endif %}
+            </div>
+            <button type="button" id="open-media-btn" class="status-btn draft" style="margin-top:6px">Выбрать из медиатеки</button>
+            {{ adminform.form.featured_image }}
+        </div>
+
+        <div class="sidebar-card seo-section">
+            <h3>SEO</h3>
+            {{ adminform.form.meta_title }}
+            {{ adminform.form.meta_description }}
+            {{ adminform.form.og_image }}
+        </div>
+    </div>
+</div>
 {% endblock %}
 
-{# --- Footer: большая логика для медиатеки, превью и привязки --- #}
 {% block footer_extra %}
-    {{ block.super }}
-    <script>
-    (function () {
-        'use strict';
+{{ block.super }}
+<script>
+(function(){
+    'use strict';
 
-        // --- Safety: prevent ReferenceError from third-party inline scripts expecting grp (double-check) ---
-        if (typeof grp === 'undefined') window.grp = null;
+    const postId = {{ object.id|default:"null" }};
+    const csrfToken = document.cookie.match(/(^|;)\\s*csrftoken=([^;]+)/);
 
-        // Current post id: null on add view
-        var CURRENT_POST_ID = {% if object %}{{ object.id }}{% else %}null{% endif %};
-        window.ADMIN_CURRENT_POST_ID = CURRENT_POST_ID;
+    function toast(msg, err) {
+        let t = document.createElement("div");
+        t.className = "toast";
+        t.style.background = err ? "#b91c1c" : "#0f172a";
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(()=>{t.remove();},3000);
+    }
 
-        // CSRF helper
-        function getCsrf() {
-            var m = document.cookie.match(/(^|;)\s*csrftoken=([^;]+)/);
-            return m ? decodeURIComponent(m[2]) : '';
-        }
+    function updateStatus(status) {
+        if (!postId) { toast("Сначала сохраните пост", true); return; }
+        fetch("/admin/post-inline-update/", {
+            method:"POST",
+            headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken?csrfToken[2]:""},
+            body:JSON.stringify({post_id:postId, field:"status", value:status})
+        }).then(r=>r.json()).then(data=>{
+            if(data.success){
+                document.getElementById("current-status").textContent=status;
+                toast("Статус изменён", false);
+            } else { toast("Ошибка: "+data.message,true); }
+        }).catch(()=>toast("Ошибка сети",true));
+    }
 
-        // Simple toast
-        function toast(msg, err) {
-            try {
-                var el = document.createElement('div');
-                el.textContent = msg;
-                el.style.position = 'fixed';
-                el.style.right = '18px';
-                el.style.bottom = (20 + (err ? 60 : 0)) + 'px';
-                el.style.background = err ? '#b91c1c' : '#0f172a';
-                el.style.color = '#fff';
-                el.style.padding = '8px 12px';
-                el.style.borderRadius = '8px';
-                el.style.zIndex = 99999;
-                document.body.appendChild(el);
-                setTimeout(function(){ el.style.opacity='0'; el.style.transition='opacity .35s'; setTimeout(function(){ try{ document.body.removeChild(el);}catch(e){} }, 350); }, 3000);
-            } catch (e) { console.log(msg); }
-        }
-
-        // Attach attachment to post via API
-        function attachToPost(attachmentId, postId) {
-            if (!attachmentId) return Promise.resolve({ success: false, message: 'no attachmentId' });
-            if (!postId) return Promise.resolve({ success: false, message: 'no postId' });
-
-            return fetch('/api/blog/media/attach/', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCsrf()
-                },
-                body: JSON.stringify({ attachment_id: Number(attachmentId), post_id: Number(postId) })
-            }).then(function (r) {
-                return r.json().catch(function () { return { success: false, status: r.status }; });
-            }).catch(function (err) {
-                console.error('attachToPost network error', err);
-                return { success: false, message: 'network error' };
-            });
-        }
-
-        // Utility: safe localStorage access
-        function lsSet(key, value) { try { localStorage.setItem(key, value); } catch(e) {} }
-        function lsGet(key) { try { return localStorage.getItem(key); } catch(e) { return null; } }
-        function lsRemove(key) { try { localStorage.removeItem(key); } catch(e) {} }
-
-        // Update UI: try to set various possible widgets that represent the "Главное изображение"
-        function updateFeaturedImageWidgets(url) {
-            if (!url) return false;
-            var changed = false;
-
-            // 1) If there's a textual input for featured_image (URL field)
-            var textInput = document.querySelector('input[name="featured_image"], textarea[name="featured_image"], input#id_featured_image');
-            if (textInput) {
-                try {
-                    textInput.value = url;
-                    // dispatch change
-                    try { textInput.dispatchEvent(new Event('change', { bubbles: true })); }
-                    catch (e) { var ev = document.createEvent('HTMLEvents'); ev.initEvent('change', true, false); textInput.dispatchEvent(ev); }
-                    changed = true;
-                } catch (e) { console.warn('Failed to set featured_image input', e); }
-            }
-
-            // 2) Create or update hidden field to carry image URL to backend if needed
-            var hiddenName = 'featured_image_url';
-            var hidden = document.querySelector('input[name="'+hiddenName+'"]');
-            if (!hidden) {
-                // attach hidden input near the form
-                var form = document.querySelector('form');
-                if (form) {
-                    hidden = document.createElement('input');
-                    hidden.type = 'hidden'; hidden.name = hiddenName;
-                    form.appendChild(hidden);
-                }
-            }
-            if (hidden) {
-                try { hidden.value = url; changed = true; } catch(e){}
-            }
-
-            // 3) Update visual preview area, if exists, or create it
-            try {
-                var preview = document.getElementById('featured-image-preview');
-                if (!preview) {
-                    // try to create preview near input or at the top of the form
-                    var anchor = document.querySelector('input[name="featured_image"]') || document.querySelector('input#id_featured_image') || document.querySelector('form');
-                    preview = document.createElement('div');
-                    preview.id = 'featured-image-preview';
-                    preview.style.marginTop = '8px';
-                    preview.style.maxWidth = '360px';
-                    preview.style.display = 'block';
-                    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(preview, anchor.nextSibling);
-                    else if (document.body) document.body.insertBefore(preview, document.body.firstChild);
-                }
-                // put image into preview
-                preview.innerHTML = '';
-                var img = document.createElement('img');
-                img.src = url;
-                img.alt = '';
-                img.style.maxWidth = '100%';
-                img.style.borderRadius = '6px';
-                preview.appendChild(img);
-                changed = true;
-            } catch (e) { console.warn('Failed to create/update preview', e); }
-
-            // 4) Try to update default Django admin existing-file link if present (a.link or p.directory)
-            try {
-                // common selectors: a[href*="/media/"], a.field-thumbnail maybe
-                var anchors = document.querySelectorAll('a');
-                for (var i=0;i<anchors.length;i++){
-                    var a = anchors[i];
-                    // heuristics: anchor that is currently 'no file' or points to previous file
-                    if (a.classList.contains('related-file') || a.classList.contains('file-link') || /media/i.test(a.href)) {
-                        // update href and text maybe
-                        a.href = url;
-                        if (a.querySelector && a.querySelector('img')) {
-                            a.querySelector('img').src = url;
-                        }
-                    }
-                }
-            } catch (e) {}
-
-            return changed;
-        }
-
-        // Message handler for postMessage from media library
-        window.addEventListener('message', function (ev) {
-            try {
-                var data = ev.data;
-                if (!data || data.source !== 'media-library' || data.action !== 'select') return;
-                var att = data.attachment;
-                if (!att || !att.id) return;
-
-                // Avoid double-saving the same pending attachment
-                var existingPending = lsGet('pending_attachment_id');
-                if (existingPending && String(existingPending) === String(att.id)) {
-                    console.log('Same attachment already pending, ignoring duplicate message', att.id);
-                } else {
-                    lsSet('pending_attachment_id', String(att.id));
-                    if (att.url) lsSet('pending_attachment_url', att.url);
-                    lsSet('pending_attachment_saved_at', String(Date.now()));
-                    console.log('Saved pending attachment to localStorage', att.id);
-                }
-
-                // Update frontend widgets / preview immediately (best-effort)
-                var updated = updateFeaturedImageWidgets(att.url);
-
-                // Immediate attach if editing existing post (has id)
-                if (CURRENT_POST_ID) {
-                    attachToPost(att.id, CURRENT_POST_ID).then(function (resp) {
-                        if (resp && resp.success) {
-                            toast('Изображение прикреплено к посту', false);
-                            console.log('Attachment attached immediately', resp);
-                        } else {
-                            toast('Не удалось прикрепить изображение: ' + (resp && resp.message ? resp.message : 'unknown'), true);
-                            console.warn('Immediate attach failed', resp);
-                        }
-                    });
-                } else {
-                    // Notify user that URL placed and will be attached after save
-                    toast('Изображение выбрано. Сохраните пост — привязка выполнится автоматически.', false);
-                }
-            } catch (err) {
-                console.error('media-library message handler error', err);
-                toast('Ошибка обработки выбранного файла', true);
-            }
-        }, false);
-
-        // On DOMContentLoaded: if pending attachment exists and now we have a post id -> attach and update UI
-        document.addEventListener('DOMContentLoaded', function () {
-            try {
-                var pending = lsGet('pending_attachment_id');
-                var pendingUrl = lsGet('pending_attachment_url');
-                if (pending && CURRENT_POST_ID) {
-                    attachToPost(Number(pending), Number(CURRENT_POST_ID)).then(function (resp) {
-                        if (resp && resp.success) {
-                            toast('Откладываемое изображение привязано к посту', false);
-                            lsRemove('pending_attachment_id'); lsRemove('pending_attachment_url'); lsRemove('pending_attachment_saved_at');
-                        } else {
-                            toast('Ошибка привязки откладываемого изображения', true);
-                            console.warn('Failed to attach pending attachment', resp);
-                        }
-                    });
-                    // update UI
-                    if (pendingUrl) updateFeaturedImageWidgets(pendingUrl);
-                } else if (pendingUrl) {
-                    // if no CURRENT_POST_ID yet (user on add), still show preview and value
-                    updateFeaturedImageWidgets(pendingUrl);
-                }
-
-                // inject Open media button next to featured_image input if missing
-                try {
-                    var input = document.querySelector('input[name="featured_image"], input#id_featured_image, textarea[name="featured_image"]');
-                    // If field not found, try to insert button to top of form
-                    var already = document.getElementById('open-media-btn');
-                    if (!already) {
-                        var btn = document.createElement('button');
-                        btn.type = 'button';
-                        btn.id = 'open-media-btn';
-                        btn.textContent = 'Открыть медиатеку';
-                        btn.className = 'small-btn';
-                        btn.style.marginLeft = '8px';
-
-                        var target = input && input.parentNode ? input.parentNode : document.querySelector('form') || document.body;
-                        if (input && input.nextSibling) target.insertBefore(btn, input.nextSibling);
-                        else target.appendChild(btn);
-
-                        btn.addEventListener('click', function () {
-                            var postId = window.ADMIN_CURRENT_POST_ID || null;
-                            var url = '/admin/media-library/';
-                            if (postId) url += '?post_id=' + encodeURIComponent(postId);
-                            window.open(url, '_blank', 'width=1100,height=700');
-                        });
-                    }
-                } catch (e) { console.warn('open-media button injection failed', e); }
-
-                // Cleanup old pending markers older than 10 minutes
-                try {
-                    var ts = lsGet('pending_attachment_saved_at');
-                    if (ts) {
-                        var age = Date.now() - Number(ts || 0);
-                        if (age > 1000 * 60 * 10) { lsRemove('pending_attachment_id'); lsRemove('pending_attachment_url'); lsRemove('pending_attachment_saved_at'); }
-                    }
-                } catch (e) {}
-            } catch (e) {
-                console.error('post-load pending attach handler error', e);
-            }
+    document.querySelectorAll(".status-btn").forEach(btn=>{
+        btn.addEventListener("click", e=>{
+            e.preventDefault();
+            updateStatus(btn.dataset.status);
         });
+    });
 
-    })();
-    </script>
+    document.getElementById("open-media-btn").addEventListener("click", ()=>{
+        let url = "/admin/media-library/";
+        if (postId) url += "?post_id="+postId;
+        window.open(url,"_blank","width=1100,height=700");
+    });
+
+})();
+</script>
 {% endblock %}

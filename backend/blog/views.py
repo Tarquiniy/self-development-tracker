@@ -24,6 +24,11 @@ from django.utils.decorators import method_decorator
 from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
 from django.shortcuts import redirect
+from django.shortcuts import render
+from django.http import Http404
+from django.core import signing
+from django.conf import settings
+from django.utils import timezone
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.urls import reverse
 
@@ -34,6 +39,26 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+PREVIEW_SALT = "post-preview-salt"
+PREVIEW_MAX_AGE = 60 * 60
+
+def preview_by_token(request, token):
+    try:
+        payload = signing.loads(token, salt=PREVIEW_SALT, max_age=PREVIEW_MAX_AGE)
+    except signing.BadSignature:
+        raise Http404("Invalid preview token")
+    # payload has title/content/excerpt/featured_image
+    post_data = {
+        'title': payload.get('title', ''),
+        'content': payload.get('content', ''),
+        'excerpt': payload.get('excerpt', ''),
+        'featured_image': payload.get('featured_image', ''),
+        'preview_token': token,
+    }
+    # Renders template that is used for frontend post (you likely have similar)
+    return render(request, 'blog/preview.html', {'post': post_data})
+
 
 
 class PostViewSet(viewsets.ModelViewSet):

@@ -6,44 +6,50 @@
 <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
 <style>
 .dashboard {
-    padding: 18px 8px;
+    padding: 22px;
+    background: #f9fafb;
 }
-.dashboard .top-row {
-    display: grid;
-    grid-template-columns: 1fr 380px;
-    gap: 18px;
-    align-items: start;
+h1.dashboard-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: #111827;
 }
 .summary-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px;
-    margin-bottom: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+    margin-bottom: 24px;
 }
 .summary-card {
     background: white;
-    padding: 14px;
-    border-radius: 10px;
-    box-shadow: 0 2px 6px rgba(16,24,40,0.06);
+    padding: 18px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     display: flex;
     flex-direction: column;
     gap: 6px;
+    transition: transform 0.15s ease;
 }
+.summary-card:hover { transform: translateY(-3px); }
 .summary-card .label { color: #6b7280; font-size: 13px; }
-.summary-card .value { font-size: 1.6rem; font-weight: 700; color: #0f172a; }
+.summary-card .value { font-size: 1.8rem; font-weight: 700; color: #111827; }
 
 .card {
     background: white;
-    border-radius: 10px;
-    padding: 14px;
-    box-shadow: 0 2px 6px rgba(16,24,40,0.04);
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+    margin-bottom: 20px;
 }
 
 .charts-row {
     display: grid;
-    grid-template-columns: 1fr 420px;
-    gap: 18px;
-    margin-top: 12px;
+    grid-template-columns: 1fr 380px;
+    gap: 20px;
+}
+@media (max-width: 1000px) {
+    .charts-row { grid-template-columns: 1fr; }
 }
 
 .recent-list {
@@ -52,204 +58,134 @@
     margin: 0;
 }
 .recent-list li {
-    padding: 10px 8px;
+    padding: 10px;
     border-radius: 8px;
     display: flex;
-    gap: 10px;
-    align-items: center;
+    gap: 12px;
+    align-items: flex-start;
+    transition: background 0.15s ease;
 }
-.recent-list li + li { margin-top: 8px; border-top: 1px solid #f1f5f9; padding-top: 12px; }
+.recent-list li:hover { background: #f9fafb; }
+.recent-list li + li { border-top: 1px solid #f1f5f9; margin-top: 10px; padding-top: 10px; }
 
 .recent-thumb {
-    width: 56px;
-    height: 42px;
+    width: 64px;
+    height: 48px;
     border-radius: 6px;
     object-fit: cover;
     background: #f3f4f6;
     flex-shrink: 0;
 }
 
-.controls {
-    display:flex;
-    gap:8px;
-    align-items:center;
-}
-
 .quick-action-btn {
-    padding:8px 10px;
+    padding:6px 10px;
     border-radius:6px;
-    background:#0ea5e9;
-    color:white;
-    text-decoration:none;
     font-size:13px;
+    text-decoration:none;
+    color:white;
+    margin-right:6px;
+    display:inline-block;
 }
+.quick-action-btn.publish { background:#10b981; }
+.quick-action-btn.draft { background:#f59e0b; }
+.quick-action-btn.archive { background:#ef4444; }
 
-@media (max-width: 1000px) {
-    .dashboard .top-row { grid-template-columns: 1fr; }
-    .charts-row { grid-template-columns: 1fr; }
-}
+.controls { display:flex; gap:8px; align-items:center; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="dashboard">
-    <h1 style="margin-bottom:12px">Панель управления Positive Theta</h1>
+    <h1 class="dashboard-title">Панель управления Positive Theta</h1>
 
-    <div class="top-row">
-        <div>
-            <div class="summary-cards">
-                <div class="summary-card">
-                    <div class="label">Всего постов</div>
-                    <div class="value">{{ posts_count }}</div>
-                    <div class="label" style="font-size:12px">
-                        Опубликовано: {{ published_count }} · Черновики: {{ draft_count }}
-                    </div>
-                </div>
-                <div class="summary-card">
-                    <div class="label">Комментарии</div>
-                    <div class="value">{{ comments_count }}</div>
-                    <div class="label" style="font-size:12px">
-                        На модерации: {{ pending_comments }}
-                    </div>
-                </div>
-                <div class="summary-card">
-                    <div class="label">Пользователи</div>
-                    <div class="value">{{ users_count }}</div>
-                    <div class="label" style="font-size:12px">
-                        Новых сегодня: {{ today_posts }}
-                    </div>
-                </div>
-                <div class="summary-card">
-                    <div class="label">Просмотры (всего)</div>
-                    <div class="value">{{ total_views }}</div>
-                    <div class="label" style="font-size:12px">—</div>
-                </div>
+    <div class="summary-cards">
+        <div class="summary-card">
+            <div class="label">Всего постов</div>
+            <div class="value">{{ posts_count }}</div>
+            <div class="label">Опубликовано: {{ published_count }} / Черновики: {{ draft_count }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Комментарии</div>
+            <div class="value">{{ comments_count }}</div>
+            <div class="label">На модерации: {{ pending_comments }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Пользователи</div>
+            <div class="value">{{ users_count }}</div>
+            <div class="label">Новых сегодня: {{ today_posts }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Просмотры</div>
+            <div class="value">{{ total_views }}</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h3 style="margin:0">Активность за период</h3>
+            <div class="controls">
+                <label for="dashboard-days" style="font-size:13px;color:#6b7280">Период</label>
+                <select id="dashboard-days">
+                    <option value="7">7 дней</option>
+                    <option value="14">14 дней</option>
+                    <option value="30" selected>30 дней</option>
+                    <option value="90">90 дней</option>
+                </select>
             </div>
-
-            <div class="card">
-                <div style="display:flex;justify-content:space-between;align-items:center">
-                    <h3 style="margin:0">Активность за последние 30 дней</h3>
-                    <div class="controls">
-                        <label for="dashboard-days" style="font-size:13px;color:#6b7280">Период</label>
-                        <select id="dashboard-days">
-                            <option value="7">7 дней</option>
-                            <option value="14">14 дней</option>
-                            <option value="30" selected>30 дней</option>
-                            <option value="90">90 дней</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="charts-row">
-                    <div>
-                        <canvas id="activityChart" height="220"></canvas>
-                    </div>
-                    <div>
-                        <h4 style="margin:0 0 8px 0">Быстрые действия</h4>
-                        <p style="margin:0 0 10px 0;color:#6b7280;font-size:13px">
-                            Выберите пост из списка и примените действие.
-                        </p>
-
-                        <div id="quick-actions-container" style="display:flex;flex-direction:column;gap:8px"></div>
-
-                        <hr style="margin:12px 0">
-
-                        <h4 style="margin:0 0 8px 0">Последние комментарии</h4>
-                        <ul class="recent-list">
-                            {% for c in recent_comments %}
-                                <li>
-                                    <div style="flex:1">
-                                        <div style="font-weight:600">
-                                            {{ c.name }}
-                                            {% if c.user %}
-                                                <small style="color:#6b7280">· {{ c.user.username }}</small>
-                                            {% endif %}
-                                        </div>
-                                        <div style="font-size:13px;color:#6b7280">
-                                            {{ c.content|truncatechars:120 }}
-                                        </div>
-                                        <div style="font-size:12px;color:#94a3b8;margin-top:6px">
-                                            Пост:
-                                            <a href="{% url 'admin:blog_post_change' c.post.id %}">
-                                                {{ c.post.title }}
-                                            </a>
-                                             • {{ c.created_at|date:"Y-m-d H:i" }}
-                                        </div>
-                                    </div>
-                                </li>
-                            {% empty %}
-                                <li>Нет комментариев</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            <div style="margin-top:14px" class="card">
-                <h3 style="margin:0 0 10px 0">Последние посты</h3>
+        </div>
+        <div class="charts-row">
+            <canvas id="activityChart" height="220"></canvas>
+            <div>
+                <h4 style="margin:0 0 8px 0">Последние комментарии</h4>
                 <ul class="recent-list">
-                    {% for p in recent_posts %}
+                    {% for c in recent_comments %}
                         <li>
-                            {% if p.featured_image %}
-                                <img src="{{ p.featured_image }}" class="recent-thumb" alt="">
-                            {% else %}
-                                <div class="recent-thumb"></div>
-                            {% endif %}
                             <div style="flex:1">
-                                <div style="display:flex;justify-content:space-between;align-items:center">
-                                    <a href="{% url 'admin:blog_post_change' p.id %}" style="font-weight:600">
-                                        {{ p.title }}
-                                    </a>
-                                    <span style="font-size:13px;color:#6b7280">
-                                        {{ p.published_at|date:"Y-m-d" }}
-                                    </span>
+                                <div style="font-weight:600">{{ c.name }}
+                                    {% if c.user %}<small style="color:#6b7280"> · {{ c.user.username }}</small>{% endif %}
                                 </div>
-                                <div style="color:#6b7280;font-size:13px;margin-top:4px">
-                                    {{ p.excerpt|truncatechars:160 }}
-                                </div>
-                                <div style="margin-top:8px;font-size:13px">
-                                    <a class="quick-action-btn" data-post-id="{{ p.id }}" data-action="publish">Опубликовать</a>
-                                    <a class="quick-action-btn" style="background:#f97316" data-post-id="{{ p.id }}" data-action="draft">В черновики</a>
-                                    <a class="quick-action-btn" style="background:#ef4444" data-post-id="{{ p.id }}" data-action="archive">В архив</a>
+                                <div style="font-size:13px;color:#6b7280">{{ c.content|truncatechars:120 }}</div>
+                                <div style="font-size:12px;color:#94a3b8;margin-top:6px">
+                                    Пост: <a href="{% url 'admin:blog_post_change' c.post.id %}">{{ c.post.title }}</a>
+                                     • {{ c.created_at|date:"Y-m-d H:i" }}
                                 </div>
                             </div>
                         </li>
                     {% empty %}
-                        <li>Нет постов</li>
+                        <li>Нет комментариев</li>
                     {% endfor %}
                 </ul>
             </div>
         </div>
+    </div>
 
-        <div>
-            <div class="card">
-                <h3 style="margin:0 0 10px 0">Сводка</h3>
-                <div style="display:flex;flex-direction:column;gap:10px">
-                    <div style="display:flex;justify-content:space-between">
-                        <div>Всего постов</div><div><strong>{{ posts_count }}</strong></div>
+    <div class="card">
+        <h3 style="margin:0 0 10px 0">Последние посты</h3>
+        <ul class="recent-list">
+            {% for p in recent_posts %}
+            <li>
+                {% if p.featured_image %}
+                    <img src="{{ p.featured_image }}" class="recent-thumb" alt="">
+                {% else %}
+                    <div class="recent-thumb"></div>
+                {% endif %}
+                <div style="flex:1">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <a href="{% url 'admin:blog_post_change' p.id %}" style="font-weight:600">{{ p.title }}</a>
+                        <span style="font-size:13px;color:#6b7280">{{ p.published_at|date:"Y-m-d" }}</span>
                     </div>
-                    <div style="display:flex;justify-content:space-between">
-                        <div>Опубликовано</div><div><strong class="status-published">{{ published_count }}</strong></div>
-                    </div>
-                    <div style="display:flex;justify-content:space-between">
-                        <div>Черновики</div><div><strong class="status-draft">{{ draft_count }}</strong></div>
-                    </div>
-                    <div style="display:flex;justify-content:space-between">
-                        <div>Комментариев</div><div><strong>{{ comments_count }}</strong></div>
-                    </div>
-                    <div style="display:flex;justify-content:space-between">
-                        <div>Пользователей</div><div><strong>{{ users_count }}</strong></div>
+                    <div style="color:#6b7280;font-size:13px;margin-top:4px">{{ p.excerpt|truncatechars:160 }}</div>
+                    <div style="margin-top:8px">
+                        <a class="quick-action-btn publish" data-post-id="{{ p.id }}" data-action="publish">Опубликовать</a>
+                        <a class="quick-action-btn draft" data-post-id="{{ p.id }}" data-action="draft">В черновики</a>
+                        <a class="quick-action-btn archive" data-post-id="{{ p.id }}" data-action="archive">В архив</a>
                     </div>
                 </div>
-            </div>
-
-            <div class="card" style="margin-top:12px">
-                <h3 style="margin:0 0 10px 0">Поиск</h3>
-                <form method="get" action="{% url 'admin:blog_post_changelist' %}">
-                    <input type="text" name="q" placeholder="Поиск постов..." style="width:100%;padding:8px;border-radius:6px;border:1px solid #e6e9ee">
-                </form>
-            </div>
-        </div>
+            </li>
+            {% empty %}
+                <li>Нет постов</li>
+            {% endfor %}
+        </ul>
     </div>
 </div>
 

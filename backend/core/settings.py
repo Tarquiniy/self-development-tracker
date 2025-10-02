@@ -180,7 +180,10 @@ MIDDLEWARE = [
 
 # ========== APPS ==========
 INSTALLED_APPS = [
-    "jazzmin",   # 👈 Jazzmin первым
+    "jazzmin",
+    "reversion",
+    "ckeditor",
+    "ckeditor_uploader",
     'grappelli',
     "django.contrib.admin",
     "django.contrib.auth",
@@ -197,6 +200,9 @@ INSTALLED_APPS = [
     'django_filters',
     'django_summernote',
     'storages',
+    'reversion',
+    'adminsortable2',
+    'filebrowser',
 
     # Local apps
     "users",
@@ -206,7 +212,9 @@ INSTALLED_APPS = [
     "blog",
 ]
 
-# Остальное без изменений...
+CKEDITOR_UPLOAD_PATH = "uploads/"
+CKEDITOR_ALLOW_NONIMAGE_FILES = False
+
 PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
     'django.contrib.auth.hashers.PBKDF2PasswordHasher',
