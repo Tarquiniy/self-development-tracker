@@ -11,46 +11,36 @@ env = os.environ.get
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ========== SUPABASE / S3 переменные (определяем ДО того, как они используются) ==========
-# Читаем из окружения — безопасные значения по умолчанию (пустая строка / None)
+# ========== SUPABASE / S3 ==========
 SUPABASE_USE_PROXY = True
 SUPABASE_URL = env("SUPABASE_URL", "").strip() or None
 SUPABASE_KEY = env("SUPABASE_KEY", "").strip() or None
-SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "post_attachments")  # имя бакета, например media
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "post_attachments")
 SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", "").strip() or None
 
-# S3-совместимые ключи (Supabase может выдавать S3-ключи)
 AWS_ACCESS_KEY_ID = env("SUPABASE_S3_KEY", "").strip() or None
 AWS_SECRET_ACCESS_KEY = env("SUPABASE_S3_SECRET", "").strip() or None
-
-# Имя бакета (bucket)
 AWS_STORAGE_BUCKET_NAME = "post_attachments"
 
-# Флаг: бакет публичный? (True по умолчанию). Можно переопределить через env:
 SUPABASE_PUBLIC_BUCKET = True
-
-# Конфигурация endpoint для S3 (подставьте реальный endpoint, если Supabase дал S3-совместимую ссылку)
-# Чаще всего можно использовать: https://<project>.supabase.co/storage/v1
 AWS_S3_ENDPOINT_URL = os.environ.get("AWS_S3_ENDPOINT_URL", SUPABASE_URL)
 AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', 'us-east-1')
 AWS_S3_SIGNATURE_VERSION = 's3v4'
 AWS_S3_ADDRESSING_STYLE = "path"
-AWS_DEFAULT_ACL = None  # управляем ACL через bucket policy на стороне Supabase
+AWS_DEFAULT_ACL = None
 AWS_S3_OBJECT_PARAMETERS = {
     'CacheControl': 'max-age=86400, public',
 }
 
-# ========== MEDIA (MEDIA_URL) ==========
-# Формируем MEDIA_URL только если есть SUPABASE_URL и имя бакета; иначе — локальный fallback.
+# ========== MEDIA ==========
 if SUPABASE_URL and AWS_STORAGE_BUCKET_NAME:
     MEDIA_URL = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/{AWS_STORAGE_BUCKET_NAME}/"
 else:
-    # fallback — локальная директория (для разработки)
     MEDIA_URL = os.environ.get('MEDIA_URL', '/media/')
 
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
-# ========== НАСТРОЙКИ ADMIN И GRAPPELLI ==========
+# ========== ADMIN ==========
 GRAPPELLI_ADMIN_TITLE = 'Positive Theta Admin'
 GRAPPELLI_SWITCH_USER = True
 
@@ -75,8 +65,30 @@ SUMMERNOTE_CONFIG = {
     'attachment_require_authentication': True,
 }
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'резервный-секретный-ключ-для-разработки')
+# 🎨 Jazzmin кастомизация
+JAZZMIN_SETTINGS = {
+    "site_title": "SDTracker Admin",
+    "site_header": "SDTracker Панель",
+    "site_brand": "SDTracker",
+    "welcome_sign": "Добро пожаловать в панель управления",
+    "copyright": "SDTracker © 2025",
+    "show_ui_builder": True,
+    "icons": {
+        "auth": "fas fa-users-cog",
+        "blog.Post": "fas fa-newspaper",
+        "blog.Category": "fas fa-folder",
+        "blog.Tag": "fas fa-tags",
+        "blog.Comment": "fas fa-comments",
+    },
+    "order_with_respect_to": ["blog", "auth"],
+    "topmenu_links": [
+        {"name": "Главная", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"app": "blog"},
+        {"name": "Сайт", "url": "/", "new_window": True},
+    ],
+}
 
+SECRET_KEY = os.environ.get('SECRET_KEY', 'резервный-секретный-ключ-для-разработки')
 DEBUG = os.getenv("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") + [
@@ -94,7 +106,7 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
-# CSRF и CORS настройки
+# CSRF / CORS
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -118,26 +130,10 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
-
-CORS_ALLOW_METHODS = [
-    'DELETE',
-    'GET',
-    'OPTIONS',
-    'PATCH',
-    'POST',
-    'PUT',
-]
-
+CORS_ALLOW_METHODS = ['DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'PUT']
 CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
+    'accept', 'accept-encoding', 'authorization', 'content-type',
+    'dnt', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with',
 ]
 
 SESSION_COOKIE_SAMESITE = 'None'
@@ -145,18 +141,13 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SAMESITE = 'None'
 CSRF_COOKIE_SECURE = True
 
-# ========== СТАТИЧЕСКИЕ ФАЙЛЫ ==========
+# ========== STATIC ==========
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-
-# Важно: правильный порядок для статических файлов
-STATICFILES_DIRS = [
-    BASE_DIR / 'blog' / 'static',   # <-- проверь этот путь локально
-]
-
+STATICFILES_DIRS = [BASE_DIR / 'blog' / 'static']
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
-# ========== БАЗА ДАННЫХ ==========
+# ========== DATABASE ==========
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -167,7 +158,6 @@ DATABASES = {
         'PORT': os.environ.get('SUPABASE_DB_PORT', '5432'),
     }
 }
-
 if os.environ.get('DATABASE_URL'):
     DATABASES['default'] = dj_database_url.config(
         default=os.environ.get('DATABASE_URL'),
@@ -179,7 +169,7 @@ if os.environ.get('DATABASE_URL'):
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # Важно: после SecurityMiddleware
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -188,8 +178,9 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# ========== ПРИЛОЖЕНИЯ ==========
+# ========== APPS ==========
 INSTALLED_APPS = [
+    "jazzmin",   # 👈 Jazzmin первым
     'grappelli',
     "django.contrib.admin",
     "django.contrib.auth",
@@ -215,6 +206,7 @@ INSTALLED_APPS = [
     "blog",
 ]
 
+# Остальное без изменений...
 PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
     'django.contrib.auth.hashers.PBKDF2PasswordHasher',
@@ -223,11 +215,10 @@ PASSWORD_HASHERS = [
 
 JWT_SECRET = os.environ.get('DJANGO_JWT_SECRET', os.environ.get('SECRET_KEY'))
 JWT_ALGORITHM = 'HS256'
-JWT_EXP_DELTA_SECONDS = 60 * 60 * 24 * 7  # 7 дней
+JWT_EXP_DELTA_SECONDS = 60 * 60 * 24 * 7
 
 ROOT_URLCONF = "core.urls"
 
-# ========== ШАБЛОНЫ ==========
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -236,7 +227,7 @@ TEMPLATES = [
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.debug",
-                "django.template.context_processors.request",  # Важно для Grappelli
+                "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "django.template.context_processors.static",
@@ -247,7 +238,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "core.wsgi.application"
 
-# ========== КЕШИРОВАНИЕ ==========
+# ========== CACHE ==========
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
@@ -256,7 +247,6 @@ CACHES = {
     }
 }
 
-# ========== ПАРОЛИ ==========
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -264,12 +254,10 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# ========== ЯЗЫК И ВРЕМЯ ==========
 LANGUAGE_CODE = "ru-ru"
 TIME_ZONE = "Europe/Moscow"
 USE_I18N = True
 USE_TZ = True
-
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ========== REST FRAMEWORK ==========
@@ -279,9 +267,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
-    ],
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
 }
@@ -299,10 +285,8 @@ SIMPLE_JWT = {
     "AUTH_COOKIE_SAMESITE": "None",
 }
 
-# ========== ПОЛЬЗОВАТЕЛИ ==========
 AUTH_USER_MODEL = "users.CustomUser"
 
-# ========== БЕЗОПАСНОСТЬ PRODUCTION ==========
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -314,10 +298,8 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
-# ========== DEFAULT FILE STORAGE (использует blog/storages.SupabaseStorage) ==========
 DEFAULT_FILE_STORAGE = "backend.blog.storages.SupabaseStorage"
 
-# ========== Email ==========
 if not DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = os.getenv('EMAIL_HOST')
@@ -329,21 +311,12 @@ if not DEBUG:
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# ========== ЛОГГИРОВАНИЕ ==========
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-        },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': 'django.log',
-        },
+        'console': {"class": 'logging.StreamHandler'},
+        'file': {"class": 'logging.FileHandler', 'filename': 'django.log'},
     },
-    'root': {
-        'handlers': ['console', 'file'],
-        'level': 'INFO',
-    },
+    'root': {'handlers': ['console', 'file'], 'level': 'INFO'},
 }
