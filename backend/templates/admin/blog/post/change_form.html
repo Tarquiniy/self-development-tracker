@@ -1,131 +1,124 @@
 {% extends "admin/change_form.html" %}
 {% load static i18n %}
 
-{% block extrastyle %}
-{{ block.super }}
-<link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
-<style>
-.editor-wrapper {
-    display: grid;
-    grid-template-columns: 1fr 340px;
-    gap: 20px;
-}
-@media (max-width: 1100px) {
-    .editor-wrapper { grid-template-columns: 1fr; }
-}
-.editor-main {
-    background: white;
-    border-radius: 12px;
-    padding: 18px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-}
-.editor-sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-.sidebar-card {
-    background: white;
-    border-radius: 12px;
-    padding: 14px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-}
-.sidebar-card h3 {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 10px;
-    display:flex;
-    justify-content: space-between;
-    align-items:center;
-}
-.status-btn {
-    padding:6px 10px;
-    border-radius:6px;
-    font-size:13px;
-    color:white;
-    text-decoration:none;
-    margin-right:6px;
-}
-.status-btn.publish { background:#10b981; }
-.status-btn.draft { background:#f59e0b; }
-.status-btn.archive { background:#ef4444; }
-.featured-preview img {
-    max-width: 100%;
-    border-radius: 8px;
-    margin-bottom: 8px;
-}
-.seo-section input, .seo-section textarea {
-    width: 100%;
-    border: 1px solid #e5e7eb;
-    padding: 6px 8px;
-    border-radius: 6px;
-    font-size: 14px;
-    margin-bottom: 8px;
-}
-.toast {
-    position: fixed;
-    right: 20px;
-    bottom: 20px;
-    background: #0f172a;
-    color: white;
-    padding: 10px 14px;
-    border-radius: 8px;
-    z-index: 99999;
-    opacity: 0.95;
-}
-</style>
+{% block extrahead %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tiptap/extension-text-style@2/dist/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tiptap/core@2/dist/style.css">
+
+    <style>
+        .editor-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 20px;
+            margin-top: 16px;
+        }
+        .editor-main {
+            background: white;
+            border-radius: 10px;
+            padding: 16px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        }
+        .editor-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .editor-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .editor-toolbar button {
+            padding: 6px 10px;
+            border: 1px solid #e2e8f0;
+            background: #f9fafb;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .editor-toolbar button.active {
+            background: #0ea5e9;
+            color: white;
+        }
+        .editor-content {
+            min-height: 300px;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+        .seo-box, .publish-box, .meta-box {
+            background: white;
+            padding: 14px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        }
+        .seo-box input, .seo-box textarea {
+            width: 100%;
+            margin-top: 6px;
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
+        .post-preview {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            background: #f8fafc;
+            margin-top: 12px;
+        }
+    </style>
 {% endblock %}
 
 {% block content %}
 <div class="editor-wrapper">
+    <!-- Основной редактор -->
     <div class="editor-main">
-        <h2 style="margin-bottom:14px">Редактор поста</h2>
-        {{ adminform.form.title }}
-        {{ adminform.form.excerpt }}
-        {{ adminform.form.content }}
+        <div class="editor-toolbar" id="editor-toolbar"></div>
+        <div id="editor-content" class="editor-content"></div>
     </div>
 
+    <!-- Боковая панель -->
     <div class="editor-sidebar">
-        <div class="sidebar-card">
-            <h3>Статус публикации</h3>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <a href="#" class="status-btn publish" data-status="published">Опубликовать</a>
-                <a href="#" class="status-btn draft" data-status="draft">В черновики</a>
-                <a href="#" class="status-btn archive" data-status="archived">В архив</a>
-            </div>
-            <div style="margin-top:10px;font-size:13px;color:#6b7280">
-                Текущий статус: <strong id="current-status">{{ original.status|default:"draft" }}</strong>
-            </div>
+        <!-- SEO -->
+        <div class="seo-box">
+            <h3>SEO</h3>
+            <label>Slug:</label>
+            <input type="text" name="slug" id="id_slug" value="{{ original.slug|default:'' }}">
+            <label>Мета-описание:</label>
+            <textarea name="meta_description" rows="3">{{ original.meta_description|default:'' }}</textarea>
+            <label>Ключевые слова:</label>
+            <input type="text" name="meta_keywords" value="{{ original.meta_keywords|default:'' }}">
         </div>
 
-        <div class="sidebar-card">
-            <h3>Дата публикации</h3>
-            {{ adminform.form.published_at }}
+        <!-- Публикация -->
+        <div class="publish-box">
+            <h3>Публикация</h3>
+            <p>Статус: 
+                <select name="status">
+                    <option value="draft" {% if original.status == "draft" %}selected{% endif %}>Черновик</option>
+                    <option value="published" {% if original.status == "published" %}selected{% endif %}>Опубликован</option>
+                    <option value="archived" {% if original.status == "archived" %}selected{% endif %}>Архив</option>
+                </select>
+            </p>
+            <p>Дата публикации: <input type="datetime-local" name="published_at" value="{{ original.published_at|date:'Y-m-d\TH:i' }}"></p>
+            <button type="submit" class="default">💾 Сохранить</button>
         </div>
 
-        <div class="sidebar-card">
-            <h3>Категории</h3>
+        <!-- Мета -->
+        <div class="meta-box">
+            <h3>Категории и теги</h3>
             {{ adminform.form.categories }}
-            <h3 style="margin-top:12px">Теги</h3>
             {{ adminform.form.tags }}
         </div>
 
-        <div class="sidebar-card">
-            <h3>Главное изображение</h3>
-            <div class="featured-preview" id="featured-image-preview">
-                {% if original.featured_image %}
-                    <img src="{{ original.featured_image }}" alt="">
-                {% endif %}
-            </div>
-            <button type="button" id="open-media-btn" class="status-btn draft" style="margin-top:6px">Выбрать из медиатеки</button>
-            {{ adminform.form.featured_image }}
-        </div>
-
-        <div class="sidebar-card seo-section">
-            <h3>SEO</h3>
-            {{ adminform.form.meta_title }}
-            {{ adminform.form.meta_description }}
-            {{ adminform.form.og_image }}
+        <!-- Превью -->
+        <div class="meta-box">
+            <h3>Превью поста</h3>
+            <div id="post-preview" class="post-preview">Начните печатать, чтобы увидеть превью...</div>
         </div>
     </div>
 </div>
@@ -133,49 +126,62 @@
 
 {% block footer_extra %}
 {{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/@tiptap/core@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@2"></script>
+
 <script>
-(function(){
-    'use strict';
+document.addEventListener("DOMContentLoaded", function() {
+    const { Editor } = window['@tiptap/core'];
+    const StarterKit = window['@tiptap/starter-kit'].StarterKit;
 
-    const postId = {{ object.id|default:"null" }};
-    const csrfToken = document.cookie.match(/(^|;)\\s*csrftoken=([^;]+)/);
+    // Инициализация редактора
+    const editor = new Editor({
+        element: document.querySelector('#editor-content'),
+        extensions: [StarterKit],
+        content: `{{ original.content|default:""|escapejs }}`,
+        onUpdate: ({ editor }) => {
+            document.querySelector('#post-preview').innerHTML = editor.getHTML();
+        }
+    });
 
-    function toast(msg, err) {
-        let t = document.createElement("div");
-        t.className = "toast";
-        t.style.background = err ? "#b91c1c" : "#0f172a";
-        t.textContent = msg;
-        document.body.appendChild(t);
-        setTimeout(()=>{t.remove();},3000);
-    }
+    // Toolbar
+    const toolbar = document.getElementById("editor-toolbar");
+    const buttons = [
+        {cmd: 'toggleBold', label: 'B'},
+        {cmd: 'toggleItalic', label: 'I'},
+        {cmd: 'toggleStrike', label: 'S'},
+        {cmd: 'toggleBulletList', label: '• список'},
+        {cmd: 'toggleOrderedList', label: '1. список'},
+        {cmd: 'toggleBlockquote', label: '“ цитата'},
+        {cmd: 'toggleCodeBlock', label: '</>'},
+    ];
 
-    function updateStatus(status) {
-        if (!postId) { toast("Сначала сохраните пост", true); return; }
-        fetch("/admin/post-inline-update/", {
-            method:"POST",
-            headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken?csrfToken[2]:""},
-            body:JSON.stringify({post_id:postId, field:"status", value:status})
-        }).then(r=>r.json()).then(data=>{
-            if(data.success){
-                document.getElementById("current-status").textContent=status;
-                toast("Статус изменён", false);
-            } else { toast("Ошибка: "+data.message,true); }
-        }).catch(()=>toast("Ошибка сети",true));
-    }
+    buttons.forEach(b => {
+        const btn = document.createElement("button");
+        btn.innerText = b.label;
+        btn.onclick = () => {
+            editor.chain().focus()[b.cmd]().run();
+            updateToolbar();
+        };
+        toolbar.appendChild(btn);
+    });
 
-    document.querySelectorAll(".status-btn").forEach(btn=>{
-        btn.addEventListener("click", e=>{
-            e.preventDefault();
-            updateStatus(btn.dataset.status);
+    function updateToolbar() {
+        toolbar.querySelectorAll("button").forEach((btn, i) => {
+            const cmd = buttons[i].cmd.replace("toggle","").toLowerCase();
+            btn.classList.toggle("active", editor.isActive(cmd));
         });
-    });
+    }
 
-    document.getElementById("open-media-btn").addEventListener("click", ()=>{
-        let url = "/admin/media-library/";
-        if (postId) url += "?post_id="+postId;
-        window.open(url,"_blank","width=1100,height=700");
-    });
+    editor.on('selectionUpdate', updateToolbar);
 
-})();
+    // Ctrl+S = сохранить
+    document.addEventListener("keydown", e => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+            e.preventDefault();
+            document.querySelector("form").submit();
+        }
+    });
+});
 </script>
 {% endblock %}
