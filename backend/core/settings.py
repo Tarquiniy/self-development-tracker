@@ -181,7 +181,6 @@ MIDDLEWARE = [
 # ========== APPS ==========
 INSTALLED_APPS = [
     "jazzmin",
-    "reversion",
     "ckeditor",
     "ckeditor_uploader",
     'grappelli',
