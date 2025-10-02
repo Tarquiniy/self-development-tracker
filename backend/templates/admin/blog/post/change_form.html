@@ -4,13 +4,14 @@
 {% block extrahead %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tiptap/extension-text-style@2/dist/style.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tiptap/core@2/dist/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tiptap/extension-text-style@2/dist/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
 
     <style>
         .editor-wrapper {
             display: grid;
-            grid-template-columns: 1fr 320px;
+            grid-template-columns: 1fr 340px;
             gap: 20px;
             margin-top: 16px;
         }
@@ -20,16 +21,11 @@
             padding: 16px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
         }
-        .editor-sidebar {
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
         .editor-toolbar {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
         }
         .editor-toolbar button {
             padding: 6px 10px;
@@ -44,18 +40,19 @@
             color: white;
         }
         .editor-content {
-            min-height: 300px;
+            min-height: 400px;
             padding: 12px;
             border: 1px solid #e5e7eb;
             border-radius: 8px;
         }
-        .seo-box, .publish-box, .meta-box {
+        .sidebar-box {
             background: white;
             padding: 14px;
             border-radius: 10px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+            margin-bottom: 14px;
         }
-        .seo-box input, .seo-box textarea {
+        .sidebar-box input, .sidebar-box textarea, .sidebar-box select {
             width: 100%;
             margin-top: 6px;
             margin-bottom: 10px;
@@ -69,6 +66,8 @@
             padding: 12px;
             background: #f8fafc;
             margin-top: 12px;
+            max-height: 200px;
+            overflow: auto;
         }
     </style>
 {% endblock %}
@@ -81,44 +80,41 @@
         <div id="editor-content" class="editor-content"></div>
     </div>
 
-    <!-- Боковая панель -->
-    <div class="editor-sidebar">
-        <!-- SEO -->
-        <div class="seo-box">
+    <!-- Сайдбар -->
+    <div>
+        <div class="sidebar-box">
             <h3>SEO</h3>
             <label>Slug:</label>
             <input type="text" name="slug" id="id_slug" value="{{ original.slug|default:'' }}">
             <label>Мета-описание:</label>
-            <textarea name="meta_description" rows="3">{{ original.meta_description|default:'' }}</textarea>
+            <textarea name="meta_description" rows="3" maxlength="160">{{ original.meta_description|default:'' }}</textarea>
+            <small id="meta-count"></small>
             <label>Ключевые слова:</label>
             <input type="text" name="meta_keywords" value="{{ original.meta_keywords|default:'' }}">
         </div>
 
-        <!-- Публикация -->
-        <div class="publish-box">
+        <div class="sidebar-box">
             <h3>Публикация</h3>
-            <p>Статус: 
-                <select name="status">
-                    <option value="draft" {% if original.status == "draft" %}selected{% endif %}>Черновик</option>
-                    <option value="published" {% if original.status == "published" %}selected{% endif %}>Опубликован</option>
-                    <option value="archived" {% if original.status == "archived" %}selected{% endif %}>Архив</option>
-                </select>
-            </p>
-            <p>Дата публикации: <input type="datetime-local" name="published_at" value="{{ original.published_at|date:'Y-m-d\TH:i' }}"></p>
+            <label>Статус:</label>
+            <select name="status">
+                <option value="draft" {% if original.status == "draft" %}selected{% endif %}>Черновик</option>
+                <option value="published" {% if original.status == "published" %}selected{% endif %}>Опубликован</option>
+                <option value="archived" {% if original.status == "archived" %}selected{% endif %}>Архив</option>
+            </select>
+            <label>Дата публикации:</label>
+            <input type="datetime-local" name="published_at" value="{{ original.published_at|date:'Y-m-d\TH:i' }}">
             <button type="submit" class="default">💾 Сохранить</button>
         </div>
 
-        <!-- Мета -->
-        <div class="meta-box">
+        <div class="sidebar-box">
             <h3>Категории и теги</h3>
             {{ adminform.form.categories }}
             {{ adminform.form.tags }}
         </div>
 
-        <!-- Превью -->
-        <div class="meta-box">
+        <div class="sidebar-box">
             <h3>Превью поста</h3>
-            <div id="post-preview" class="post-preview">Начните печатать, чтобы увидеть превью...</div>
+            <div id="post-preview" class="post-preview">Начните печатать...</div>
         </div>
     </div>
 </div>
@@ -128,60 +124,83 @@
 {{ block.super }}
 <script src="https://cdn.jsdelivr.net/npm/@tiptap/core@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-link@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-table@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-highlight@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-color@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-text-style@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/index.min.js"></script>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
     const { Editor } = window['@tiptap/core'];
     const StarterKit = window['@tiptap/starter-kit'].StarterKit;
+    const Link = window['@tiptap/extension-link'].default;
+    const Table = window['@tiptap/extension-table'].default;
+    const Highlight = window['@tiptap/extension-highlight'].default;
+    const TextStyle = window['@tiptap/extension-text-style'].default;
+    const Color = window['@tiptap/extension-color'].default;
 
-    // Инициализация редактора
     const editor = new Editor({
         element: document.querySelector('#editor-content'),
-        extensions: [StarterKit],
+        extensions: [StarterKit, Link, Table, Highlight, TextStyle, Color],
         content: `{{ original.content|default:""|escapejs }}`,
         onUpdate: ({ editor }) => {
             document.querySelector('#post-preview').innerHTML = editor.getHTML();
+            localStorage.setItem("draft_autosave", editor.getHTML());
         }
     });
 
     // Toolbar
     const toolbar = document.getElementById("editor-toolbar");
     const buttons = [
-        {cmd: 'toggleBold', label: 'B'},
-        {cmd: 'toggleItalic', label: 'I'},
-        {cmd: 'toggleStrike', label: 'S'},
-        {cmd: 'toggleBulletList', label: '• список'},
-        {cmd: 'toggleOrderedList', label: '1. список'},
-        {cmd: 'toggleBlockquote', label: '“ цитата'},
-        {cmd: 'toggleCodeBlock', label: '</>'},
+        {cmd:'toggleBold',label:'B'},
+        {cmd:'toggleItalic',label:'I'},
+        {cmd:'toggleStrike',label:'S'},
+        {cmd:'toggleUnderline',label:'U'},
+        {cmd:'toggleHeading',opts:{level:2},label:'H2'},
+        {cmd:'toggleHeading',opts:{level:3},label:'H3'},
+        {cmd:'toggleBulletList',label:'• список'},
+        {cmd:'toggleOrderedList',label:'1. список'},
+        {cmd:'toggleBlockquote',label:'“ цитата'},
+        {cmd:'toggleCodeBlock',label:'</>'},
+        {cmd:'setHorizontalRule',label:'— HR'},
+        {cmd:'toggleHighlight',label:'⧉ подсветка'},
+        {cmd:'setColor',opts:'#ef4444',label:'Красный'},
+        {cmd:'setColor',opts:'#10b981',label:'Зелёный'},
+        {cmd:'setColor',opts:'#3b82f6',label:'Синий'}
     ];
 
-    buttons.forEach(b => {
-        const btn = document.createElement("button");
-        btn.innerText = b.label;
-        btn.onclick = () => {
-            editor.chain().focus()[b.cmd]().run();
-            updateToolbar();
-        };
+    buttons.forEach(b=>{
+        const btn=document.createElement("button");
+        btn.innerText=b.label;
+        btn.onclick=()=>{ editor.chain().focus()[b.cmd](b.opts||{}).run(); };
         toolbar.appendChild(btn);
     });
 
-    function updateToolbar() {
-        toolbar.querySelectorAll("button").forEach((btn, i) => {
-            const cmd = buttons[i].cmd.replace("toggle","").toLowerCase();
-            btn.classList.toggle("active", editor.isActive(cmd));
-        });
+    // Автовосстановление
+    const saved = localStorage.getItem("draft_autosave");
+    if(saved && !editor.getHTML().trim()){
+        editor.commands.setContent(saved);
     }
 
-    editor.on('selectionUpdate', updateToolbar);
-
     // Ctrl+S = сохранить
-    document.addEventListener("keydown", e => {
-        if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+    document.addEventListener("keydown", e=>{
+        if((e.ctrlKey||e.metaKey)&&e.key==="s"){
             e.preventDefault();
             document.querySelector("form").submit();
         }
     });
+
+    // SEO счётчик символов
+    const metaField=document.querySelector("textarea[name=meta_description]");
+    const metaCount=document.getElementById("meta-count");
+    function updateMeta(){
+        metaCount.textContent=`${metaField.value.length}/160`;
+        metaCount.style.color=metaField.value.length>160?"red":"#6b7280";
+    }
+    metaField.addEventListener("input",updateMeta);
+    updateMeta();
 });
 </script>
 {% endblock %}
