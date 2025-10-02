@@ -32,7 +32,7 @@ if admin_media_library_view is None:
 urlpatterns = [
     path('grappelli/', include('grappelli.urls')),
     path("admin/", custom_admin_site.urls),
-    path("api/", include("api.urls")),
+    path("api/", include("blog.urls")),
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', LoginView.as_view(), name='login'),
     # подключаем API блога
