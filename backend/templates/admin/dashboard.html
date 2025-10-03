@@ -1,0 +1,58 @@
+{# templates/admin/dashboard.html #}
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block content %}
+  <div class="dashboard-panel">
+    <h1>{% trans "Admin dashboard" %}</h1>
+
+    <div class="dashboard-cards" style="display:flex;gap:16px;flex-wrap:wrap;">
+      <div class="card"><strong>{% trans "Posts" %}</strong><div>{{ posts_count }}</div><small>Published: {{ published_count }}</small></div>
+      <div class="card"><strong>{% trans "Comments" %}</strong><div>{{ comments_count }}</div></div>
+      <div class="card"><strong>{% trans "Users" %}</strong><div>{{ users_count }}</div></div>
+      <div class="card"><strong>{% trans "Views" %}</strong><div>{{ total_views }}</div></div>
+    </div>
+
+    <h2 style="margin-top:20px">Recent posts</h2>
+    <ul>
+      {% for p in recent_posts %}
+        <li>{% if p.url %}<a href="{{ p.url }}">{% endif %}{{ p.title }}{% if p.url %}</a>{% endif %} — {{ p.published_at }}</li>
+      {% empty %}
+        <li>No posts</li>
+      {% endfor %}
+    </ul>
+
+    <h2>Recent comments</h2>
+    <ul>
+      {% for c in recent_comments %}
+        <li>{{ c.name }} — {{ c.content }} <em>({{ c.post_title }})</em></li>
+      {% empty %}
+        <li>No comments</li>
+      {% endfor %}
+    </ul>
+
+    <h2>Recent admin actions</h2>
+    <ul>
+      {% for l in log_entries %}
+        <li>{{ l.action_time }} — {{ l.user }} — {{ l.object_repr }} — {{ l.change_message|safe }}</li>
+      {% empty %}
+        <li>No admin log entries</li>
+      {% endfor %}
+    </ul>
+
+    {# Optionally show the standard app list (if app_list provided) #}
+    {% if app_list %}
+      <h2>Applications</h2>
+      <div>
+        {% for app in app_list %}
+          <h3>{{ app.name }}</h3>
+          <ul>
+            {% for model in app.models %}
+              <li><a href="{{ model.admin_url }}">{{ model.name }}</a></li>
+            {% endfor %}
+          </ul>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+  </div>
+{% endblock %}

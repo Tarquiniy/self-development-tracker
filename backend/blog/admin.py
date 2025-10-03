@@ -402,13 +402,24 @@ def get_admin_change_url_for_obj(obj):
     except Exception:
         return None
 
+def _pretty_change_message(raw):
+    # Попытка распаковать JSON change_message (если это JSON), иначе вернуть строку
+    try:
+        parsed = json.loads(raw)
+        # parsed может быть списком/словарём/строкой — преобразуем в читаемую строку
+        if isinstance(parsed, dict) or isinstance(parsed, list):
+            return json.dumps(parsed, ensure_ascii=False)
+        return str(parsed)
+    except Exception:
+        # Если не JSON — просто вернуть строку (декодированную)
+        try:
+            # ensure we return unicode-friendly string
+            return raw.encode('utf-8', errors='ignore').decode('unicode_escape')
+        except Exception:
+            return str(raw)
 
 @require_GET
 def admin_dashboard_view(request):
-    """
-    Admin dashboard: пытаемся отрендерить HTML-дашборд, иначе возвращаем безопасный JSON.
-    URL'ы на редактирование вычисляем через get_admin_change_url_for_obj.
-    """
     if not request.user.is_staff:
         raise Http404("permission denied")
 
@@ -422,25 +433,21 @@ def admin_dashboard_view(request):
         users_count = CustomUser.objects.count() if CustomUser is not None else 0
         total_views = PostView.objects.count() if PostView is not None else 0
 
-        # recent posts — сериализуем в простой словарь
         recent_posts = []
         if Post is not None:
             for p in Post.objects.order_by('-created_at')[:8]:
                 recent_posts.append({
                     'id': p.pk,
                     'title': getattr(p, 'title', '')[:120],
-                    'status': getattr(p, 'status', ''),
                     'url': get_admin_change_url_for_obj(p),
                     'published_at': getattr(p, 'published_at', None).isoformat() if getattr(p, 'published_at', None) else None,
                 })
 
-        # recent comments — тоже словари
         recent_comments = []
         if Comment is not None:
             for c in Comment.objects.select_related('post').order_by('-created_at')[:8]:
                 recent_comments.append({
                     'id': c.pk,
-                    'post_id': c.post.pk if getattr(c, 'post', None) else None,
                     'post_title': getattr(c.post, 'title', '') if getattr(c, 'post', None) else '',
                     'post_url': get_admin_change_url_for_obj(getattr(c, 'post', None)),
                     'name': getattr(c, 'name', '')[:80],
@@ -448,18 +455,31 @@ def admin_dashboard_view(request):
                     'created_at': getattr(c, 'created_at', None).isoformat() if getattr(c, 'created_at', None) else None,
                 })
 
-        # recent log entries — сериализуем
-        from django.contrib.admin.models import LogEntry
+        # logs: десериализуем change_message
         recent_logs = []
         for le in LogEntry.objects.select_related('user').order_by('-action_time')[:10]:
+            cm = getattr(le, 'change_message', '')
+            pretty = _pretty_change_message(cm)
             recent_logs.append({
                 'id': le.pk,
                 'user': getattr(le.user, 'username', str(le.user)),
                 'action_time': le.action_time.isoformat() if getattr(le, 'action_time', None) else None,
                 'object_repr': getattr(le, 'object_repr', '')[:140],
-                'change_message': getattr(le, 'change_message', '')[:240],
+                'change_message': pretty,
                 'action_flag': le.action_flag,
             })
+
+        # app list для вставки (если нужно в шаблоне)
+        app_list = []
+        try:
+            # custom_admin_site может быть используемым админ-сайтом
+            if custom_admin_site:
+                app_list = custom_admin_site.get_app_list(request)
+        except Exception:
+            try:
+                app_list = admin.site.get_app_list(request)
+            except Exception:
+                app_list = []
 
         context = {
             'title': 'Dashboard',
@@ -473,13 +493,14 @@ def admin_dashboard_view(request):
             'recent_posts': recent_posts,
             'recent_comments': recent_comments,
             'log_entries': recent_logs,
+            'app_list': app_list,
         }
 
-        # Попытка отрендерить HTML-шаблон. Если шаблон есть — отдаём HTML.
+        # render our custom dashboard template (not admin/index.html)
         try:
-            return render(request, 'admin/index.html', context)
+            return render(request, 'admin/dashboard.html', context)
         except Exception as e:
-            logger.debug("Dashboard render failed, returning JSON: %s", e, exc_info=True)
+            logger.exception("Failed to render custom dashboard template, falling back to JSON: %s", e)
             return JsonResponse(context)
 
     except Exception as exc:
