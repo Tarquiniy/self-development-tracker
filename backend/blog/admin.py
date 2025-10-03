@@ -376,8 +376,9 @@ def admin_dashboard_view(request):
         users_count = CustomUser.objects.count()
         total_views = PostView.objects.count() if PostView is not None else 0
 
-        recent_posts = Post.objects.order_by('-created_at')[:8] if Post is not None else []
-        recent_comments = Comment.objects.select_related('post').order_by('-created_at')[:8] if Comment is not None else []
+        recent_posts = list(Post.objects.order_by('-created_at')[:8]) if Post is not None else []
+        recent_comments = list(Comment.objects.select_related('post').order_by('-created_at')[:8]) if Comment is not None else []
+        log_entries = LogEntry.objects.select_related('user').order_by('-action_time')[:10]
 
         context.update({
             'title': 'Dashboard',
@@ -390,15 +391,19 @@ def admin_dashboard_view(request):
             'total_views': total_views,
             'recent_posts': recent_posts,
             'recent_comments': recent_comments,
+            'log_entries': log_entries,
         })
 
-        try:
-            return render(request, 'admin/index.html', context)
-        except Exception:
-            return JsonResponse(context)
+        return render(request, 'admin/index.html', context)
+
     except Exception as e:
         logger.exception("Error building dashboard")
-        raise
+        # fallback to JSON with safe serialization
+        safe_context = {
+            k: (list(v) if hasattr(v, '__iter__') and not isinstance(v, (str, dict)) else v)
+            for k, v in context.items()
+        }
+        return JsonResponse(safe_context)
 
 @require_GET
 def admin_stats_api(request):
