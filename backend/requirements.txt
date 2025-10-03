@@ -76,3 +76,5 @@ django-reversion==6.0.0
 django-ckeditor==6.7.3
 django-admin-sortable2==2.2.8
 django_filebrowser_no_grappelli==4.0.2
+django-admin-sortable2==2.2.8
+filebrowser==1.2.0
