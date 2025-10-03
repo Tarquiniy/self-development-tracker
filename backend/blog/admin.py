@@ -4,7 +4,7 @@ import json
 import logging
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
-from django.urls import reverse
+from django.urls import reverse, NoReverseMatch
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, Http404, HttpResponseBadRequest
 from django.utils import timezone
@@ -156,9 +156,13 @@ class CommentAdmin(admin.ModelAdmin):
     def shorter_name(self, obj): return getattr(obj, 'name', '')[:30]
     def post_link(self, obj):
         try:
-            return format_html('<a href="{}">{}</a>', reverse('admin:blog_post_change', args=[obj.post.id]), obj.post.title)
+            post = getattr(obj, 'post', None)
+            url = get_admin_change_url_for_obj(post)
+            if post and url:
+                return format_html('<a href="{}">{}</a>', url, getattr(post, 'title', ''))
         except Exception:
-            return '-'
+            pass
+        return '-'
     def short_content(self, obj): return (getattr(obj, 'content', '')[:100] + ('...' if len(getattr(obj, 'content', '')) > 100 else ''))
 
 class PostReactionAdmin(admin.ModelAdmin):
@@ -357,17 +361,57 @@ def admin_post_update_view(request):
         logger.exception("Error saving post inline update")
         return JsonResponse({'success': False, 'message': f'Error saving: {e}'}, status=500)
 
+def get_admin_change_url_for_obj(obj):
+    """
+    Попытаться собрать корректный URL для admin change view для данного объекта,
+    учитывая, что AdminSite может иметь произвольное имя (например custom_admin).
+    Возвращает строку URL или None.
+    """
+    if obj is None:
+        return None
+
+    # формируем имя view: "<app_label>_<model_name>_change"
+    try:
+        viewname = f"{obj._meta.app_label}_{obj._meta.model_name}_change"
+    except Exception:
+        return None
+
+    # Список namespace'ов попробовать в порядке приоритета:
+    candidates = []
+    # если есть custom_admin_site и у него name — пробуем его
+    try:
+        if custom_admin_site and getattr(custom_admin_site, 'name', None):
+            candidates.append(getattr(custom_admin_site, 'name'))
+    except Exception:
+        pass
+    # стандартный 'admin'
+    candidates.append('admin')
+
+    # также попробуем пустой namespace (без префикса)
+    for ns in candidates:
+        try:
+            return reverse(f"{ns}:{viewname}", args=[obj.pk])
+        except NoReverseMatch:
+            continue
+        except Exception:
+            continue
+
+    # без namespace
+    try:
+        return reverse(viewname, args=[obj.pk])
+    except Exception:
+        return None
+
 
 @require_GET
 def admin_dashboard_view(request):
     """
-    Admin dashboard: render admin/index.html if exists, otherwise return JSON with safe stats.
-    Always returns non-empty useful payload.
+    Admin dashboard: пытаемся отрендерить HTML-дашборд, иначе возвращаем безопасный JSON.
+    URL'ы на редактирование вычисляем через get_admin_change_url_for_obj.
     """
     if not request.user.is_staff:
         raise Http404("permission denied")
 
-    # Собираем данные — аккуратно, так чтобы в JSON не попали QuerySet/Model объекты напрямую
     try:
         posts_count = Post.objects.count() if Post is not None else 0
         published_count = Post.objects.filter(status='published').count() if Post is not None else 0
@@ -378,36 +422,38 @@ def admin_dashboard_view(request):
         users_count = CustomUser.objects.count() if CustomUser is not None else 0
         total_views = PostView.objects.count() if PostView is not None else 0
 
-        # Сформируем упрощённые записи (списки словарей) — безопасные для JSON
-        recent_posts_qs = Post.objects.order_by('-created_at')[:8] if Post is not None else []
+        # recent posts — сериализуем в простой словарь
         recent_posts = []
-        for p in recent_posts_qs:
-            recent_posts.append({
-                'id': p.id,
-                'title': getattr(p, 'title', '')[:120],
-                'status': getattr(p, 'status', ''),
-                'url': reverse('admin:blog_post_change', args=[p.id]) if getattr(p, 'id', None) else None,
-                'published_at': getattr(p, 'published_at', None).isoformat() if getattr(p, 'published_at', None) else None,
-            })
+        if Post is not None:
+            for p in Post.objects.order_by('-created_at')[:8]:
+                recent_posts.append({
+                    'id': p.pk,
+                    'title': getattr(p, 'title', '')[:120],
+                    'status': getattr(p, 'status', ''),
+                    'url': get_admin_change_url_for_obj(p),
+                    'published_at': getattr(p, 'published_at', None).isoformat() if getattr(p, 'published_at', None) else None,
+                })
 
-        recent_comments_qs = Comment.objects.select_related('post').order_by('-created_at')[:8] if Comment is not None else []
+        # recent comments — тоже словари
         recent_comments = []
-        for c in recent_comments_qs:
-            recent_comments.append({
-                'id': c.id,
-                'post_id': c.post.id if getattr(c, 'post', None) else None,
-                'post_title': getattr(c.post, 'title', '') if getattr(c, 'post', None) else '',
-                'name': getattr(c, 'name', '')[:80],
-                'content': getattr(c, 'content', '')[:160],
-                'created_at': getattr(c, 'created_at', None).isoformat() if getattr(c, 'created_at', None) else None,
-            })
+        if Comment is not None:
+            for c in Comment.objects.select_related('post').order_by('-created_at')[:8]:
+                recent_comments.append({
+                    'id': c.pk,
+                    'post_id': c.post.pk if getattr(c, 'post', None) else None,
+                    'post_title': getattr(c.post, 'title', '') if getattr(c, 'post', None) else '',
+                    'post_url': get_admin_change_url_for_obj(getattr(c, 'post', None)),
+                    'name': getattr(c, 'name', '')[:80],
+                    'content': getattr(c, 'content', '')[:160],
+                    'created_at': getattr(c, 'created_at', None).isoformat() if getattr(c, 'created_at', None) else None,
+                })
 
-        # последние записи лога админки (audit log)
-        log_qs = LogEntry.objects.select_related('user').order_by('-action_time')[:10]
+        # recent log entries — сериализуем
+        from django.contrib.admin.models import LogEntry
         recent_logs = []
-        for le in log_qs:
+        for le in LogEntry.objects.select_related('user').order_by('-action_time')[:10]:
             recent_logs.append({
-                'id': le.id,
+                'id': le.pk,
                 'user': getattr(le.user, 'username', str(le.user)),
                 'action_time': le.action_time.isoformat() if getattr(le, 'action_time', None) else None,
                 'object_repr': getattr(le, 'object_repr', '')[:140],
@@ -426,22 +472,18 @@ def admin_dashboard_view(request):
             'total_views': total_views,
             'recent_posts': recent_posts,
             'recent_comments': recent_comments,
-            'log_entries': recent_logs,   # шаблон admin/index.html обычно ожидает log_entries
+            'log_entries': recent_logs,
         }
 
-        # Попытка отрендерить HTML — если шаблон есть, он будет отдан.
+        # Попытка отрендерить HTML-шаблон. Если шаблон есть — отдаём HTML.
         try:
-            # Передаём оригинальный QuerySet-объект в шаблон не нужно — шаблон обычно использует log_entries,
-            # но готов принимать любой вид; мы передаём сериализованные данные — это безопасно.
             return render(request, 'admin/index.html', context)
         except Exception as e:
-            # Логируем причину, и возвращаем полезный JSON fallback
-            logger.debug("Dashboard render error, returning JSON fallback: %s", e, exc_info=True)
+            logger.debug("Dashboard render failed, returning JSON: %s", e, exc_info=True)
             return JsonResponse(context)
 
     except Exception as exc:
         logger.exception("Unexpected error building dashboard")
-        # вернуть минимальную, но информативную ошибку
         return JsonResponse({'error': 'dashboard_error', 'detail': str(exc)}, status=500)
 
 @require_GET
