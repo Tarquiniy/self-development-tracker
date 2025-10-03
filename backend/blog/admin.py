@@ -17,6 +17,7 @@ from django.core import signing
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils.html import format_html
+from django.contrib.admin.models import LogEntry
 
 logger = logging.getLogger(__name__)
 
@@ -360,12 +361,13 @@ def admin_post_update_view(request):
 @require_GET
 def admin_dashboard_view(request):
     """
-    Simple admin dashboard — tries to render 'admin/index.html' with stats, otherwise returns JSON.
+    Admin dashboard: render admin/index.html if exists, otherwise return JSON with safe stats.
+    Always returns non-empty useful payload.
     """
     if not request.user.is_staff:
         raise Http404("permission denied")
 
-    context = {}
+    # Собираем данные — аккуратно, так чтобы в JSON не попали QuerySet/Model объекты напрямую
     try:
         posts_count = Post.objects.count() if Post is not None else 0
         published_count = Post.objects.filter(status='published').count() if Post is not None else 0
@@ -373,14 +375,47 @@ def admin_dashboard_view(request):
         today = timezone.now().date()
         today_posts = Post.objects.filter(created_at__date=today).count() if Post is not None else 0
         comments_count = Comment.objects.count() if Comment is not None else 0
-        users_count = CustomUser.objects.count()
+        users_count = CustomUser.objects.count() if CustomUser is not None else 0
         total_views = PostView.objects.count() if PostView is not None else 0
 
-        recent_posts = list(Post.objects.order_by('-created_at')[:8]) if Post is not None else []
-        recent_comments = list(Comment.objects.select_related('post').order_by('-created_at')[:8]) if Comment is not None else []
-        log_entries = LogEntry.objects.select_related('user').order_by('-action_time')[:10]
+        # Сформируем упрощённые записи (списки словарей) — безопасные для JSON
+        recent_posts_qs = Post.objects.order_by('-created_at')[:8] if Post is not None else []
+        recent_posts = []
+        for p in recent_posts_qs:
+            recent_posts.append({
+                'id': p.id,
+                'title': getattr(p, 'title', '')[:120],
+                'status': getattr(p, 'status', ''),
+                'url': reverse('admin:blog_post_change', args=[p.id]) if getattr(p, 'id', None) else None,
+                'published_at': getattr(p, 'published_at', None).isoformat() if getattr(p, 'published_at', None) else None,
+            })
 
-        context.update({
+        recent_comments_qs = Comment.objects.select_related('post').order_by('-created_at')[:8] if Comment is not None else []
+        recent_comments = []
+        for c in recent_comments_qs:
+            recent_comments.append({
+                'id': c.id,
+                'post_id': c.post.id if getattr(c, 'post', None) else None,
+                'post_title': getattr(c.post, 'title', '') if getattr(c, 'post', None) else '',
+                'name': getattr(c, 'name', '')[:80],
+                'content': getattr(c, 'content', '')[:160],
+                'created_at': getattr(c, 'created_at', None).isoformat() if getattr(c, 'created_at', None) else None,
+            })
+
+        # последние записи лога админки (audit log)
+        log_qs = LogEntry.objects.select_related('user').order_by('-action_time')[:10]
+        recent_logs = []
+        for le in log_qs:
+            recent_logs.append({
+                'id': le.id,
+                'user': getattr(le.user, 'username', str(le.user)),
+                'action_time': le.action_time.isoformat() if getattr(le, 'action_time', None) else None,
+                'object_repr': getattr(le, 'object_repr', '')[:140],
+                'change_message': getattr(le, 'change_message', '')[:240],
+                'action_flag': le.action_flag,
+            })
+
+        context = {
             'title': 'Dashboard',
             'posts_count': posts_count,
             'published_count': published_count,
@@ -391,19 +426,23 @@ def admin_dashboard_view(request):
             'total_views': total_views,
             'recent_posts': recent_posts,
             'recent_comments': recent_comments,
-            'log_entries': log_entries,
-        })
-
-        return render(request, 'admin/index.html', context)
-
-    except Exception as e:
-        logger.exception("Error building dashboard")
-        # fallback to JSON with safe serialization
-        safe_context = {
-            k: (list(v) if hasattr(v, '__iter__') and not isinstance(v, (str, dict)) else v)
-            for k, v in context.items()
+            'log_entries': recent_logs,   # шаблон admin/index.html обычно ожидает log_entries
         }
-        return JsonResponse(safe_context)
+
+        # Попытка отрендерить HTML — если шаблон есть, он будет отдан.
+        try:
+            # Передаём оригинальный QuerySet-объект в шаблон не нужно — шаблон обычно использует log_entries,
+            # но готов принимать любой вид; мы передаём сериализованные данные — это безопасно.
+            return render(request, 'admin/index.html', context)
+        except Exception as e:
+            # Логируем причину, и возвращаем полезный JSON fallback
+            logger.debug("Dashboard render error, returning JSON fallback: %s", e, exc_info=True)
+            return JsonResponse(context)
+
+    except Exception as exc:
+        logger.exception("Unexpected error building dashboard")
+        # вернуть минимальную, но информативную ошибку
+        return JsonResponse({'error': 'dashboard_error', 'detail': str(exc)}, status=500)
 
 @require_GET
 def admin_stats_api(request):

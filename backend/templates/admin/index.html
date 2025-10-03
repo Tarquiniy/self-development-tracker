@@ -1,0 +1,66 @@
+{# templates/admin/index.html #}
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block content %}
+  <div class="dashboard-panel">
+    <h1>{% trans "Admin dashboard" %}</h1>
+
+    <div style="display:flex;gap:20px;flex-wrap:wrap">
+      <div style="padding:12px;border:1px solid #eee;border-radius:6px;min-width:160px">
+        <strong>{% trans "Posts" %}</strong>
+        <div>{{ posts_count }}</div>
+        <small>{% trans "Published" %}: {{ published_count }}</small><br/>
+        <small>{% trans "Drafts" %}: {{ draft_count }}</small>
+      </div>
+
+      <div style="padding:12px;border:1px solid #eee;border-radius:6px;min-width:160px">
+        <strong>{% trans "Comments" %}</strong>
+        <div>{{ comments_count }}</div>
+      </div>
+
+      <div style="padding:12px;border:1px solid #eee;border-radius:6px;min-width:160px">
+        <strong>{% trans "Users" %}</strong>
+        <div>{{ users_count }}</div>
+      </div>
+
+      <div style="padding:12px;border:1px solid #eee;border-radius:6px;min-width:160px">
+        <strong>{% trans "Views" %}</strong>
+        <div>{{ total_views }}</div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:20px">{% trans "Recent posts" %}</h2>
+    <ul>
+      {% for p in recent_posts %}
+        <li>
+          {% if p.url %}<a href="{{ p.url }}">{% endif %}
+            {{ p.title }}
+          {% if p.url %}</a>{% endif %}
+          — <small>{{ p.published_at }}</small>
+        </li>
+      {% empty %}
+        <li>{% trans "No posts" %}</li>
+      {% endfor %}
+    </ul>
+
+    <h2>{% trans "Recent comments" %}</h2>
+    <ul>
+      {% for c in recent_comments %}
+        <li>
+          <strong>{{ c.name }}</strong> — {{ c.content }} <em>({{ c.post_title }})</em>
+        </li>
+      {% empty %}
+        <li>{% trans "No comments" %}</li>
+      {% endfor %}
+    </ul>
+
+    <h2>{% trans "Recent admin actions" %}</h2>
+    <ul>
+      {% for l in log_entries %}
+        <li>{{ l.action_time }} — {{ l.user }} — {{ l.object_repr }} — {{ l.change_message }}</li>
+      {% empty %}
+        <li>{% trans "No admin log entries" %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endblock %}
