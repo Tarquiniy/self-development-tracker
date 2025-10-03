@@ -31,10 +31,10 @@ if admin_media_library_view is None:
 
 # Базовые маршруты API/авторизации и пр.
 urlpatterns = [
-    path('ckeditor/', include('ckeditor_uploader.urls')),
+    #path('ckeditor/', include('ckeditor_uploader.urls')),
     path('grappelli/', include('grappelli.urls')),
     path("admin/", custom_admin_site.urls),
-    path('', include("blog.urls")),
+    #path('', include("blog.urls")),
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', LoginView.as_view(), name='login'),
     # подключаем API блога

@@ -181,8 +181,8 @@ MIDDLEWARE = [
 # ========== APPS ==========
 INSTALLED_APPS = [
     "jazzmin",
-    "ckeditor",
-    "ckeditor_uploader",
+    #"ckeditor",
+    #"ckeditor_uploader",
     'grappelli',
     "django.contrib.admin",
     "django.contrib.auth",

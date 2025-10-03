@@ -63,9 +63,9 @@ class PostAttachment(AbstractAttachment):
     """
     post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
     file = models.FileField(
-    storage=SupabaseStorage(),
-    upload_to="post_attachments"
-)
+        storage=SupabaseStorage(),
+        upload_to="post_attachments"
+    )
     title = models.CharField(max_length=255, blank=True)
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -95,7 +95,8 @@ class Post(models.Model):
     title = models.CharField(max_length=255, verbose_name="Заголовок")
     slug = models.SlugField(max_length=300, unique=True, blank=True, db_index=True, verbose_name="URL")
     excerpt = models.TextField(blank=True, verbose_name="Краткое описание")
-    content = models.TextField(verbose_name="Содержание")
+    content = models.TextField(verbose_name="Содержание")  # HTML content for rendering
+    content_json = models.JSONField(blank=True, null=True, verbose_name="Content JSON")  # TipTap document model JSON
     featured_image = models.URLField(blank=True, null=True, verbose_name="Главное изображение")
     categories = models.ManyToManyField(Category, related_name='posts', blank=True, verbose_name="Категории")
     tags = models.ManyToManyField(Tag, related_name='posts', blank=True, verbose_name="Теги")

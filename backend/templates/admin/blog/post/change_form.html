@@ -1,181 +1,25 @@
 {% extends "admin/change_form.html" %}
-{% load static i18n %}
+{% load static %}
 
-{% block extrastyle %}
-{{ block.super }}
-<link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
-<style>
-.editor-wrapper {
-    display: grid;
-    grid-template-columns: 1fr 340px;
-    gap: 20px;
-}
-@media (max-width: 1100px) {
-    .editor-wrapper { grid-template-columns: 1fr; }
-}
-.editor-main {
-    background: white;
-    border-radius: 12px;
-    padding: 18px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-}
-.editor-sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-.sidebar-card {
-    background: white;
-    border-radius: 12px;
-    padding: 14px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-}
-.sidebar-card h3 {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 10px;
-    display:flex;
-    justify-content: space-between;
-    align-items:center;
-}
-.status-btn {
-    padding:6px 10px;
-    border-radius:6px;
-    font-size:13px;
-    color:white;
-    text-decoration:none;
-    margin-right:6px;
-}
-.status-btn.publish { background:#10b981; }
-.status-btn.draft { background:#f59e0b; }
-.status-btn.archive { background:#ef4444; }
-.featured-preview img {
-    max-width: 100%;
-    border-radius: 8px;
-    margin-bottom: 8px;
-}
-.seo-section input, .seo-section textarea {
-    width: 100%;
-    border: 1px solid #e5e7eb;
-    padding: 6px 8px;
-    border-radius: 6px;
-    font-size: 14px;
-    margin-bottom: 8px;
-}
-.toast {
-    position: fixed;
-    right: 20px;
-    bottom: 20px;
-    background: #0f172a;
-    color: white;
-    padding: 10px 14px;
-    border-radius: 8px;
-    z-index: 99999;
-    opacity: 0.95;
-}
-</style>
+{% block extrahead %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
+  <!-- TipTap via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tiptap/core@2.0.0-beta.153/dist/tiptap-core.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@2.0.0-beta.143/dist/tiptap-starter-kit.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-image@2.0.0-beta.37/dist/tiptap-extension-image.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-link@2.0.0-beta.37/dist/tiptap-extension-link.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-code-block-lowlight@2.0.0-beta.19/dist/tiptap-extension-code-block-lowlight.umd.min.js"></script>
+  <script src="{% static 'admin/js/tiptap-editor.js' %}"></script>
 {% endblock %}
 
 {% block content %}
-<div class="editor-wrapper">
-    <div class="editor-main">
-        <h2 style="margin-bottom:14px">Редактор поста</h2>
-        {{ adminform.form.title }}
-        {{ adminform.form.excerpt }}
-        {{ adminform.form.content }}
-    </div>
-
-    <div class="editor-sidebar">
-        <div class="sidebar-card">
-            <h3>Статус публикации</h3>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <a href="#" class="status-btn publish" data-status="published">Опубликовать</a>
-                <a href="#" class="status-btn draft" data-status="draft">В черновики</a>
-                <a href="#" class="status-btn archive" data-status="archived">В архив</a>
-            </div>
-            <div style="margin-top:10px;font-size:13px;color:#6b7280">
-                Текущий статус: <strong id="current-status">{{ original.status|default:"draft" }}</strong>
-            </div>
-        </div>
-
-        <div class="sidebar-card">
-            <h3>Дата публикации</h3>
-            {{ adminform.form.published_at }}
-        </div>
-
-        <div class="sidebar-card">
-            <h3>Категории</h3>
-            {{ adminform.form.categories }}
-            <h3 style="margin-top:12px">Теги</h3>
-            {{ adminform.form.tags }}
-        </div>
-
-        <div class="sidebar-card">
-            <h3>Главное изображение</h3>
-            <div class="featured-preview" id="featured-image-preview">
-                {% if original.featured_image %}
-                    <img src="{{ original.featured_image }}" alt="">
-                {% endif %}
-            </div>
-            <button type="button" id="open-media-btn" class="status-btn draft" style="margin-top:6px">Выбрать из медиатеки</button>
-            {{ adminform.form.featured_image }}
-        </div>
-
-        <div class="sidebar-card seo-section">
-            <h3>SEO</h3>
-            {{ adminform.form.meta_title }}
-            {{ adminform.form.meta_description }}
-            {{ adminform.form.og_image }}
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block footer_extra %}
-{{ block.super }}
-<script>
-(function(){
-    'use strict';
-
-    const postId = {{ object.id|default:"null" }};
-    const csrfToken = document.cookie.match(/(^|;)\\s*csrftoken=([^;]+)/);
-
-    function toast(msg, err) {
-        let t = document.createElement("div");
-        t.className = "toast";
-        t.style.background = err ? "#b91c1c" : "#0f172a";
-        t.textContent = msg;
-        document.body.appendChild(t);
-        setTimeout(()=>{t.remove();},3000);
-    }
-
-    function updateStatus(status) {
-        if (!postId) { toast("Сначала сохраните пост", true); return; }
-        fetch("/admin/post-inline-update/", {
-            method:"POST",
-            headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken?csrfToken[2]:""},
-            body:JSON.stringify({post_id:postId, field:"status", value:status})
-        }).then(r=>r.json()).then(data=>{
-            if(data.success){
-                document.getElementById("current-status").textContent=status;
-                toast("Статус изменён", false);
-            } else { toast("Ошибка: "+data.message,true); }
-        }).catch(()=>toast("Ошибка сети",true));
-    }
-
-    document.querySelectorAll(".status-btn").forEach(btn=>{
-        btn.addEventListener("click", e=>{
-            e.preventDefault();
-            updateStatus(btn.dataset.status);
-        });
+  {{ block.super }}
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.initAdminTipTap) {
+        window.initAdminTipTap();
+      }
     });
-
-    document.getElementById("open-media-btn").addEventListener("click", ()=>{
-        let url = "/admin/media-library/";
-        if (postId) url += "?post_id="+postId;
-        window.open(url,"_blank","width=1100,height=700");
-    });
-
-})();
-</script>
+  </script>
 {% endblock %}
