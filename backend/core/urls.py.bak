@@ -4,8 +4,6 @@ from django.contrib import admin
 from django.urls import path, include
 from users.views import RegisterView, LoginView, ProfileView
 from django.conf.urls.static import static
-
-# Импортируем custom_admin_site (он может быть определён в backend/core/admin.py)
 from .admin import custom_admin_site
 from blog import views as blog_views
 
@@ -15,7 +13,6 @@ admin_stats_api = None
 admin_post_update_view = None
 admin_media_library_view = None
 try:
-    # blog.admin экспортирует удобные функции (admin_media_library_view, admin_dashboard_view, ...)
     from blog.admin import admin_media_library_view, admin_dashboard_view, admin_post_update_view, admin_stats_api
 except Exception:
     admin_media_library_view = None
@@ -32,20 +29,24 @@ if admin_media_library_view is None:
     except Exception:
         admin_media_library_view = None
 
+# Базовые маршруты API/авторизации и пр.
 urlpatterns = [
+    #path('ckeditor/', include('ckeditor_uploader.urls')),
     path('grappelli/', include('grappelli.urls')),
-
-    # API / auth
+    path("admin/", custom_admin_site.urls),
+    #path('', include("blog.urls")),
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', LoginView.as_view(), name='login'),
+    # подключаем API блога
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
+    # подключаем API tables (важно для фронтенда: /api/tables/tables/)
     path('api/tables/', include(('tables.urls', 'tables'), namespace='tables')),
     path('summernote/', include('django_summernote.urls')),
     path('api/auth/profile/', ProfileView.as_view(), name='profile'),
     path('preview/<str:token>/', blog_views.preview_by_token, name='post-preview'),
 ]
 
-# ВАЖНО: регистрируем /admin/media-library/ до admin/ маршрута,
+# ВАЖНО: регистрируем /admin/media-library/ до admin.site.urls,
 # чтобы он не был перехвачен более общим admin/ маршрутом.
 if admin_media_library_view:
     urlpatterns += [
@@ -58,10 +59,9 @@ else:
         path('admin/media-library/', TemplateView.as_view(template_name='admin/media_library_unavailable.html'), name='admin-media-library'),
     ]
 
-# Подключаем кастомную админку (или стандартную замените на admin.site.urls если хотите).
-# Важно: только ОДИН маршрут 'admin/' — его нельзя дублировать.
+# Далее регистрируем стандартную админку (внимание: должен быть после media-library)
 urlpatterns += [
-    path('admin/', custom_admin_site.urls),  # если хотите использовать стандартную админку - замените на admin.site.urls
+    path('admin/', admin.site.urls),
 ]
 
 # Регистрация дополнительных админ-views, если доступны
@@ -81,6 +81,6 @@ if admin_post_update_view:
     ]
 
 # В режиме разработки отдать media/static
-if settings.DEBUG:
+if settings.DEBUG:  # только в dev
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
