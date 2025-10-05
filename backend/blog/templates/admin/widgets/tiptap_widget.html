@@ -1,0 +1,210 @@
+{# admin/widgets/tiptap_widget.html - полный TipTap widget для Django admin (ESM/CDN + fallback) #}
+{% load static %}
+<style>
+.tiptap-root { margin-top: 0.35rem; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+.tiptap-toolbar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; align-items:center; }
+.tiptap-toolbar button { padding:6px 8px; border-radius:6px; border:1px solid #e5e7eb; background:#fff; cursor:pointer; font-size:13px; }
+.tiptap-toolbar button.active { background: linear-gradient(180deg, rgba(59,130,246,0.08), rgba(59,130,246,0.03)); box-shadow: inset 0 -2px 0 rgba(59,130,246,0.15); }
+.tiptap-editor { min-height:260px; border-radius:8px; border:1px solid #e6e7eb; padding:12px; background:#fff; outline:none; }
+.tiptap-editor:focus { box-shadow:0 0 0 4px rgba(59,130,246,0.06); border-color:#93c5fd; }
+.tiptap-hidden-textarea { display:none; }
+.tiptap-help { margin-top:6px; font-size:12px; color:#6b7280; }
+.tiptap-upload-input { display:none; }
+@media (prefers-color-scheme: dark) {
+  .tiptap-editor { background:#071025; color:#e6eef8; border-color:#1f2937; }
+  .tiptap-toolbar button { background:#0b1220; color:#d1d5db; border-color:#374151; }
+}
+</style>
+
+<div class="tiptap-root" data-widget-name="{{ widget.name }}" {% for k,v in widget.attrs.items %} {{ k }}="{{ v|escape }}" {% endfor %}>
+  <textarea name="{{ widget.name }}" class="tiptap-hidden-textarea" {% include "django/forms/widgets/attrs.html" %}>{{ widget.value|default_if_none:"" }}</textarea>
+
+  <div class="tiptap-toolbar" role="toolbar" aria-label="Editor toolbar">
+    <button type="button" data-cmd="toggleBold" title="Bold (Ctrl/Cmd+B)"><strong>B</strong></button>
+    <button type="button" data-cmd="toggleItalic" title="Italic (Ctrl/Cmd+I)"><em>I</em></button>
+    <button type="button" data-cmd="toggleStrike" title="Strike">S</button>
+    <button type="button" data-cmd="toggleUnderline" title="U">U</button>
+    <button type="button" data-cmd="toggleHeading1">H1</button>
+    <button type="button" data-cmd="toggleHeading2">H2</button>
+    <button type="button" data-cmd="toggleBulletList">•</button>
+    <button type="button" data-cmd="toggleOrderedList">1.</button>
+    <button type="button" data-cmd="toggleBlockquote">❝</button>
+    <button type="button" data-cmd="toggleCodeBlock">&lt;/&gt;</button>
+    <button type="button" data-cmd="setLink">🔗</button>
+    <button type="button" data-cmd="unsetLink">⛔</button>
+    <label>
+      <input type="file" accept="image/*" class="tiptap-upload-input" />
+      <button type="button" data-cmd="uploadImage">🖼️</button>
+    </label>
+    <button type="button" data-cmd="undo">↶</button>
+    <button type="button" data-cmd="redo">↷</button>
+  </div>
+
+  <div id="{{ widget.attrs.id|default:widget.name }}_tiptap" class="tiptap-editor" contenteditable="true" role="textbox" aria-multiline="true">
+    {% if widget.value %}{{ widget.value|safe }}{% else %}<p></p>{% endif %}
+  </div>
+
+  <div class="tiptap-help">Hotkeys: <kbd>Ctrl/Cmd+B</kbd>, <kbd>Ctrl/Cmd+I</kbd>. Контент сохраняется в скрытое поле при submit.</div>
+</div>
+
+<script type="module">
+(async function(){
+  const root = document.currentScript.previousElementSibling;
+  const textarea = root.querySelector('textarea[name="{{ widget.name }}"]');
+  const editorEl = root.querySelector('.tiptap-editor');
+  const toolbar = root.querySelector('.tiptap-toolbar');
+  const uploadInput = root.querySelector('.tiptap-upload-input');
+  const uploadUrl = root.getAttribute('data-upload-url') || root.dataset.uploadUrl || null;
+
+  function getCSRFToken(){
+    const name = 'csrftoken=';
+    const cookies = document.cookie.split(';').map(c => c.trim());
+    for (const c of cookies) if (c.startsWith(name)) return decodeURIComponent(c.substring(name.length));
+    const meta = document.querySelector('meta[name="csrfmiddlewaretoken"], meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : null;
+  }
+
+  function initFallback(){
+    function sync(){ textarea.value = editorEl.innerHTML; }
+    editorEl.addEventListener('blur', sync);
+    editorEl.addEventListener('input', sync);
+    if (textarea.value && !editorEl.innerHTML.trim()) editorEl.innerHTML = textarea.value;
+    const form = editorEl.closest('form');
+    if (form) form.addEventListener('submit', sync);
+    console.warn('TipTap modules failed to load — initialized fallback contenteditable editor.');
+    return;
+  }
+
+  try {
+    const [{ Editor }, StarterKitModule, LinkModule, ImageModule, PlaceholderModule, CharacterCountModule, UnderlineModule, HistoryModule] = await Promise.all([
+      import('https://esm.sh/@tiptap/core'),
+      import('https://esm.sh/@tiptap/starter-kit'),
+      import('https://esm.sh/@tiptap/extension-link'),
+      import('https://esm.sh/@tiptap/extension-image'),
+      import('https://esm.sh/@tiptap/extension-placeholder'),
+      import('https://esm.sh/@tiptap/extension-character-count'),
+      import('https://esm.sh/@tiptap/extension-underline'),
+      import('https://esm.sh/@tiptap/extension-history'),
+    ]);
+
+    const StarterKit = StarterKitModule.default || StarterKitModule;
+    const Link = LinkModule.default || LinkModule;
+    const Image = ImageModule.default || ImageModule;
+    const Placeholder = PlaceholderModule.default || PlaceholderModule;
+    const CharacterCount = CharacterCountModule.default || CharacterCountModule;
+    const Underline = UnderlineModule.default || UnderlineModule;
+    const History = HistoryModule.default || HistoryModule;
+
+    let CodeBlockLowlight = null;
+    let lowlight = null;
+    try {
+      const cb = await import('https://esm.sh/@tiptap/extension-code-block-lowlight');
+      CodeBlockLowlight = cb.default || cb;
+      const ll = await import('https://esm.sh/lowlight/lib/core');
+      lowlight = ll.default || ll;
+      try { lowlight.registerLanguage('js', (await import('https://esm.sh/highlight.js/lib/languages/javascript')).default); } catch(e){}
+      try { lowlight.registerLanguage('python', (await import('https://esm.sh/highlight.js/lib/languages/python')).default); } catch(e){}
+    } catch(e){ CodeBlockLowlight = null; lowlight = null; }
+
+    const editor = new Editor({
+      element: editorEl,
+      extensions: [
+        StarterKit(),
+        Link.configure({ openOnClick: false, linkOnPaste: true }),
+        Image.configure({ inline: false }),
+        Placeholder.configure({ placeholder: 'Напишите текст...' }),
+        CharacterCount.configure(),
+        Underline(),
+        History(),
+        ...(CodeBlockLowlight && lowlight ? [ CodeBlockLowlight.configure({ lowlight }) ] : [])
+      ],
+      content: textarea.value && textarea.value.trim() ? textarea.value : '<p></p>',
+      editorProps: { attributes: { class: 'tiptap-content' } },
+      onUpdate: ({ editor }) => { textarea.value = editor.getHTML(); }
+    });
+
+    const form = editorEl.closest('form');
+    if (form) form.addEventListener('submit', ()=>{ textarea.value = editor.getHTML(); });
+
+    toolbar.addEventListener('click', function(e){
+      const btn = e.target.closest('button'); if (!btn) return;
+      const cmd = btn.getAttribute('data-cmd'); if (!cmd) return; e.preventDefault();
+      switch (cmd) {
+        case 'toggleBold': editor.chain().focus().toggleBold().run(); break;
+        case 'toggleItalic': editor.chain().focus().toggleItalic().run(); break;
+        case 'toggleStrike': editor.chain().focus().toggleStrike().run(); break;
+        case 'toggleUnderline': editor.chain().focus().toggleUnderline().run(); break;
+        case 'toggleHeading1': editor.chain().focus().toggleHeading({ level: 1 }).run(); break;
+        case 'toggleHeading2': editor.chain().focus().toggleHeading({ level: 2 }).run(); break;
+        case 'toggleBulletList': editor.chain().focus().toggleBulletList().run(); break;
+        case 'toggleOrderedList': editor.chain().focus().toggleOrderedList().run(); break;
+        case 'toggleBlockquote': editor.chain().focus().toggleBlockquote().run(); break;
+        case 'toggleCodeBlock': editor.chain().focus().toggleCodeBlock().run(); break;
+        case 'setLink': { const url = prompt('Вставьте ссылку (https://...)', 'https://'); if (url) editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run(); break; }
+        case 'unsetLink': editor.chain().focus().unsetLink().run(); break;
+        case 'undo': editor.chain().focus().undo().run(); break;
+        case 'redo': editor.chain().focus().redo().run(); break;
+        case 'uploadImage': uploadInput && uploadInput.click(); break;
+      }
+    });
+
+    uploadInput && uploadInput.addEventListener('change', async function(e){
+      const file = this.files && this.files[0]; if (!file) return;
+      if (!uploadUrl) { alert('Upload URL not configured for widget.'); return; }
+      const fd = new FormData(); fd.append('file', file);
+      try {
+        const res = await fetch(uploadUrl, { method:'POST', body:fd, headers:{ 'X-CSRFToken': getCSRFToken() || '' } });
+        if (!res.ok) throw new Error('Upload failed: ' + res.status);
+        const data = await res.json();
+        const url = data.url || data.location || data.file || data.result || null;
+        if (!url) throw new Error('Upload response did not contain image URL.');
+        editor.chain().focus().setImage({ src: url }).run();
+      } catch(err) { console.error('Image upload error', err); alert('Ошибка при загрузке изображения: ' + (err.message||err)); } finally { this.value = ''; }
+    });
+
+    editor.on('selectionUpdate', () => {
+      toolbar.querySelectorAll('button[data-cmd]').forEach(btn => {
+        const cmd = btn.getAttribute('data-cmd');
+        let active = false;
+        try {
+          switch (cmd) {
+            case 'toggleBold': active = editor.isActive('bold'); break;
+            case 'toggleItalic': active = editor.isActive('italic'); break;
+            case 'toggleStrike': active = editor.isActive('strike'); break;
+            case 'toggleUnderline': active = editor.isActive('underline'); break;
+            case 'toggleBulletList': active = editor.isActive('bulletList'); break;
+            case 'toggleOrderedList': active = editor.isActive('orderedList'); break;
+            case 'toggleHeading1': active = editor.isActive('heading', { level: 1 }); break;
+            case 'toggleHeading2': active = editor.isActive('heading', { level: 2 }); break;
+            default: active = false;
+          }
+        } catch(e){ active = false; }
+        btn.classList.toggle('active', !!active);
+      });
+    });
+
+    editor.registerPlugin({
+      props: {
+        handleKeyDown(view, event) {
+          if ((event.ctrlKey || event.metaKey) && !event.shiftKey) {
+            if (event.key.toLowerCase() === 'b') { editor.chain().focus().toggleBold().run(); event.preventDefault(); return true; }
+            if (event.key.toLowerCase() === 'i') { editor.chain().focus().toggleItalic().run(); event.preventDefault(); return true; }
+          }
+          return false;
+        }
+      }
+    });
+
+    const periodic = setInterval(()=>{ textarea.value = editor.getHTML(); }, 2000);
+    window.addEventListener('beforeunload', ()=>{ textarea.value = editor.getHTML(); clearInterval(periodic); });
+
+    return;
+
+  } catch(err) {
+    console.error('TipTap ESM import failed:', err);
+    initFallback();
+    return;
+  }
+
+})();
+</script>
