@@ -4,13 +4,12 @@ import json
 import logging
 import mimetypes
 import traceback
-from datetime import timedelta
 
 from django.conf import settings
 from django.core import signing
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.http import JsonResponse, FileResponse, Http404, HttpResponseBadRequest, HttpResponseForbidden
+from django.http import JsonResponse, FileResponse, Http404
 from django.shortcuts import get_object_or_404, render, redirect
 from django.utils import timezone
 from django.views.generic import TemplateView
@@ -46,15 +45,12 @@ PREVIEW_MAX_AGE = getattr(settings, "PREVIEW_MAX_AGE", 60 * 60)  # seconds
 # Preview / Post preview token
 # ---------------------------
 def preview_by_token(request, token):
-    """
-    Render a preview page from signed token (title/content/excerpt/featured_image).
-    """
     try:
         payload = signing.loads(token, salt=PREVIEW_SALT, max_age=PREVIEW_MAX_AGE)
-    except signing.BadSignature:
-        raise Http404("Invalid preview token")
     except signing.SignatureExpired:
         raise Http404("Preview token expired")
+    except signing.BadSignature:
+        raise Http404("Invalid preview token")
     post_data = {
         'title': payload.get('title', ''),
         'content': payload.get('content', ''),
@@ -87,7 +83,6 @@ class PostViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = Post.objects.select_related('author').prefetch_related('categories', 'tags')
-        # only staff can see non-published posts
         user = getattr(self.request, 'user', None)
         if not (user and getattr(user, 'is_staff', False)):
             qs = qs.filter(dj_models.Q(status='published', published_at__lte=timezone.now()))
@@ -164,7 +159,6 @@ def reaction_toggle(request):
             else:
                 reaction.users.add(user)
         else:
-            # anonymous toggles handled by anon_count (best-effort)
             reaction.anon_count = reaction.anon_count + 1 if reaction.anon_count == 0 else max(0, reaction.anon_count - 1)
         reaction.save()
     return Response({'post_slug': post.slug, 'likes_count': reaction.likes_count()})
@@ -176,12 +170,7 @@ def reaction_toggle(request):
 @require_POST
 @staff_member_required(login_url='/admin/login/')
 def quick_action_view(request):
-    """
-    Admin-only quick actions via POST JSON: { action: 'publish'|'draft'|'archive', post_id: <id> }
-    Must include CSRF token (admin does by default).
-    """
     try:
-        # Accept JSON body or form-encoded
         if request.content_type and 'application/json' in request.content_type:
             data = json.loads(request.body.decode('utf-8') or '{}')
         else:
@@ -214,9 +203,6 @@ def quick_action_view(request):
 
 @staff_member_required(login_url='/admin/login/')
 def dashboard_stats(request):
-    """
-    Admin-only dashboard stats (JSON). Use this for admin widgets.
-    """
     today = timezone.now().date()
     stats = {
         'total_posts': Post.objects.count(),
@@ -234,13 +220,12 @@ def dashboard_stats(request):
 # ---------------------------
 # Media Library UI (admin) and helpers
 # ---------------------------
-@staff_member_required(login_url='/admin/login/')
 class MediaLibraryView(TemplateView):
     """
-    Admin-facing media library page. The template should exist at:
-      - blog/templates/admin/media_library.html  (app-level)
+    Admin-facing media library page. Template locations:
+      - blog/templates/admin/media_library.html
       OR
-      - templates/admin/media_library.html      (project-level)
+      - templates/admin/media_library.html
     """
     template_name = 'admin/media_library.html'
 
@@ -266,7 +251,6 @@ class MediaLibraryView(TemplateView):
                         try:
                             url = file_field.url
                         except Exception:
-                            # storage backend may not support url()
                             url = ''
                 except Exception:
                     logger.exception("Error getting file/url for attachment id=%s", getattr(a, 'id', None))
@@ -287,19 +271,13 @@ class MediaLibraryView(TemplateView):
         return ctx
 
 
-# Expose a callable view to be used by url resolvers that import from blog.views
-admin_media_library_view = MediaLibraryView.as_view()
-# Also expose a staff-protected alias (useful elsewhere)
+# Create callable views for URLs and wrap with staff_member_required when exposing
 admin_media_library_view = staff_member_required(MediaLibraryView.as_view(), login_url='/admin/login/')
 
 
 @require_GET
 @staff_member_required(login_url='/admin/login/')
 def admin_preview_token_view(request):
-    """
-    Return a CSRF token and optionally a preview token generator helper.
-    Used by admin JS to request CSRF or to obtain a preview token (if needed).
-    """
     token = get_token(request)
     return JsonResponse({"csrf": token})
 
@@ -307,27 +285,18 @@ def admin_preview_token_view(request):
 @require_GET
 @staff_member_required(login_url='/admin/login/')
 def admin_stats_api(request):
-    """
-    Admin endpoint returning dashboard stats as JSON (same as dashboard_stats but callable from admin UI).
-    """
-    # Reuse dashboard_stats logic
     return dashboard_stats(request)
 
 
 @require_POST
 @staff_member_required(login_url='/admin/login/')
 def admin_post_update_view(request):
-    """
-    Admin helper to update a post field via POST.
-    Expect JSON body with at least 'post_id' and fields to update, e.g. {'post_id': 12, 'title': 'New'}
-    """
     try:
         data = json.loads(request.body.decode('utf-8') or '{}') if request.content_type and 'application/json' in request.content_type else request.POST
         post_id = data.get('post_id')
         if not post_id:
             return JsonResponse({'success': False, 'message': 'post_id required'}, status=400)
         post = Post.objects.get(pk=int(post_id))
-        # allow only specific safe fields to be updated via this API
         allowed = {'title', 'excerpt', 'content', 'status', 'meta_description'}
         updates = {}
         for k, v in (data.items() if hasattr(data, 'items') else []):
@@ -349,10 +318,6 @@ def admin_post_update_view(request):
 @require_POST
 @staff_member_required(login_url='/admin/login/')
 def admin_autosave_view(request):
-    """
-    Simple autosave endpoint: accepts title/content/excerpt/featured_image and returns a preview token.
-    The token can be used by preview_by_token to render a preview.
-    """
     try:
         data = json.loads(request.body.decode('utf-8') or '{}') if request.content_type and 'application/json' in request.content_type else request.POST
         payload = {
@@ -374,9 +339,6 @@ def admin_autosave_view(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def media_list(request):
-    """
-    Returns list of attachments with their URLs. Supports search q, unattached_only, pagination.
-    """
     try:
         q = request.GET.get('q', '').strip()
         unattached = request.GET.get('unattached_only') in ('1', 'true', 'True')
@@ -423,12 +385,8 @@ def media_list(request):
 @permission_classes([IsAdminUser])
 @parser_classes([MultiPartParser, FormParser])
 def media_upload(request):
-    """
-    Upload files (admin-only). Saves file via storage and creates PostAttachment entries.
-    """
     try:
         files = []
-        # Accept both 'file' single, 'files' list or multipart list
         if 'file' in request.FILES:
             files = [request.FILES['file']]
         elif 'files' in request.FILES:
@@ -453,7 +411,6 @@ def media_upload(request):
             try:
                 att.save()
             except Exception as e:
-                # cleanup file on failure
                 try:
                     if att.file:
                         att.file.delete(save=False)
@@ -462,7 +419,6 @@ def media_upload(request):
                 logger.exception("media_upload: saving PostAttachment failed: %s", e)
                 return Response({'success': False, 'message': 'attachment save failed'}, status=500)
 
-            # Optional normalization: handle duplicate prefix bug
             try:
                 name = getattr(att.file, 'name', '') or ''
                 normalized = name.replace('post_attachments/post_attachments/', 'post_attachments/')
@@ -494,9 +450,6 @@ def media_upload(request):
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def media_delete(request):
-    """
-    Delete attachments by ids (admin-only).
-    """
     try:
         ids = request.data.get('ids') or []
         if not isinstance(ids, (list, tuple)):
@@ -522,11 +475,6 @@ def media_delete(request):
 
 @require_GET
 def media_proxy(request, pk):
-    """
-    Proxy endpoint to serve files:
-    - non-staff: redirect to storage's public URL (if any)
-    - staff: stream file from storage via Django
-    """
     att = get_object_or_404(PostAttachment, pk=pk)
     file_field = getattr(att, 'file', None)
     if not file_field or not getattr(file_field, 'name', None):
@@ -562,10 +510,6 @@ def media_proxy(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def media_attach_to_post(request):
-    """
-    Attach/unlink an existing PostAttachment to/from a Post.
-    POST JSON: { "attachment_id": <id>, "post_id": <id or null> }
-    """
     try:
         data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8') or '{}')
     except Exception:
