@@ -1,4 +1,4 @@
-/* Styles for admin TipTap container and fallback editor */
+/* backend/blog/static/admin/css/admin-post-form.css */
 .tiptap-editor-container {
   border: 1px solid #e1e1e1;
   background: #fff;
@@ -11,24 +11,9 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
   color: #222;
 }
-
-/* ProseMirror target (TipTap) and our fallback */
-.tiptap-editor-container .ProseMirror,
-.tiptap-fallback {
-  min-height: 180px;
-  outline: none;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-
-/* small UI niceties */
 .tiptap-fallback {
   padding: 8px;
   line-height: 1.45;
+  min-height: 180px;
 }
-
-/* ensure admin form spacing */
-fieldset.module .tiptap-editor-container {
-  margin-left: 0;
-  margin-right: 0;
-}
+fieldset.module .tiptap-editor-container { margin-left: 0; margin-right: 0; }
