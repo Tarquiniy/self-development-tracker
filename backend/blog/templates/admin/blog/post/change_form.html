@@ -1,102 +1,94 @@
-{# backend/blog/templates/admin/blog/post/change_form.html #}
 {% extends "admin/change_form.html" %}
 {% load static %}
 {% block extrastyle %}
 <link rel="stylesheet" href="{% static 'admin/css/tiptap_admin.css' %}">
-<style>
-/* Минимальная сетка: левый редактор, правый предпросмотр/метапанель */
-.tiptap-layout { display:flex; gap:18px; align-items:flex-start; }
-.tiptap-main { flex: 1 1 65%; min-width: 520px; }
-.tiptap-side { flex: 0 0 320px; max-width: 320px; }
-.tiptap-side .panel { padding:10px; border:1px solid #e5e7eb; border-radius:6px; background:#fff; margin-bottom:12px; }
-.tiptap-toolbar-row { display:flex; gap:6px; align-items:center; margin-bottom:8px; }
-.tiptap-preview { border:1px solid #e5e7eb; border-radius:6px; padding:12px; min-height:300px; background:#fff; overflow:auto; }
-.tiptap-footer { margin-top:8px; font-size:13px; color:#6b7280; display:flex; justify-content:space-between; align-items:center; }
-</style>
 {{ block.super }}
 {% endblock %}
 
 {% block content %}
-<div class="tiptap-layout">
-  <div class="tiptap-main">
-    {# Render standard admin form fields as usual but put content field into the TipTap widget area #}
-    <div>
-      {% for fieldset in adminform %}
-        {% for line in fieldset %}
-          {% for field in line %}
-            {% if field.name == 'content' %}
-              <div class="form-row field-content">
-                <label class="required">{{ field.label_tag }}</label>
-                {{ field.field }}
-                {% if field.errors %}{{ field.errors }}{% endif %}
-                {% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
+<div class="tiptap-layout" style="display:flex; gap:18px; align-items:flex-start;">
+  <div class="tiptap-main" style="flex:1 1 65%; min-width:520px;">
+    {# Основная форма: рендерим все поля, но контент - в нашем редакторе #}
+    <form method="post" enctype="multipart/form-data" id="post-form">
+      {% csrf_token %}
+      <div>
+        {% for fieldset in adminform %}
+          <fieldset class="module aligned">
+            {% for line in fieldset %}
+              <div class="form-row">
+                {% for field in line %}
+                  {% if field.name == 'content' %}
+                    <div class="field-box">
+                      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                      {{ field.field }}
+                      {% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
+                    </div>
+                  {% else %}
+                    <div class="field-box">
+                      {{ field }}
+                    </div>
+                  {% endif %}
+                {% endfor %}
               </div>
-            {% else %}
-              {{ field|unordered_list }} {# fallback render for other fields - admin will fill them normally #}
-            {% endif %}
-          {% endfor %}
+            {% endfor %}
+          </fieldset>
         {% endfor %}
-      {% endfor %}
-    </div>
-
-    <div class="tiptap-toolbar-row">
-      <button type="button" class="button" id="btn-save-draft">Save draft</button>
-      <button type="button" class="button" id="btn-preview">Preview</button>
-      <button type="button" class="button" id="btn-toggle-preview">Toggle preview</button>
-      <button type="button" class="button" id="btn-revisions">Revisions</button>
-      <button type="button" class="button" id="btn-fullscreen">Fullscreen</button>
-      <span id="autosave-indicator" style="margin-left:8px;color:#6b7280">Autosave: idle</span>
-    </div>
-
-    <div id="editor-and-preview" style="display:flex; gap:12px; align-items:flex-start;">
-      <div id="editor-container" style="flex:1;">
-        {# TIPTAP widget renders as textarea + contenteditable; already in widget template #}
       </div>
-      <div id="preview-container" style="flex:1;">
-        <div class="tiptap-preview" id="live-preview" aria-live="polite"></div>
-      </div>
-    </div>
 
-    <div class="tiptap-footer">
-      <div>Words: <span id="word-count">0</span> • Characters: <span id="char-count">0</span></div>
-      <div>Read time: <span id="read-time">0</span> min</div>
-    </div>
+      <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+        <button type="button" class="button" id="btn-save-draft">Сохранить</button>
+        <button type="button" class="button" id="btn-preview">Предпросмотр</button>
+        <button type="button" class="button" id="btn-toggle-preview">Показать/Скрыть превью</button>
+        <button type="button" class="button" id="btn-revisions">Ревизии</button>
+        <span id="autosave-indicator" style="color:#6b7280; margin-left:10px">Autosave: idle</span>
+      </div>
+
+      <div id="editor-and-preview" style="display:flex; gap:12px; margin-top:12px;">
+        <div id="editor-container" style="flex:1; min-width:300px;">
+          {# TipTap widget находится в поле content (textarea): он инициализирует редактор #}
+          <!-- тут редактор будет отрисован виджетом -->
+        </div>
+
+        <div id="preview-container" style="flex:1; min-width:300px;">
+          <div class="tiptap-preview" id="live-preview" aria-live="polite" style="min-height:280px; padding:12px; border:1px solid #e5e7eb; border-radius:6px; background:#fff; overflow:auto;">
+            Предпросмотр появится здесь...
+          </div>
+        </div>
+      </div>
+
+      {# Hidden submit to allow real saving (server expects content in textarea) #}
+      <input type="hidden" name="_save" value="1">
+    </form>
   </div>
 
-  <aside class="tiptap-side">
-    <div class="panel">
-      <h4>Post meta</h4>
-      <div>
-        <strong>Status:</strong> {{ original.status }}
-      </div>
-      <div>
-        <strong>Author:</strong> {{ original.author }}
-      </div>
-      <div style="margin-top:8px">
-        <a class="button" href="{% url 'admin-media-library' %}?post_id={{ original.pk }}">Open Media Library</a>
-      </div>
+  <aside class="tiptap-side" style="flex:0 0 320px; max-width:320px;">
+    <div class="panel" style="padding:10px; border:1px solid #e5e7eb; border-radius:6px; background:#fff; margin-bottom:12px;">
+      <h4>Сведения</h4>
+      <div><strong>Автор:</strong> {{ original.author }}</div>
+      <div><strong>Статус:</strong> {{ original.status }}</div>
+      <div style="margin-top:8px"><a class="button" href="{% url 'admin-media-library' %}?post_id={{ original.pk }}">Медиа библиотека</a></div>
     </div>
 
-    <div class="panel">
-      <h4>Revisions</h4>
-      <div id="revisions-list">Loading…</div>
+    <div class="panel" id="revisions-panel" style="padding:10px; border:1px solid #e5e7eb; border-radius:6px; background:#fff; margin-bottom:12px;">
+      <h4>Ревизии</h4>
+      <div id="revisions-list">Загрузка…</div>
     </div>
 
-    <div class="panel">
-      <h4>SEO</h4>
-      <div><strong>Meta description</strong><div>{{ original.meta_description|default:"—" }}</div></div>
-      <div style="margin-top:6px"><a class="button" id="btn-insert-toc">Insert TOC</a></div>
+    <div class="panel" style="padding:10px; border:1px solid #e5e7eb; border-radius:6px; background:#fff;">
+      <h4>SEO / Помощь</h4>
+      <div>Слов: <span id="word-count">0</span></div>
+      <div>Знаков: <span id="char-count">0</span></div>
+      <div style="margin-top:6px"><button id="btn-insert-toc" class="button">Вставить оглавление</button></div>
     </div>
   </aside>
 </div>
 
-{{ block.super }}
 {% endblock %}
 
 {% block extrahead %}
 <script>
 window.ADMIN_POST_ID = {{ original.pk|default:'null' }};
-window.ADMIN_POST_EDIT_URL = "{% url 'admin:blog_post_change' original.pk %}" ;
 </script>
-<script src="{% static 'admin/js/tiptap_widget_extra.js' %}"></script>
+<script src="{% static 'admin/js/tiptap_admin_extra.js' %}"></script>
+<link rel="stylesheet" href="{% static 'admin/css/tiptap_admin.css' %}">
 {% endblock %}

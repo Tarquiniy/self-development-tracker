@@ -2,6 +2,7 @@
 import os
 import json
 import logging
+from django import forms
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
 from django.urls import reverse, path
@@ -16,7 +17,8 @@ from django.contrib.auth import get_user_model
 from django.db.models.functions import TruncDate
 from django.db.models import Count
 from django.db import models
-from .widgets import TiptapWidget
+
+from .widgets import TipTapWidget, TiptapWidget
 from django.utils.safestring import mark_safe
 
 logger = logging.getLogger(__name__)
@@ -580,26 +582,18 @@ def register_admin_models(site_obj):
     return True
 
 
+class PostAdminForm(forms.ModelForm):
+    class Meta:
+        model = Post
+        fields = '__all__'
+        widgets = {
+            'content': TipTapWidget(attrs={'class':'admin-tiptap-textarea'}),
+        }
+
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
-    list_display = ('title', 'status', 'author', 'published_at')
-    readonly_fields = ('revision_tools',)
-    fields = ('title', 'excerpt', 'content', 'revision_tools')
-
-    def revision_tools(self, obj):
-        # show buttons: view revisions, preview, open media library
-        if obj and obj.pk:
-            rev_list_url = reverse('blog:revisions-list', args=[obj.pk])
-            preview_url = reverse('post-preview', args=[ 'DUMMY' ])  # sample — JS will request preview token
-            media_library = reverse('admin-media-library')
-            return mark_safe(
-                f'<a class="button" href="#" data-rev-url="{rev_list_url}" onclick="openRevisionsPanel(event, {obj.pk})">Revisions</a> '
-                f'<a class="button" href="#" onclick="openPreviewForPost({obj.pk})">Preview</a> '
-                f'<a class="button" href="{media_library}">Media Library</a>'
-            )
-        return "Save draft to enable revisions"
-
-    revision_tools.short_description = "Revision / Preview"
-
+    form = PostAdminForm
+    change_form_template = 'admin/blog/post/change_form.html'  # наш override
     class Media:
-        js = ('admin/js/tiptap_widget_extra.js',)  # include our extra admin JS
+        js = ('admin/js/tiptap_admin_extra.js',)
+        css = {'all': ('admin/css/tiptap_admin.css',)}
