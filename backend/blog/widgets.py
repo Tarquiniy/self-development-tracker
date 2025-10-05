@@ -4,7 +4,7 @@ from django.utils.safestring import mark_safe
 from django.template import TemplateDoesNotExist
 from django.forms.renderers import get_default_renderer
 
-class TipTapWidget(forms.Textarea):
+class TiptapWidget(forms.Textarea):
     # template_name остаётся тем же — шаблон должен быть в templates/admin/widgets/tiptap_widget.html
     template_name = 'admin/widgets/tiptap_widget.html'
 
