@@ -18,7 +18,7 @@ from django.db.models.functions import TruncDate
 from django.db.models import Count
 from django.db import models
 
-from .widgets import TipTapWidget, TiptapWidget
+from .widgets import TipTapWidget
 from django.utils.safestring import mark_safe
 
 logger = logging.getLogger(__name__)
