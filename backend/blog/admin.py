@@ -15,6 +15,8 @@ from django.core import signing
 from django.contrib.auth import get_user_model
 from django.db.models.functions import TruncDate
 from django.db.models import Count
+from django.db import models
+from .widgets import TiptapWidget
 
 logger = logging.getLogger(__name__)
 
@@ -576,6 +578,12 @@ def register_admin_models(site_obj):
 
     return True
 
+
+@admin.register(Post)
+class PostAdmin(admin.ModelAdmin):
+    formfield_overrides = {
+        models.TextField: {'widget': TiptapWidget(attrs={'rows':20, 'id':'id_content'}, upload_url='/admin/media/upload/')},
+    }
 
 # Exported names (so core.admin can import these safely)
 __all__ = [
