@@ -211,15 +211,24 @@ def admin_dashboard_view(request):
     comments_count = Comment.objects.count() if Comment else 0
     users_count = CustomUser.objects.count() if CustomUser else 0
 
-    context = dict(
-        custom_admin_site.each_context(request),
-        title="Панель администратора",
-        posts_count=posts_count,
-        comments_count=comments_count,
-        users_count=users_count,
-    )
-    return render(request, "admin/dashboard.html", context)
+    try:
+        each_context = custom_admin_site.each_context(request)
+    except Exception:
+        each_context = {}
 
+    context = {
+        **each_context,
+        "title": "Панель администратора",
+        "posts_count": posts_count,
+        "comments_count": comments_count,
+        "users_count": users_count,
+    }
+
+    try:
+        return render(request, "admin/dashboard.html", context)
+    except Exception as e:
+        logger.exception("Dashboard render failed")
+        return JsonResponse({"error": str(e), "context": context}, status=500)
 
 @require_GET
 def admin_stats_api(request):
