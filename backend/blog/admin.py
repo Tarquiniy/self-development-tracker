@@ -17,7 +17,6 @@ from django.core import signing
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.admin.models import LogEntry
-from types import FunctionType
 
 logger = logging.getLogger(__name__)
 
@@ -93,13 +92,45 @@ def _pretty_change_message(raw):
 
 
 # -----------------------
-# Admin classes
+# Admin classes (with robust fallback for PostAdminForm & template)
 # -----------------------
 class BasePostAdmin(VersionAdmin):
-    if PostAdminForm:
-        form = PostAdminForm
+    """
+    Админ-класс для Post с защитой:
+    - если PostAdminForm присутствует, но вызывает ошибку — fallback на стандартный form.
+    - применяем change_form_template только если файл действительно существует.
+    """
+    # NOTE: don't bind form at import time — use get_form to decide at runtime
+    # form = PostAdminForm  # <-- DO NOT set here
 
-    change_form_template = "admin/blog/post/change_form.html"
+    # conditional change_form_template: only set if template file exists in templates dir
+    # We check the first templates DIR from settings (if configured) or app templates fallback.
+    change_form_template = None
+    try:
+        # determine template full path by checking TEMPLATES DIRS if available
+        template_name = os.path.join('admin', 'blog', 'post', 'change_form.html')
+        template_found = False
+        # check explicit DIRS
+        try:
+            dirs = settings.TEMPLATES[0].get('DIRS', []) if getattr(settings, 'TEMPLATES', None) else []
+        except Exception:
+            dirs = []
+        for d in dirs:
+            if os.path.exists(os.path.join(d, template_name)):
+                template_found = True
+                break
+        # also try app template path relative to this file
+        if not template_found:
+            # look for backend/templates/admin/blog/post/change_form.html relative to project base dirs
+            project_base = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            alt = os.path.join(project_base, 'templates', 'admin', 'blog', 'post', 'change_form.html')
+            if os.path.exists(alt):
+                template_found = True
+        if template_found:
+            change_form_template = 'admin/blog/post/change_form.html'
+    except Exception:
+        change_form_template = None
+
     list_display = ("title", "status", "author", "published_at")
     list_filter = ("status", "published_at") if Post is not None else ()
     search_fields = ("title", "content") if Post is not None else ()
@@ -115,6 +146,32 @@ class BasePostAdmin(VersionAdmin):
         ("Категории и теги", {"fields": ("categories", "tags")}),
         ("SEO", {"fields": ("meta_title", "meta_description", "og_image"), "classes": ("collapse",)}),
     )
+
+    def get_form(self, request, obj=None, **kwargs):
+        """
+        Try to use PostAdminForm if available and usable, otherwise fallback to default admin form.
+        This prevents 500 when PostAdminForm requires missing JS/CSS or raises during field/widget init.
+        """
+        if PostAdminForm:
+            try:
+                # Try to create a form class via super to ensure admin machinery is okay with it.
+                # We do a light check by asking the form class for base fields — but avoid instantiation of widgets with heavy deps.
+                # Simply returning the class is usually fine; but we'll also protect with try/except around super().get_form call.
+                form_cls = PostAdminForm
+                # Attempt to call parent get_form with our class (to let Django construct it).
+                # If this raises, fall back to default.
+                return super().get_form(request, obj, form=form_cls, **kwargs)
+            except Exception:
+                logger.exception("PostAdminForm failed to be used in admin; falling back to default ModelAdmin form.")
+                # fall through to default
+        # Default behaviour
+        try:
+            return super().get_form(request, obj, **kwargs)
+        except Exception:
+            # Last-resort: attempt to return a bare ModelForm from model
+            logger.exception("Default admin.get_form also failed; returning simple ModelForm fallback.")
+            from django.forms import modelform_factory
+            return modelform_factory(self.model, fields="__all__")
 
     def make_published(self, request, queryset):
         updated = queryset.update(status="published")
@@ -143,7 +200,6 @@ class BasePostAdmin(VersionAdmin):
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ("title", "slug", "post_count")
     prepopulated_fields = {"slug": ("title",)}
-
     def post_count(self, obj):
         try:
             return obj.posts.count()
@@ -155,7 +211,6 @@ class CategoryAdmin(admin.ModelAdmin):
 class TagAdmin(admin.ModelAdmin):
     list_display = ("title", "slug", "post_count")
     prepopulated_fields = {"slug": ("title",)}
-
     def post_count(self, obj):
         try:
             return obj.posts.count()
@@ -167,19 +222,18 @@ class TagAdmin(admin.ModelAdmin):
 class CommentAdmin(admin.ModelAdmin):
     list_display = ("shorter_name", "post_link", "user", "short_content", "is_public", "is_moderated", "created_at")
     list_editable = ("is_public", "is_moderated")
-
-    def shorter_name(self, obj):
-        return getattr(obj, "name", "")[:30]
-
+    def shorter_name(self, obj): return getattr(obj, "name", "")[:30]
     def post_link(self, obj):
-        post = getattr(obj, "post", None)
-        site_name = getattr(custom_admin_site, "name", None) if custom_admin_site else None
-        url = get_admin_change_url_for_obj(post, site_name=site_name)
-        if post and url:
-            from django.utils.html import format_html
-            return format_html('<a href="{}">{}</a>', url, getattr(post, "title", ""))
+        try:
+            post = getattr(obj, "post", None)
+            site_name = getattr(custom_admin_site, "name", None) if custom_admin_site else None
+            url = get_admin_change_url_for_obj(post, site_name=site_name)
+            if post and url:
+                from django.utils.html import format_html
+                return format_html('<a href="{}">{}</a>', url, getattr(post, "title", ""))
+        except Exception:
+            pass
         return "-"
-
     def short_content(self, obj):
         txt = getattr(obj, "content", "") or ""
         return txt[:100] + ("..." if len(txt) > 100 else "")
@@ -187,7 +241,6 @@ class CommentAdmin(admin.ModelAdmin):
 
 class PostReactionAdmin(admin.ModelAdmin):
     list_display = ("post", "likes_count", "updated_at")
-
     def likes_count(self, obj):
         try:
             return obj.likes_count()
@@ -197,22 +250,19 @@ class PostReactionAdmin(admin.ModelAdmin):
 
 class MediaLibraryAdmin(admin.ModelAdmin):
     list_display = ("title", "uploaded_by", "uploaded_at", "post_link")
-
     def post_link(self, obj):
         if getattr(obj, "post", None):
-            site_name = getattr(custom_admin_site, "name", None) if custom_admin_site else None
-            url = get_admin_change_url_for_obj(obj.post, site_name=site_name)
+            url = get_admin_change_url_for_obj(obj.post, site_name=getattr(custom_admin_site, "name", None))
             from django.utils.html import format_html
             if url:
                 return format_html('<a href="{}">{}</a>', url, obj.post.title)
         return "-"
-
     def changelist_view(self, request, extra_context=None):
         return redirect("admin-media-library")
 
 
 # -----------------------
-# Views
+# Views (unchanged, robust)
 # -----------------------
 @require_GET
 def admin_dashboard_view(request):
@@ -229,14 +279,8 @@ def admin_dashboard_view(request):
             app_list = admin.site.get_app_list(request)
     except Exception:
         app_list = []
-    context = dict(
-        (custom_admin_site.each_context(request) if custom_admin_site else admin.site.each_context(request)),
-        title="Admin dashboard",
-        posts_count=posts_count,
-        comments_count=comments_count,
-        users_count=users_count,
-        app_list=app_list,
-    )
+    ctx_base = custom_admin_site.each_context(request) if custom_admin_site else admin.site.each_context(request)
+    context = dict(ctx_base, title="Admin dashboard", posts_count=posts_count, comments_count=comments_count, users_count=users_count, app_list=app_list)
     return render(request, "admin/dashboard.html", context)
 
 
@@ -402,10 +446,6 @@ def _ensure_registered(site_obj, model, admin_class=None):
 # Main entrypoint: register models & urls into provided admin site
 # -----------------------
 def register_admin_models(site_obj):
-    """
-    Register admin models and attach custom urls into the provided admin site instance.
-    Call this AFTER custom_admin_site is created to avoid import cycles.
-    """
     global custom_admin_site
     custom_admin_site = site_obj or admin.site
 
@@ -442,7 +482,7 @@ def register_admin_models(site_obj):
     except Exception:
         logger.exception("bulk registration failed")
 
-    # Attach custom urls: make sure to wrap the ORIGINAL get_urls to avoid recursion.
+    # Attach custom urls safely (wrap original get_urls to avoid recursion).
     def get_admin_urls(urls):
         custom_urls = [
             path("dashboard/", admin_dashboard_view, name="admin-dashboard"),
@@ -455,23 +495,18 @@ def register_admin_models(site_obj):
         return custom_urls + urls
 
     try:
-        # If get_urls already wrapped, skip to avoid double-wrapping
         current_get_urls = getattr(custom_admin_site, "get_urls", None)
-        # detect if already wrapped by checking for an attribute we set or if it's our wrapper
         already_wrapped = getattr(current_get_urls, "_is_wrapped_by_blog_admin", False)
-
         if not already_wrapped:
             orig_get_urls = current_get_urls
 
             def wrapped_get_urls():
-                # call the original get_urls and then prefix our custom urls
                 try:
                     base = orig_get_urls()
                 except Exception:
                     base = super(type(custom_admin_site), custom_admin_site).get_urls()
                 return get_admin_urls(base)
 
-            # mark wrapper to prevent double wrapping
             setattr(wrapped_get_urls, "_is_wrapped_by_blog_admin", True)
             custom_admin_site.get_urls = wrapped_get_urls
     except Exception:

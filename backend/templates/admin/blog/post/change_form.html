@@ -1,248 +1,269 @@
 {% extends "admin/change_form.html" %}
 {% load static i18n %}
 
-{# Подключаем стили и TipTap (CDN) + локальный скрипт и стили администратора #}
+{# Безопасный шаблон формы поста — TipTap интеграция с fallback #}
 {% block extrahead %}
   {{ block.super }}
-  <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
-  {# TipTap CDN (версии — оставить как есть или поменять при необходимости) #}
-  <script src="https://cdn.jsdelivr.net/npm/@tiptap/core@2.0.0-beta.153/dist/tiptap-core.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@2.0.0-beta.143/dist/tiptap-starter-kit.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-image@2.0.0-beta.37/dist/tiptap-extension-image.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-link@2.0.0-beta.37/dist/tiptap-extension-link.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-code-block-lowlight@2.0.0-beta.19/dist/tiptap-extension-code-block-lowlight.umd.min.js"></script>
 
-  {# Опциональный локальный инициализатор (если есть static/admin/js/tiptap-editor.js) #}
+  {# локальные стили (если файла нет — браузер просто не подгрузит) #}
+  <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
+
+  {# TipTap CDN (опционально) — если CDN недоступен, скрипты просто не загрузятся #}
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@tiptap/core@2.0.0-beta.153/dist/tiptap-core.umd.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@2.0.0-beta.143/dist/tiptap-starter-kit.umd.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@tiptap/extension-image@2.0.0-beta.37/dist/tiptap-extension-image.umd.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@tiptap/extension-link@2.0.0-beta.37/dist/tiptap-extension-link.umd.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@tiptap/extension-code-block-lowlight@2.0.0-beta.19/dist/tiptap-extension-code-block-lowlight.umd.min.js"></script>
+
+  {# Локальный безопасный инициализатор (создайте файл admin/js/tiptap-editor.js — если его нет, ничего страшного) #}
   <script src="{% static 'admin/js/tiptap-editor.js' %}"></script>
 
   <style>
-    /* Небольшие правки стилей, чтобы редактор красиво вставал в админку */
-    .tiptap-editor-container {
-      border: 1px solid #e6edf3;
-      border-radius: 6px;
-      padding: 12px;
-      min-height: 240px;
-      background: #fff;
-    }
-    .tiptap-toolbar {
-      margin-bottom: 8px;
-    }
-    .admin-media-btn {
-      margin-left: .5rem;
-    }
+    /* Небольшие правки для админки */
+    .tiptap-editor-container { border: 1px solid #e6edf3; border-radius: 6px; padding: 12px; min-height: 240px; background: #fff; }
+    .tiptap-toolbar { margin-bottom: 8px; }
+    .admin-media-btn { margin-left: .5rem; }
+    /* fallback: хороший отступ чтобы textarea не выглядела слипшейся */
+    textarea[name="content"] { min-height: 220px; }
   </style>
 {% endblock %}
 
 
-{# Добавляем кнопку "Медиа библиотека" рядом с кнопками сабмита #}
+{# Верхняя панель кнопок: добавляем кнопку медиа-библиотеки рядом с Save #}
 {% block submit_buttons_top %}
   {{ block.super }}
-  {# Кнопка откроет попап с медиа-библиотекой; URL использует имя маршрута admin-media-library (должен быть в core/urls.py) #}
-  <a href="{% url 'admin-media-library' %}"
-     class="button admin-media-btn"
-     onclick="openMediaLibrary(event)">
+  <a href="{% url 'admin-media-library' %}" class="button admin-media-btn" onclick="openMediaLibrary(event)">
     {% trans "Медиа библиотека" %}
   </a>
 {% endblock %}
 
 
 {% block content %}
-  {# Сохраняем оригинальный content блок админа #}
   {{ block.super }}
 
   <script>
   (function () {
-    // Утилиты
-    function qs(selector, root) {
-      root = root || document;
-      return root.querySelector(selector);
-    }
-    function qsa(selector, root) {
-      root = root || document;
-      return Array.from(root.querySelectorAll(selector));
-    }
+    // helpers
+    function qs(sel, root) { root = root || document; return root.querySelector(sel); }
+    function qsa(sel, root) { root = root || document; return Array.from(root.querySelectorAll(sel)); }
 
-    // Открыть медиа библиотеку в попапе
+    // Открыть медиа библиотеку в popup — имя роута admin-media-library должно существовать
     window.openMediaLibrary = function (e) {
-      e && e.preventDefault && e.preventDefault();
-      var url = "{% url 'admin-media-library' %}";
-      // небольшая проверка — откроем попап, туда media_library.html умеет вставлять в window.opener
-      window.open(url, "media_library", "width=1000,height=700,scrollbars=yes");
+      try {
+        if (e && e.preventDefault) e.preventDefault();
+        var url = "{% url 'admin-media-library' %}";
+        window.open(url, "media_library", "width=1000,height=700,scrollbars=yes");
+      } catch (err) {
+        console.error('openMediaLibrary error', err);
+        alert("{% trans 'Не удалось открыть медиа библиотеку' %}");
+      }
       return false;
     };
 
-    // Попытка инициализировать TipTap — внешняя точка входа (в случае наличия локального static скрипта)
+    // Функция, вызываемая popup'ом для вставки media в редактор/поле
+    // popup: window.opener.__insertMediaToEditor(url)
+    window.__insertMediaToEditor = function (url) {
+      try {
+        // если есть поле featured_image — заполним его
+        var feat = qs('input[name="featured_image"]');
+        if (feat) { feat.value = url; }
+
+        // если tiptap editor проинициализирован, используем его API
+        var container = qs('.tiptap-editor-container');
+        if (container && container._tiptap_editor) {
+          try {
+            var editor = container._tiptap_editor;
+            if (editor && editor.chain) {
+              editor.chain().focus().setImage({ src: url }).run();
+              return true;
+            }
+          } catch (e) { /* ignore and fallback to textarea */ }
+        }
+
+        // fallback: вставляем в textarea
+        var ta = qs('textarea[name="content"]');
+        if (ta) {
+          ta.value = (ta.value || '') + "\n<img src='" + url + "' alt='' />\n";
+          return true;
+        }
+        return false;
+      } catch (err) {
+        console.error('insertMediaToEditor error', err);
+        return false;
+      }
+    };
+
+    // Safe init function — вызывается на DOMContentLoaded и из локального JS
     window.initAdminTipTap = function () {
       try {
-        // находим textarea[name="content"]
         var textarea = qs('textarea[name="content"]');
-        if (!textarea) {
-          return; // ничего не делаем, используем нативный textarea
-        }
+        if (!textarea) return;
 
-        // Если уже проинициализировано — ничего не делаем
-        if (textarea.dataset.tiptapInitialized) {
-          return;
-        }
+        // prevent double init
+        if (textarea.dataset.tiptapInitialized) return;
+        textarea.dataset.tiptapInitialized = '1';
 
-        // Скрываем textarea (мы будем синхронизировать его перед отправкой формы)
+        // hide textarea (we'll sync value to it on submit)
         textarea.style.display = 'none';
-        textarea.dataset.tiptapInitialized = "1";
 
-        // Создаём контейнер для редактора
-        var editorWrapper = document.createElement('div');
-        editorWrapper.className = 'tiptap-editor-wrapper';
+        // create wrapper
+        var wrapper = document.createElement('div');
+        wrapper.className = 'tiptap-editor-wrapper';
         var toolbar = document.createElement('div');
         toolbar.className = 'tiptap-toolbar';
-        // можно добавить кастомные кнопки в toolbar, но мы оставим минимальный набор
         var editorContainer = document.createElement('div');
         editorContainer.className = 'tiptap-editor-container';
-        editorWrapper.appendChild(toolbar);
-        editorWrapper.appendChild(editorContainer);
+        wrapper.appendChild(toolbar);
+        wrapper.appendChild(editorContainer);
 
-        // Вставляем редактор после textarea
-        textarea.parentNode.insertBefore(editorWrapper, textarea.nextSibling);
+        // insert after textarea
+        textarea.parentNode.insertBefore(wrapper, textarea.nextSibling);
 
-        // Скрытое поле content_json — если нет, создаём
+        // ensure hidden content_json field exists (server expects it)
         var contentJson = qs('input[name="content_json"]');
         if (!contentJson) {
           contentJson = document.createElement('input');
           contentJson.type = 'hidden';
           contentJson.name = 'content_json';
-          textarea.parentNode.insertBefore(contentJson, editorWrapper.nextSibling);
+          textarea.parentNode.insertBefore(contentJson, wrapper.nextSibling);
         }
 
-        // Инициализация TipTap (используем глобальные объекты из CDN):
-        var Editor = window.tiptap && window.tiptap.Editor ? window.tiptap.Editor : (window.tiptapCore && window.tiptapCore.Editor ? window.tiptapCore.Editor : null);
-        var StarterKit = window.tiptap && window.tiptap.StarterKit ? window.tiptap.StarterKit : (window.tiptapStarterKit && window.tiptapStarterKit.StarterKit ? window.tiptapStarterKit.StarterKit : null);
+        // Try to find TipTap Editor & StarterKit from CDN UMD bundles or global names
+        var TipTapCore = window['@tiptap/core'] || window.tiptapCore || window.tiptap || null;
+        var StarterKit = window['@tiptap/starter-kit'] || window.tiptapStarterKit || window.tiptapStarterKit || null;
 
-        // Compatibility: some CDN builds export differently — try common names
-        if (!Editor || !StarterKit) {
-          // try fallback names (UMD exposed on window)
-          Editor = window["@tiptap/core"] && window["@tiptap/core"].Editor ? window["@tiptap/core"].Editor : Editor;
-          StarterKit = window["@tiptap/starter-kit"] && window["@tiptap/starter-kit"].StarterKit ? window["@tiptap/starter-kit"].StarterKit : StarterKit;
+        // Determine constructors
+        var Editor = null, Starter = null;
+        try {
+          if (TipTapCore && (TipTapCore.Editor || (TipTapCore.default && TipTapCore.default.Editor))) {
+            Editor = TipTapCore.Editor || (TipTapCore.default && TipTapCore.default.Editor);
+          }
+          if (StarterKit && (StarterKit.StarterKit || StarterKit.default || typeof StarterKit === 'function')) {
+            Starter = StarterKit.StarterKit || StarterKit.default || StarterKit;
+          }
+        } catch (e) {
+          // ignore
         }
 
-        // If we still don't have TipTap, bail out — keep native textarea visible for users.
-        if (!Editor || !StarterKit) {
-          // show textarea fallback
+        // If TipTap not available — fallback to plain editable div
+        if (!Editor || !Starter) {
+          console.warn('TipTap not available — falling back to simple contentEditable');
+          // show textarea fallback if cannot create nice editor
           textarea.style.display = '';
-          console.warn('TipTap not available — using native textarea');
+          // small enhancement: show a simple contentEditable synced to textarea
+          try {
+            var fallback = document.createElement('div');
+            fallback.className = 'tiptap-fallback';
+            fallback.contentEditable = true;
+            fallback.innerHTML = textarea.value || '';
+            fallback.addEventListener('input', function () { textarea.value = fallback.innerHTML; });
+            editorContainer.appendChild(fallback);
+          } catch (err) { console.error('fallback editor init failed', err); }
           return;
         }
 
-        // basic extensions: image, link, codeblock from CDN if present
+        // Build list of extensions if available
         var extensions = [];
         try {
-          if (window.tiptapImage || window['@tiptap/extension-image']) {
-            var ImageExtension = (window.tiptapImage && window.tiptapImage.Image) || (window['@tiptap/extension-image'] && window['@tiptap/extension-image'].Image) || null;
-            if (ImageExtension) extensions.push(ImageExtension);
+          var ImgExt = window['@tiptap/extension-image'] || window.tiptapImage || null;
+          if (ImgExt && (ImgExt.Image || ImgExt.default || typeof ImgExt === 'function')) {
+            extensions.push(ImgExt.Image || ImgExt.default || ImgExt);
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) {}
 
         try {
-          var LinkExt = (window.tiptapLink && window.tiptapLink.Link) || (window['@tiptap/extension-link'] && window['@tiptap/extension-link'].Link) || null;
-          if (LinkExt) extensions.push(LinkExt);
-        } catch (e) { /* ignore */ }
-
-        // Create editor
-        var editor = new Editor({
-          element: editorContainer,
-          extensions: [StarterKit && StarterKit.configure ? StarterKit.configure() : StarterKit].concat(extensions),
-          content: textarea.value || '',
-          onUpdate: function ({ editor: ed }) {
-            // live update if you want (we will sync on submit)
+          var LinkExt = window['@tiptap/extension-link'] || window.tiptapLink || null;
+          if (LinkExt && (LinkExt.Link || LinkExt.default || typeof LinkExt === 'function')) {
+            extensions.push(LinkExt.Link || LinkExt.default || LinkExt);
           }
-        });
+        } catch (e) {}
 
-        // Add simple toolbar buttons (bold/italic/heading/image/insert link)
-        function btn(label, handler) {
+        // create editor
+        var editor = null;
+        try {
+          editor = new Editor({
+            element: editorContainer,
+            extensions: [ (Starter.configure ? Starter.configure() : Starter) ].concat(extensions),
+            content: textarea.value || '',
+            onUpdate: function (props) {
+              try {
+                // don't aggressively sync on each keystroke (we sync on submit), but keep current html
+                if (props && props.editor && typeof props.editor.getHTML === 'function') {
+                  // store current html to container for potential external usage
+                  editorContainer._current_html = props.editor.getHTML();
+                }
+              } catch (e) { /* ignore */ }
+            }
+          });
+
+          // store editor reference for popup insertion
+          editorContainer._tiptap_editor = editor;
+        } catch (err) {
+          console.error('Failed to instantiate TipTap editor', err);
+          // fallback: show textarea
+          textarea.style.display = '';
+          return;
+        }
+
+        // minimal toolbar buttons
+        function makeBtn(label, onClick) {
           var b = document.createElement('button');
           b.type = 'button';
           b.className = 'button';
           b.style.marginRight = '6px';
           b.textContent = label;
-          b.addEventListener('click', handler);
+          b.addEventListener('click', onClick);
           toolbar.appendChild(b);
           return b;
         }
 
-        btn('B', function () { editor.chain().focus().toggleBold().run(); });
-        btn('I', function () { editor.chain().focus().toggleItalic().run(); });
-        btn('H2', function () { editor.chain().focus().toggleHeading({ level: 2 }).run(); });
-        btn('{code}', function () { editor.chain().focus().toggleCodeBlock().run(); });
-        btn('Image', function () {
-          // открываем медиа-библиотеку — пользователь может вставить URL в popup
-          openMediaLibrary();
-        });
-        btn('Preview', function () {
-          // просто открываем новое окно с содержимым HTML (клиентский preview)
-          var w = window.open('', '_blank');
-          if (w) {
-            w.document.write('<!doctype html><meta charset="utf-8"><title>Preview</title>');
-            w.document.body.innerHTML = editor.getHTML();
-            w.document.close();
-          } else {
-            alert('Popup blocked — allow popups to preview');
-          }
+        makeBtn('B', function () { try { editor.chain().focus().toggleBold().run(); } catch (e) {} });
+        makeBtn('I', function () { try { editor.chain().focus().toggleItalic().run(); } catch (e) {} });
+        makeBtn('H2', function () { try { editor.chain().focus().toggleHeading({ level: 2 }).run(); } catch (e) {} });
+        makeBtn('{code}', function () { try { editor.chain().focus().toggleCodeBlock().run(); } catch (e) {} });
+        makeBtn('Image', function () { openMediaLibrary(); });
+        makeBtn('Preview', function () {
+          try {
+            var w = window.open('', '_blank');
+            if (w) {
+              w.document.write('<!doctype html><meta charset="utf-8"><title>Preview</title>');
+              w.document.body.innerHTML = editor.getHTML();
+              w.document.close();
+            } else { alert('{% trans "Пожалуйста, разрешите всплывающие окна для предпросмотра" %}'); }
+          } catch (e) { console.error(e); }
         });
 
-        // Hook form submit: sync HTML and JSON into fields before actual submit
+        // On form submit, sync HTML and JSON into textarea & content_json
         var form = textarea.closest('form');
         if (form) {
-          form.addEventListener('submit', function (ev) {
+          form.addEventListener('submit', function () {
             try {
-              var html = editor.getHTML();
-              var json = JSON.stringify(editor.getJSON());
-              // Put html into original textarea (so admin will save html in content)
-              textarea.value = html;
-              // Put json into hidden field
-              contentJson.value = json;
-            } catch (e) {
-              console.error('Error syncing TipTap content to form', e);
-            }
+              var html = (editor && typeof editor.getHTML === 'function') ? editor.getHTML() : (editorContainer._current_html || '');
+              var json = (editor && typeof editor.getJSON === 'function') ? editor.getJSON() : null;
+              textarea.value = html || textarea.value;
+              try { contentJson.value = JSON.stringify(json || {}); } catch (e) { contentJson.value = ''; }
+            } catch (e) { console.error('Sync on submit failed', e); }
           }, { passive: true });
         }
 
-        // Allow popup to call a function to insert image/url into editor
-        window.__insertMediaToEditor = function (url) {
-          try {
-            // if featured_image field present and focused, prefer to set that
-            var feat = qs('input[name="featured_image"]');
-            if (feat) {
-              feat.value = url;
-            }
-            // insert as image into tiptap editor
-            if (editor && editor.chain) {
-              editor.chain().focus().setImage({ src: url }).run();
-              return true;
-            }
-            // fallback: append HTML into textarea visible value
-            textarea.value = (textarea.value || '') + "\\n<img src='" + url + "'/>\\n";
-            return true;
-          } catch (e) {
-            console.error(e);
-            return false;
-          }
-        };
-
       } catch (err) {
         console.error('initAdminTipTap error', err);
+        // ensure textarea visible if anything fails
+        try { var ta = qs('textarea[name="content"]'); if (ta) ta.style.display = ''; } catch (_) {}
       }
     }; // end initAdminTipTap
 
-    // Auto-init when DOM ready — also supports external call window.initAdminTipTap()
+    // auto init when DOM ready (also allow manual init from local script)
     document.addEventListener('DOMContentLoaded', function () {
-      if (typeof window.initAdminTipTap === 'function') {
-        try { window.initAdminTipTap(); } catch (e) { console.error(e); }
-      } else {
-        // in case local static init script defines init differently
-        try { if (window.initAdminTipTap) window.initAdminTipTap(); } catch (e) { console.error(e); }
-      }
+      try {
+        if (typeof window.initAdminTipTap === 'function') {
+          window.initAdminTipTap();
+        } else {
+          // local static initializer could have registered it already
+          if (window.initAdminTipTap) try { window.initAdminTipTap(); } catch (e) { console.error(e); }
+        }
+      } catch (e) { console.error(e); }
     });
-
-    // If media library is opened in popup, it may call opener.__insertMediaToEditor(url)
-    // Example usage in popup: window.opener.__insertMediaToEditor(url); window.close();
 
   })();
   </script>
