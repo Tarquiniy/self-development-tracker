@@ -1,0 +1,5 @@
+/* static/admin/css/tiptap_admin.css */
+.tiptap-preview img { max-width:100%; height:auto; display:block; margin:8px 0; }
+.tiptap-preview pre { background:#0b1220; color:#e6eef8; padding:12px; border-radius:6px; overflow:auto; }
+.tiptap-preview table { width:100%; border-collapse:collapse; margin:8px 0; }
+.tiptap-preview table th, .tiptap-preview table td { border:1px solid #e5e7eb; padding:6px; }
