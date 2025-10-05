@@ -17,6 +17,7 @@ from django.core import signing
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.admin.models import LogEntry
+from types import FunctionType
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +30,10 @@ except Exception:
     class VersionAdmin(admin.ModelAdmin):
         pass
 
-# Defer importing custom_admin_site (we will be provided with it by register_admin_models)
+# custom_admin_site will be set via register_admin_models
 custom_admin_site = None
 
-# Import models defensively (they should exist)
+# Defensive import of models
 try:
     from .models import (
         Post, Category, Tag, Comment,
@@ -42,7 +43,7 @@ except Exception:
     Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = None
     logger.exception("Could not import blog.models")
 
-# Optional admin form (TipTap)
+# Optional PostAdminForm (TipTap)
 try:
     from .forms import PostAdminForm
 except Exception:
@@ -53,10 +54,9 @@ PREVIEW_SALT = "post-preview-salt"
 
 
 # -----------------------
-# Utility helpers
+# Utilities
 # -----------------------
 def get_admin_change_url_for_obj(obj, site_name=None):
-    """Return admin change URL for an object or None. If site_name provided, use it."""
     if obj is None:
         return None
     try:
@@ -93,7 +93,7 @@ def _pretty_change_message(raw):
 
 
 # -----------------------
-# Admin classes (definitions only)
+# Admin classes
 # -----------------------
 class BasePostAdmin(VersionAdmin):
     if PostAdminForm:
@@ -212,13 +212,12 @@ class MediaLibraryAdmin(admin.ModelAdmin):
 
 
 # -----------------------
-# View functions (exported)
+# Views
 # -----------------------
 @require_GET
 def admin_dashboard_view(request):
     if not request.user.is_staff:
         raise Http404("permission denied")
-    # minimal dashboard context; template should exist at admin/dashboard.html
     posts_count = Post.objects.count() if Post else 0
     comments_count = Comment.objects.count() if Comment else 0
     users_count = CustomUser.objects.count() if CustomUser else 0
@@ -382,7 +381,7 @@ def admin_media_library_view(request):
 
 
 # -----------------------
-# Registration helper (used by register_admin_models)
+# Registration helpers
 # -----------------------
 def _ensure_registered(site_obj, model, admin_class=None):
     if model is None:
@@ -404,13 +403,12 @@ def _ensure_registered(site_obj, model, admin_class=None):
 # -----------------------
 def register_admin_models(site_obj):
     """
-    Register all blog admin classes into the provided admin site instance.
-    Call this AFTER custom_admin_site is created in core.admin to avoid circular imports.
+    Register admin models and attach custom urls into the provided admin site instance.
+    Call this AFTER custom_admin_site is created to avoid import cycles.
     """
     global custom_admin_site
     custom_admin_site = site_obj or admin.site
 
-    # Register model admin classes into BOTH admin.site and custom_admin_site (if different)
     try:
         _ensure_registered(admin.site, Post, BasePostAdmin)
         _ensure_registered(custom_admin_site, Post, BasePostAdmin)
@@ -436,7 +434,6 @@ def register_admin_models(site_obj):
             except Exception:
                 pass
 
-        # Register CustomUser so Users show up in sidebar in both admin sites
         try:
             _ensure_registered(admin.site, CustomUser)
             _ensure_registered(custom_admin_site, CustomUser)
@@ -445,8 +442,7 @@ def register_admin_models(site_obj):
     except Exception:
         logger.exception("bulk registration failed")
 
-
-    # Attach custom urls into the provided admin site
+    # Attach custom urls: make sure to wrap the ORIGINAL get_urls to avoid recursion.
     def get_admin_urls(urls):
         custom_urls = [
             path("dashboard/", admin_dashboard_view, name="admin-dashboard"),
@@ -459,14 +455,32 @@ def register_admin_models(site_obj):
         return custom_urls + urls
 
     try:
-        custom_admin_site.get_urls = lambda: get_admin_urls(custom_admin_site.get_urls())
+        # If get_urls already wrapped, skip to avoid double-wrapping
+        current_get_urls = getattr(custom_admin_site, "get_urls", None)
+        # detect if already wrapped by checking for an attribute we set or if it's our wrapper
+        already_wrapped = getattr(current_get_urls, "_is_wrapped_by_blog_admin", False)
+
+        if not already_wrapped:
+            orig_get_urls = current_get_urls
+
+            def wrapped_get_urls():
+                # call the original get_urls and then prefix our custom urls
+                try:
+                    base = orig_get_urls()
+                except Exception:
+                    base = super(type(custom_admin_site), custom_admin_site).get_urls()
+                return get_admin_urls(base)
+
+            # mark wrapper to prevent double wrapping
+            setattr(wrapped_get_urls, "_is_wrapped_by_blog_admin", True)
+            custom_admin_site.get_urls = wrapped_get_urls
     except Exception:
-        logger.warning("Failed to attach custom urls to custom_admin_site", exc_info=True)
+        logger.exception("Failed to attach custom urls to custom_admin_site", exc_info=True)
 
     return True
 
 
-# Exported names — core.admin may import these
+# Export names
 __all__ = [
     "register_admin_models",
     "admin_dashboard_view",
