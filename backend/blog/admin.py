@@ -17,6 +17,7 @@ from django.db.models.functions import TruncDate
 from django.db.models import Count
 from django.db import models
 from .widgets import TiptapWidget
+from django.utils.safestring import mark_safe
 
 logger = logging.getLogger(__name__)
 
@@ -581,17 +582,24 @@ def register_admin_models(site_obj):
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
-    formfield_overrides = {
-        models.TextField: {'widget': TiptapWidget(attrs={'rows':20, 'id':'id_content'}, upload_url='/admin/media/upload/')},
-    }
+    list_display = ('title', 'status', 'author', 'published_at')
+    readonly_fields = ('revision_tools',)
+    fields = ('title', 'excerpt', 'content', 'revision_tools')
 
-# Exported names (so core.admin can import these safely)
-__all__ = [
-    "register_admin_models",
-    "admin_dashboard_view",
-    "admin_stats_api",
-    "admin_post_update_view",
-    "admin_autosave_view",
-    "admin_preview_token_view",
-    "admin_media_library_view",
-]
+    def revision_tools(self, obj):
+        # show buttons: view revisions, preview, open media library
+        if obj and obj.pk:
+            rev_list_url = reverse('blog:revisions-list', args=[obj.pk])
+            preview_url = reverse('post-preview', args=[ 'DUMMY' ])  # sample — JS will request preview token
+            media_library = reverse('admin-media-library')
+            return mark_safe(
+                f'<a class="button" href="#" data-rev-url="{rev_list_url}" onclick="openRevisionsPanel(event, {obj.pk})">Revisions</a> '
+                f'<a class="button" href="#" onclick="openPreviewForPost({obj.pk})">Preview</a> '
+                f'<a class="button" href="{media_library}">Media Library</a>'
+            )
+        return "Save draft to enable revisions"
+
+    revision_tools.short_description = "Revision / Preview"
+
+    class Media:
+        js = ('admin/js/tiptap_widget_extra.js',)  # include our extra admin JS

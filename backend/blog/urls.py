@@ -15,11 +15,16 @@ from .views import (
     media_list,
     media_upload,
     media_delete,
-    media_proxy,        # <- existing
-    media_attach_to_post,  # <- new: attach/unlink endpoint
+    media_proxy,
+    media_attach_to_post,
+    revisions_list,
+    revision_restore,
+    autosave_revision,
+    revisions_delete
 )
 
 app_name = 'blog'
+
 
 router = DefaultRouter()
 router.register(r'posts', PostViewSet, basename='post')
@@ -55,4 +60,8 @@ urlpatterns = [
     path('media/delete/', media_delete, name='media-delete'),
     path('media/proxy/<int:pk>/', media_proxy, name='media-proxy'),
     path('media/attach/', media_attach_to_post, name='media-attach'),
+    path('revisions/<int:post_id>/', revisions_list, name='revisions-list'),
+    path('revisions/restore/<int:revision_id>/', revision_restore, name='revisions-restore'),
+    path('revisions/autosave/', autosave_revision, name='revisions-autosave'),
+    path('revisions/delete/', revisions_delete, name='revisions-delete'),
 ]

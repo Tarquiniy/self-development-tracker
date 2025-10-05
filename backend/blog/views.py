@@ -28,7 +28,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import models as dj_models
 
-from .models import Post, Category, PostView, Tag, Comment, PostReaction, PostAttachment
+from .models import Post, Category, PostView, Tag, Comment, PostReaction, PostAttachment, PostRevision
 from .serializers import (
     PostListSerializer, PostDetailSerializer, PostCreateUpdateSerializer,
     CategorySerializer, TagSerializer, CommentSerializer
@@ -536,3 +536,110 @@ def media_attach_to_post(request):
     except Exception:
         url = ''
     return Response({'success': True, 'attachment': {'id': att.id, 'url': url, 'post_id': att.post.id if att.post else None}})
+
+
+# List revisions for a post (admin-only or post author)
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def revisions_list(request, post_id):
+    """
+    Returns revisions for post_id (admin-only).
+    """
+    try:
+        revisions = PostRevision.objects.filter(post_id=post_id).order_by('-created_at')[:100]
+        data = [{
+            'id': r.id,
+            'author': getattr(r.author, 'username', None),
+            'created_at': r.created_at.isoformat(),
+            'autosave': r.autosave,
+            'title': r.title,
+        } for r in revisions]
+        return Response({'results': data})
+    except Exception:
+        logger.exception("revisions_list error")
+        return Response({'results': []}, status=500)
+
+# Restore revision (admin-only)
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def revision_restore(request, revision_id):
+    try:
+        r = PostRevision.objects.get(pk=revision_id)
+        post = r.post
+        # Save current as manual revision before restore
+        PostRevision.objects.create(
+            post=post,
+            author=request.user if request.user.is_authenticated else None,
+            content=post.content,
+            title=post.title,
+            excerpt=post.excerpt,
+            autosave=False,
+            meta={'restored_from': r.id}
+        )
+        # restore
+        post.content = r.content
+        post.title = r.title
+        post.excerpt = r.excerpt
+        post.save(update_fields=['content', 'title', 'excerpt'])
+        return Response({'success': True, 'post_id': post.id})
+    except PostRevision.DoesNotExist:
+        return Response({'success': False, 'message': 'revision not found'}, status=404)
+    except Exception:
+        logger.exception("revision_restore error")
+        return Response({'success': False, 'message': 'internal'}, status=500)
+
+# Autosave endpoint (admin autosave & revision creation)
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+@parser_classes([FormParser, MultiPartParser])
+def autosave_revision(request):
+    """
+    Called by admin JS periodically. Accepts JSON/form fields: post_id, title, content, excerpt, autosave=true
+    Creates a PostRevision and returns preview token + revision id.
+    """
+    try:
+        data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8') or '{}')
+        post_id = data.get('post_id') or None
+        title = data.get('title', '') or ''
+        content = data.get('content', '') or ''
+        excerpt = data.get('excerpt', '') or ''
+        autosave = bool(data.get('autosave', True))
+
+        if post_id:
+            try:
+                post = Post.objects.get(pk=int(post_id))
+            except Post.DoesNotExist:
+                post = None
+        else:
+            post = None
+
+        rev = PostRevision.objects.create(
+            post=post,
+            author=request.user if request.user.is_authenticated else None,
+            content=content,
+            title=title,
+            excerpt=excerpt,
+            autosave=autosave,
+            meta={'client': 'admin-autosave'}
+        )
+        # create preview token (signed payload) for preview_by_token
+        payload = {'title': title, 'content': content, 'excerpt': excerpt}
+        token = signing.dumps(payload, salt=PREVIEW_SALT)
+        return Response({'success': True, 'revision_id': rev.id, 'preview_token': token, 'preview_url': reverse('post-preview', args=[token])})
+    except Exception:
+        logger.exception("autosave_revision error")
+        return Response({'success': False, 'message': 'internal'}, status=500)
+
+# Delete revisions (admin-only)
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def revisions_delete(request):
+    try:
+        ids = request.data.get('ids') or []
+        if not isinstance(ids, (list, tuple)):
+            return Response({'success': False, 'message': 'ids must be list'}, status=400)
+        deleted = PostRevision.objects.filter(id__in=ids).delete()[0]
+        return Response({'success': True, 'deleted': deleted})
+    except Exception:
+        logger.exception("revisions_delete error")
+        return Response({'success': False, 'message': 'internal'}, status=500)

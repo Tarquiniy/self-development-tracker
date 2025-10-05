@@ -224,3 +224,23 @@ class MediaLibrary(PostAttachment):
         proxy = True
         verbose_name = "Медиа библиотека"
         verbose_name_plural = "Медиа библиотека"
+
+
+class PostRevision(models.Model):
+    post = models.ForeignKey('Post', related_name='revisions', on_delete=models.CASCADE)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    content = models.TextField(blank=True)   # HTML content snapshot
+    title = models.CharField(max_length=300, blank=True)
+    excerpt = models.TextField(blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    autosave = models.BooleanField(default=False)
+    meta = models.JSONField(default=dict, blank=True)  # optional metadata: attachments, diff summary, etc.
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['post', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"Revision {self.id} for {self.post_id} @ {self.created_at.isoformat()}"
