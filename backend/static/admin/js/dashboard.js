@@ -1,54 +1,39 @@
-(function(){
-const statsUrl = '/admin/dashboard/stats-data/?days=30';
-function safeFetch(url){
-return fetch(url, {credentials:'same-origin'}).then(r=>{if(!r.ok)throw r;return r.json()});
-}
+// dashboard.js — инициализация графика Chart.js и небольшая логика
+document.addEventListener('DOMContentLoaded', function () {
+  try {
+    const labels = JSON.parse(document.getElementById('pt-dashboard-labels')?.textContent || '[]');
+    const posts = JSON.parse(document.getElementById('pt-dashboard-posts')?.textContent || '[]');
+    const comments = JSON.parse(document.getElementById('pt-dashboard-comments')?.textContent || '[]');
+    const views = JSON.parse(document.getElementById('pt-dashboard-views')?.textContent || '[]');
 
-
-function renderNumbers(data){
-try{document.getElementById('stat-posts').textContent = data.total_posts ?? document.getElementById('stat-posts').textContent;}catch(e){}
-try{document.getElementById('stat-comments').textContent = data.total_comments ?? document.getElementById('stat-comments').textContent;}catch(e){}
-try{document.getElementById('stat-users').textContent = data.users_count ?? document.getElementById('stat-users').textContent;}catch(e){}
-}
-
-
-function renderChart(data){
-const ctx = document.getElementById('dashboardChart');
-if(!ctx) return;
-const labels = data.labels || [];
-const posts = data.posts || [];
-const comments = data.comments || [];
-const views = data.views || [];
-
-
-// create or replace chart
-try{
-if(window._adminDashboardChart){ window._adminDashboardChart.destroy(); window._adminDashboardChart = null; }
-window._adminDashboardChart = new Chart(ctx, {
-type: 'line',
-data: {
-labels: labels,
-datasets: [
-{label:'Посты', data: posts, tension:0.3, fill:false, borderWidth:2},
-{label:'Комментарии', data: comments, tension:0.3, fill:false, borderWidth:2},
-{label:'Просмотры', data: views, tension:0.3, fill:false, borderWidth:2}
-]
-},
-options: { plugins:{legend:{position:'bottom'}}, scales:{x:{display:true}, y:{display:true, beginAtZero:true}} }
+    const ctx = document.getElementById('pt-stats-chart');
+    if (ctx && window.Chart) {
+      new Chart(ctx.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'Посты', data: posts, fill: false, tension: 0.2 },
+            { label: 'Комментарии', data: comments, fill: false, tension: 0.2 },
+            { label: 'Просмотры', data: views, fill: false, tension: 0.2, hidden: true },
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { position: 'top' },
+            tooltip: { enabled: true }
+          },
+          scales: {
+            x: { display: true, title: { display: false } },
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+  } catch (e) {
+    // если что-то пошло не так — не ломать страницу
+    console.error('[pt-dashboard] chart init failed', e);
+  }
 });
-}catch(e){console.warn('Chart render failed', e)}
-}
-
-
-function init(){
-safeFetch(statsUrl).then(data=>{
-renderNumbers(data);
-renderChart(data);
-}).catch(err=>{
-console.warn('Failed to load dashboard stats', err);
-});
-}
-
-
-document.addEventListener('DOMContentLoaded', init);
-})();

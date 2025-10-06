@@ -1,61 +1,81 @@
-{% raw %}{% extends "admin/base_site.html" %}
-<h1>Панель управления</h1>
-<div class="dashboard-actions">
-<a class="btn btn-primary" href="{% url 'admin:blog_post_add' %}">Создать пост</a>
-<a class="btn" href="{% url 'admin:blog_post_changelist' %}">Все посты</a>
-<a class="btn" href="{% url 'admin:admin-dashboard-stats' %}">Обновить</a>
-</div>
-</header>
+{% load static %}
+{% extends "admin/base_site.html" %}
 
+{# Простой, надёжный дашборд без {% raw %} и прочих трюков #}
 
-<section class="dashboard-stats">
-<div class="stat-card">
-<div class="stat-value" id="stat-posts">{{ posts_count }}</div>
-<div class="stat-label">Всего постов</div>
-</div>
-<div class="stat-card">
-<div class="stat-value" id="stat-comments">{{ comments_count }}</div>
-<div class="stat-label">Комментариев</div>
-</div>
-<div class="stat-card">
-<div class="stat-value" id="stat-users">{{ users_count }}</div>
-<div class="stat-label">Пользователей</div>
-</div>
-</section>
+{% block title %}Админ — Панель управления{% endblock %}
 
-
-<section class="dashboard-main">
-<div class="panel panel-left">
-<h2>Активность — последние 30 дней</h2>
-<canvas id="dashboardChart" height="140"></canvas>
-</div>
-
-
-<div class="panel panel-right">
-<h2>Быстрые ссылки</h2>
-<ul class="quick-links">
-<li><a href="{% url 'admin:blog_post_add' %}">Создать новый пост</a></li>
-<li><a href="{% url 'admin:blog_post_changelist' %}">Список постов</a></li>
-<li><a href="{% url 'admin-media-library' %}">Медиатека</a></li>
-</ul>
-
-
-<h2>Последние изменения</h2>
-<div id="recent-changes">
-<!-- можно расширить — сейчас показывает ссылку на список постов -->
-<p>См. <a href="{% url 'admin:blog_post_changelist' %}">все посты</a> для подробного списка.</p>
-</div>
-</div>
-</section>
-
-
-<footer class="dashboard-footer">
-<small>Admin dashboard — быстрый обзор сайта.</small>
-</footer>
-</div>
-
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="{% static 'admin/js/dashboard.js' %}"></script>
+{% block extrahead %}
+<link rel="stylesheet" href="{% static 'admin/css/dashboard.css' %}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+<script src="{% static 'admin/js/dashboard.js' %}" defer></script>
 {% endblock %}
-{% endraw %}
+
+{% block content %}
+<div class="pt-admin-dashboard container">
+  <header class="pt-dash-header">
+    <h1>Панель управления</h1>
+    <p class="muted">Быстрый доступ к статистике и созданию контента</p>
+    <div class="pt-dash-actions">
+      <a class="btn btn-primary" href="{% url 'admin:blog_post_add' %}">Создать пост</a>
+      <a class="btn btn-outline" href="{% url 'admin:blog_post_changelist' %}">Список постов</a>
+      <a class="btn btn-outline" href="{% url 'admin-media-library' %}">Медиатека</a>
+    </div>
+  </header>
+
+  <section class="pt-dash-counters">
+    <div class="card counter">
+      <div class="card-body">
+        <div class="counter-value">{{ posts_count|default:0 }}</div>
+        <div class="counter-label">Постов</div>
+      </div>
+    </div>
+    <div class="card counter">
+      <div class="card-body">
+        <div class="counter-value">{{ comments_count|default:0 }}</div>
+        <div class="counter-label">Комментариев</div>
+      </div>
+    </div>
+    <div class="card counter">
+      <div class="card-body">
+        <div class="counter-value">{{ users_count|default:0 }}</div>
+        <div class="counter-label">Пользователей</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pt-dash-main grid">
+    <div class="card area">
+      <div class="card-header"><strong>Активность (последние {{ days|default:30 }} дней)</strong></div>
+      <div class="card-body">
+        <canvas id="pt-stats-chart" height="140" aria-label="График активности"></canvas>
+      </div>
+    </div>
+
+    <div class="card area">
+      <div class="card-header"><strong>Последние посты</strong></div>
+      <div class="card-body">
+        {% if recent_posts %}
+          <ul class="recent-posts">
+            {% for p in recent_posts %}
+              <li>
+                <a href="{% url 'admin:blog_post_change' p.pk %}">{{ p.title|default:"(без названия)" }}</a>
+                <div class="meta">{{ p.author }} • {{ p.published_at|date:"Y-m-d H:i" }}</div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="muted">Нет последних постов.</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+</div>
+
+{# передаём данные безопасно в JS через json_script #}
+{{ labels|default:"[]"|json_script:"pt-dashboard-labels" }}
+{{ posts|default:"[]"|json_script:"pt-dashboard-posts" }}
+{{ comments|default:"[]"|json_script:"pt-dashboard-comments" }}
+{{ views|default:"[]"|json_script:"pt-dashboard-views" }}
+
+{% endblock %}
