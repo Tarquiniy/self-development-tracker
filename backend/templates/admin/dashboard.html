@@ -1,79 +1,61 @@
-{% extends "admin/base_site.html" %}
-{% load i18n %}
-{% block content %}
-  <div class="dashboard-panel" style="padding:20px;">
-    <h1>{% trans "Admin dashboard" %}</h1>
+{% raw %}{% extends "admin/base_site.html" %}
+<h1>Панель управления</h1>
+<div class="dashboard-actions">
+<a class="btn btn-primary" href="{% url 'admin:blog_post_add' %}">Создать пост</a>
+<a class="btn" href="{% url 'admin:blog_post_changelist' %}">Все посты</a>
+<a class="btn" href="{% url 'admin:admin-dashboard-stats' %}">Обновить</a>
+</div>
+</header>
 
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px">
-      <div style="padding:12px;border:1px solid #eee;border-radius:6px;min-width:160px">
-        <strong>{% trans "Posts" %}</strong>
-        <div>{{ posts_count }}</div>
-        <small>{% trans "Published" %}: {{ published_count }}</small><br/>
-        <small>{% trans "Drafts" %}: {{ draft_count }}</small>
-      </div>
 
-      <div style="padding:12px;border:1px solid #eee;border-radius:6px;min-width:160px">
-        <strong>{% trans "Comments" %}</strong>
-        <div>{{ comments_count }}</div>
-      </div>
+<section class="dashboard-stats">
+<div class="stat-card">
+<div class="stat-value" id="stat-posts">{{ posts_count }}</div>
+<div class="stat-label">Всего постов</div>
+</div>
+<div class="stat-card">
+<div class="stat-value" id="stat-comments">{{ comments_count }}</div>
+<div class="stat-label">Комментариев</div>
+</div>
+<div class="stat-card">
+<div class="stat-value" id="stat-users">{{ users_count }}</div>
+<div class="stat-label">Пользователей</div>
+</div>
+</section>
 
-      <div style="padding:12px;border:1px solid #eee;border-radius:6px;min-width:160px">
-        <strong>{% trans "Users" %}</strong>
-        <div>{{ users_count }}</div>
-      </div>
 
-      <div style="padding:12px;border:1px solid #eee;border-radius:6px;min-width:160px">
-        <strong>{% trans "Views" %}</strong>
-        <div>{{ total_views }}</div>
-      </div>
-    </div>
+<section class="dashboard-main">
+<div class="panel panel-left">
+<h2>Активность — последние 30 дней</h2>
+<canvas id="dashboardChart" height="140"></canvas>
+</div>
 
-    <h2 style="margin-top:10px">{% trans "Recent posts" %}</h2>
-    <ul>
-      {% for p in recent_posts %}
-        <li>
-          {% if p.url %}<a href="{{ p.url }}">{% endif %}
-            {{ p.title }}
-          {% if p.url %}</a>{% endif %}
-          — <small>{{ p.published_at }}</small>
-        </li>
-      {% empty %}
-        <li>{% trans "No posts" %}</li>
-      {% endfor %}
-    </ul>
 
-    <h2>{% trans "Recent comments" %}</h2>
-    <ul>
-      {% for c in recent_comments %}
-        <li>
-          <strong>{{ c.name }}</strong> — {{ c.content }} <em>({{ c.post_title }})</em>
-        </li>
-      {% empty %}
-        <li>{% trans "No comments" %}</li>
-      {% endfor %}
-    </ul>
+<div class="panel panel-right">
+<h2>Быстрые ссылки</h2>
+<ul class="quick-links">
+<li><a href="{% url 'admin:blog_post_add' %}">Создать новый пост</a></li>
+<li><a href="{% url 'admin:blog_post_changelist' %}">Список постов</a></li>
+<li><a href="{% url 'admin-media-library' %}">Медиатека</a></li>
+</ul>
 
-    <h2>{% trans "Recent admin actions" %}</h2>
-    <ul>
-      {% for l in log_entries %}
-        <li>{{ l.action_time }} — {{ l.user }} — {{ l.object_repr }} — {{ l.change_message|safe }}</li>
-      {% empty %}
-        <li>{% trans "No admin log entries" %}</li>
-      {% endfor %}
-    </ul>
 
-    {% if app_list %}
-      <h2>{% trans "Applications" %}</h2>
-      <div>
-        {% for app in app_list %}
-          <h3>{{ app.name }}</h3>
-          <ul>
-            {% for model in app.models %}
-              <li><a href="{{ model.admin_url }}">{{ model.name }}</a></li>
-            {% endfor %}
-          </ul>
-        {% endfor %}
-      </div>
-    {% endif %}
-  </div>
+<h2>Последние изменения</h2>
+<div id="recent-changes">
+<!-- можно расширить — сейчас показывает ссылку на список постов -->
+<p>См. <a href="{% url 'admin:blog_post_changelist' %}">все посты</a> для подробного списка.</p>
+</div>
+</div>
+</section>
+
+
+<footer class="dashboard-footer">
+<small>Admin dashboard — быстрый обзор сайта.</small>
+</footer>
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{% static 'admin/js/dashboard.js' %}"></script>
 {% endblock %}
+{% endraw %}
