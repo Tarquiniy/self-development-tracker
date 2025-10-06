@@ -18,9 +18,6 @@ from django.db.models.functions import TruncDate
 from django.db.models import Count
 from django.db import models
 
-from .widgets import TipTapWidget  # uses our widgets.py
-from django.utils.safestring import mark_safe
-
 logger = logging.getLogger(__name__)
 
 # Optional reversion support
@@ -42,9 +39,29 @@ except Exception:
     Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = None
     logger.exception("Could not import blog.models")
 
-# Optional admin form (TipTap integration)
+# Try to import TipTap widget (optional)
+TipTapWidget = None
 try:
-    from .forms import PostAdminForm
+    from .widgets import TipTapWidget as _TipTapWidget
+    TipTapWidget = _TipTapWidget
+except Exception:
+    # Not critical — will fallback to summernote or textarea
+    TipTapWidget = None
+    logger.debug("TipTapWidget not available; falling back to other editors.")
+
+# Try to import django-summernote widget (recommended fallback)
+SummernoteWidget = None
+try:
+    from django_summernote.widgets import SummernoteWidget as _SummernoteWidget
+    SummernoteWidget = _SummernoteWidget
+except Exception:
+    SummernoteWidget = None
+    logger.debug("django_summernote not available as widget fallback.")
+
+# Optional admin form (may be imported from forms.py in your app)
+try:
+    from .forms import PostAdminForm as ExternalPostAdminForm
+    PostAdminForm = ExternalPostAdminForm
 except Exception:
     PostAdminForm = None
 
@@ -93,8 +110,15 @@ def _pretty_change_message(raw):
 # Admin classes
 # -----------------------
 class BasePostAdmin(VersionAdmin):
+    """
+    Robust Post admin:
+    - safe use of optional PostAdminForm (TipTap/Summernote) via get_form fallback,
+    - uses change_form_template only if template exists in project.
+    """
+    # dynamic form selection in get_form
     change_form_template = None
     try:
+        # check for template existence in SETTINGS TEMPLATES DIRS or local project templates path
         template_name = os.path.join('admin', 'blog', 'post', 'change_form.html')
         from django.conf import settings as _settings
         dirs = []
@@ -484,13 +508,19 @@ def _ensure_registered(site_obj, model, admin_class=None):
 custom_admin_site = None
 
 def register_admin_models(site_obj):
+    """
+    Register all admin models into provided admin site.
+    Call this AFTER custom_admin_site is created in core.admin to avoid import cycles.
+    """
     global custom_admin_site
     custom_admin_site = site_obj or admin.site
 
+    # choose post admin class (allow emergency switch by env)
     def _choose_post_admin():
         try:
             ev = os.environ.get("EMERGENCY_ADMIN", "").strip().lower()
             if ev in ("1", "true", "yes", "on"):
+                # define emergency minimal admin
                 class EmergencyPostAdmin(admin.ModelAdmin):
                     list_display = ("title", "status", "author", "published_at")
                     fields = ("title", "slug", "author", "status", "published_at", "excerpt", "content", "featured_image")
@@ -537,6 +567,7 @@ def register_admin_models(site_obj):
     except Exception:
         logger.exception("bulk registration failed")
 
+    # Attach custom urls by wrapping original get_urls (avoid recursion)
     def get_admin_urls(urls):
         custom_urls = [
             path("dashboard/", admin_dashboard_view, name="admin-dashboard"),
@@ -567,21 +598,55 @@ def register_admin_models(site_obj):
     return True
 
 
-class PostAdminForm(forms.ModelForm):
-    class Meta:
-        model = Post
-        fields = '__all__'
-        widgets = {
-            'content': TipTapWidget(attrs={'class':'admin-tiptap-textarea'}),
-        }
+# Helper: choose best available rich text widget
+def get_rich_widget():
+    """
+    Return the best rich widget available in this environment:
+    1) TipTapWidget (if present and importable)
+    2) django-summernote SummernoteWidget (if installed)
+    3) fallback: basic textarea
+    """
+    if TipTapWidget is not None:
+        try:
+            return TipTapWidget
+        except Exception:
+            logger.debug("TipTapWidget import exists but failed to use it.")
+    if SummernoteWidget is not None:
+        try:
+            return SummernoteWidget
+        except Exception:
+            logger.debug("SummernoteWidget exists but failed to use it.")
+    # fallback
+    return forms.Textarea
 
+
+# If external PostAdminForm not provided, build a safe ModelForm that uses the best widget
+if PostAdminForm is None:
+    class PostAdminForm(forms.ModelForm):
+        class Meta:
+            model = Post
+            fields = '__all__'
+            widgets = {
+                'content': get_rich_widget()(attrs={'class': 'admin-rich-text-area', 'rows': 20}),
+            }
+else:
+    # keep whatever form external author provided
+    PostAdminForm = PostAdminForm
+
+
+# Register PostAdmin with safe defaults: no fragile custom templates/js
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
     form = PostAdminForm
-    # временно отключаем кастомный шаблон/JS — вернём позже после отладки
+    # DO NOT force a custom change_form_template here — leave flexible and safe
     change_form_template = None
 
+    # We intentionally do not include custom tiptap JS by default (was causing CORS / mime / 500 issues).
+    # Summernote will inject its own media when used. If TipTap is available and you want it, enable manually.
     class Media:
-        # убираем кастомные файлы до того, как разберёмся с проблемами статических файлов
         js = ()
         css = {}
+
+
+# If you want to register automatically when module imported by core.admin, provide register function exported.
+# (register_admin_models defined above will handle this when called from core)
