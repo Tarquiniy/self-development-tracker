@@ -1,0 +1,30 @@
+/* blog/static/admin/css/advanced_admin_editor.css */
+.admin-advanced-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.admin-advanced-toolbar .aae-btn {
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.aae-preview {
+  border: 1px solid #eee;
+  padding: 12px;
+  margin-top: 8px;
+  background: #fff;
+}
+.aae-modal {
+  position: fixed;
+  left: 0; top: 0; right:0; bottom:0;
+  background: rgba(0,0,0,0.45);
+  display:flex; align-items:center; justify-content:center; z-index:9999;
+}
+.aae-modal-inner { background:#fff; padding:16px; width:80%; max-width:900px; max-height:80%; overflow:auto; border-radius:6px; }
+.aae-attach { display:flex; gap:12px; align-items:center; margin:8px 0; }
+.aae-thumb { width:80px; height:60px; object-fit:cover; border:1px solid #ddd; }
+.ae-autosave-indicator { margin-left: 8px; color:#777; }
