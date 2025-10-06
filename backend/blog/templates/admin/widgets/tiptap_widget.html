@@ -1,28 +1,28 @@
 {# templates/admin/widgets/tiptap_widget.html #}
 {% load static %}
-<div class="admin-tiptap-widget"
-     data-upload-url="{{ widget.attrs.data_upload_url|default:'/admin/blog/upload-image/' }}">
-  <textarea name="{{ widget.name }}" id="{{ widget.attrs.id }}" style="display:none;">{{ widget.value|default:"" }}</textarea>
+{# Renders a normal textarea (so admin form handling works) and
+   also outputs a visual editor container that the JS will initialize. #}
 
-  {# placeholding element; editor script will attach here #}
-  <div class="tiptap-placeholder">
-    <div class="tiptap-toolbar" aria-hidden="true"></div>
-    <div class="tiptap-editor"></div>
-  </div>
+{# Use the built-in textarea rendering to preserve attrs id, name etc. #}
+<textarea
+  name="{{ widget.name }}"
+  id="{{ widget.attrs.id|default:'id_'|add:widget.name }}"
+  {% for k,v in widget.attrs.items %}
+    {% if k != 'id' %}
+      {{ k }}="{{ v|escape }}"
+    {% endif %}
+  {% endfor %}
+>{{ widget.value|default_if_none:''|escape }}</textarea>
+
+{# Editor container used by JS. Data attributes mirror textarea attrs (upload/preview). #}
+<div class="admin-tiptap-widget"
+     data-upload-url="{{ widget.attrs.data-upload-url|default:"/api/blog/media/upload/" }}"
+     data-preview-token-url="{{ widget.attrs.data-preview-token-url|default:"/admin/posts/preview-token/" }}"
+     aria-hidden="false">
+  <div class="tiptap-toolbar"></div>
+  <div class="tiptap-editor" contenteditable="true"></div>
 </div>
 
-{# подключаем локальный модуль JS, который инициализирует TipTap (или fallback) #}
-<script type="module" src="{% static 'admin/js/tiptap_admin_extra.js' %}"></script>
-
-<style>
-.admin-tiptap-widget .tiptap-toolbar {
-  margin-bottom: 8px;
-  display:flex; gap:6px; flex-wrap:wrap;
-}
-.admin-tiptap-widget .tiptap-toolbar button {
-  padding:6px 8px; border-radius:6px; border:1px solid #ddd; background:#fff; cursor:pointer;
-}
-.admin-tiptap-widget .tiptap-editor, .admin-tiptap-widget .tiptap-fallback {
-  min-height:300px; padding:8px; border-radius:6px; background:#fff; border:1px solid #e5e7eb;
-}
-</style>
+{# Local static JS/CSS that initialize the editor. Load only once — but safe to include. #}
+<link rel="stylesheet" href="{% static 'admin/css/tiptap_admin.css' %}">
+<script src="{% static 'admin/js/tiptap_admin_extra.js' %}"></script>

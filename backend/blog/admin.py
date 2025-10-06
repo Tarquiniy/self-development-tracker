@@ -6,8 +6,8 @@ from django import forms
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
 from django.urls import reverse, path
-from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse, Http404, HttpResponse
+from django.shortcuts import render, redirect
+from django.http import JsonResponse, Http404
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_GET
 from django.core.files.storage import default_storage
@@ -17,21 +17,22 @@ from django.contrib.auth import get_user_model
 from django.db.models.functions import TruncDate
 from django.db.models import Count
 from django.db import models
+
+from .widgets import TipTapWidget  # uses our widgets.py
 from django.utils.safestring import mark_safe
 
 logger = logging.getLogger(__name__)
 
-# Try optional reversion support
+# Optional reversion support
 try:
     import reversion
     from reversion.admin import VersionAdmin
 except Exception:
     reversion = None
-
     class VersionAdmin(admin.ModelAdmin):
         pass
 
-# Defensive import of blog models (so admin import won't fail hard)
+# Defensive import of models (log exceptions but don't crash import)
 try:
     from .models import (
         Post, Category, Tag, Comment,
@@ -41,16 +42,14 @@ except Exception:
     Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = None
     logger.exception("Could not import blog.models")
 
-# Try optional PostAdminForm from forms (if present)
+# Optional admin form (TipTap integration)
 try:
-    from .forms import PostAdminForm as ExternalPostAdminForm
+    from .forms import PostAdminForm
 except Exception:
-    ExternalPostAdminForm = None
+    PostAdminForm = None
 
 CustomUser = get_user_model()
 PREVIEW_SALT = "post-preview-salt"
-PREVIEW_MAX_AGE = 60 * 60  # 1 hour
-
 
 # -----------------------
 # Helpers
@@ -91,140 +90,201 @@ def _pretty_change_message(raw):
 
 
 # -----------------------
-# Admin views / endpoints
+# Admin classes
 # -----------------------
+class BasePostAdmin(VersionAdmin):
+    change_form_template = None
+    try:
+        template_name = os.path.join('admin', 'blog', 'post', 'change_form.html')
+        from django.conf import settings as _settings
+        dirs = []
+        try:
+            dirs = _settings.TEMPLATES[0].get('DIRS', []) if getattr(_settings, 'TEMPLATES', None) else []
+        except Exception:
+            dirs = []
+        found = False
+        for d in dirs:
+            if os.path.exists(os.path.join(d, template_name)):
+                found = True
+                break
+        if not found:
+            alt = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates', 'admin', 'blog', 'post', 'change_form.html'))
+            if os.path.exists(alt):
+                found = True
+        if found:
+            change_form_template = 'admin/blog/post/change_form.html'
+    except Exception:
+        change_form_template = None
 
+    list_display = ("title", "status", "author", "published_at")
+    list_filter = ("status", "published_at") if Post is not None else ()
+    search_fields = ("title", "content") if Post is not None else ()
+    prepopulated_fields = {"slug": ("title",)} if Post is not None else {}
+    date_hierarchy = "published_at"
+    ordering = ("-published_at",)
+    filter_horizontal = ("categories", "tags") if Post is not None else ()
+    actions = ["make_published", "make_draft", "duplicate_post"]
+
+    fieldsets = (
+        ("Основная информация", {"fields": ("title", "slug", "author", "status", "published_at")}),
+        ("Содержание", {"fields": ("excerpt", "content", "content_json", "featured_image")}),
+        ("Категории и теги", {"fields": ("categories", "tags")}),
+        ("SEO", {"fields": ("meta_title", "meta_description", "og_image"), "classes": ("collapse",)}),
+    )
+
+    def get_form(self, request, obj=None, **kwargs):
+        # try to use PostAdminForm if present; on error, fall back to default admin form
+        if PostAdminForm:
+            try:
+                return super().get_form(request, obj, form=PostAdminForm, **kwargs)
+            except Exception:
+                logger.exception("PostAdminForm raised during get_form — falling back to default admin form.")
+        try:
+            return super().get_form(request, obj, **kwargs)
+        except Exception:
+            logger.exception("admin.get_form failed; falling back to modelform_factory")
+            from django.forms import modelform_factory
+            return modelform_factory(self.model, fields="__all__")
+
+    def make_published(self, request, queryset):
+        updated = queryset.update(status="published")
+        self.message_user(request, f"{updated} постов опубликовано.")
+    make_published.short_description = "Опубликовать выбранные"
+
+    def make_draft(self, request, queryset):
+        updated = queryset.update(status="draft")
+        self.message_user(request, f"{updated} постов переведено в черновики.")
+    make_draft.short_description = "Перевести в черновики"
+
+    def duplicate_post(self, request, queryset):
+        created = 0
+        for p in queryset:
+            old_slug = getattr(p, "slug", "") or ""
+            p.pk = None
+            p.slug = f"{old_slug}-copy"
+            p.title = f"{getattr(p, 'title', '')} (копия)"
+            p.status = "draft"
+            p.save()
+            created += 1
+        self.message_user(request, f"Создано {created} копий.")
+    duplicate_post.short_description = "Создать копии"
+
+
+class CategoryAdmin(admin.ModelAdmin):
+    list_display = ("title", "slug", "post_count")
+    prepopulated_fields = {"slug": ("title",)}
+    def post_count(self, obj):
+        try:
+            return obj.posts.count()
+        except Exception:
+            return 0
+    post_count.short_description = "Постов"
+
+
+class TagAdmin(admin.ModelAdmin):
+    list_display = ("title", "slug", "post_count")
+    prepopulated_fields = {"slug": ("title",)}
+    def post_count(self, obj):
+        try:
+            return obj.posts.count()
+        except Exception:
+            return 0
+    post_count.short_description = "Постов"
+
+
+class CommentAdmin(admin.ModelAdmin):
+    list_display = ("shorter_name", "post_link", "user", "short_content", "is_public", "is_moderated", "created_at")
+    list_editable = ("is_public", "is_moderated")
+    def shorter_name(self, obj): return getattr(obj, "name", "")[:30]
+    def post_link(self, obj):
+        try:
+            post = getattr(obj, "post", None)
+            site_name = getattr(custom_admin_site, "name", None) if custom_admin_site else None
+            url = get_admin_change_url_for_obj(post, site_name=site_name)
+            if post and url:
+                from django.utils.html import format_html
+                return format_html('<a href="{}">{}</a>', url, getattr(post, "title", ""))
+        except Exception:
+            pass
+        return "-"
+    def short_content(self, obj):
+        txt = getattr(obj, "content", "") or ""
+        return txt[:100] + ("..." if len(txt) > 100 else "")
+
+
+class PostReactionAdmin(admin.ModelAdmin):
+    list_display = ("post", "likes_count", "updated_at")
+    def likes_count(self, obj):
+        try:
+            return obj.likes_count()
+        except Exception:
+            return 0
+
+
+class MediaLibraryAdmin(admin.ModelAdmin):
+    list_display = ("title", "uploaded_by", "uploaded_at", "post_link")
+    def post_link(self, obj):
+        try:
+            if getattr(obj, "post", None):
+                site_name = getattr(custom_admin_site, "name", None) if custom_admin_site else None
+                url = get_admin_change_url_for_obj(obj.post, site_name=site_name)
+                from django.utils.html import format_html
+                if url:
+                    return format_html('<a href="{}">{}</a>', url, obj.post.title)
+        except Exception:
+            pass
+        return "-"
+    def changelist_view(self, request, extra_context=None):
+        return redirect("admin-media-library")
+
+
+# -----------------------
+# Views (exported)
+# -----------------------
 @require_http_methods(["GET", "POST"])
 def admin_media_library_view(request):
-    """
-    Admin media library view: returns template or JSON list for XHR.
-    Allows upload via POST (multipart/form-data).
-    """
     if not request.user.is_staff:
         raise Http404("permission denied")
 
-    # POST = upload single file (compat for small uploads)
     if request.method == "POST":
         upload = request.FILES.get("file") or request.FILES.get("image")
         title = request.POST.get("title") or (upload.name if upload else "")
         if not upload:
             return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
-        if PostAttachment is None and MediaLibrary is None:
-            return JsonResponse({'success': False, 'error': 'Attachment model not configured'}, status=500)
+        if PostAttachment is None:
+            return JsonResponse({'success': False, 'error': 'PostAttachment model not configured'}, status=500)
         try:
-            saved_path = default_storage.save(
-                f'post_attachments/{timezone.now().strftime("%Y/%m/%d")}/{upload.name}',
-                ContentFile(upload.read())
-            )
-            url = default_storage.url(saved_path)
-            # Try save to PostAttachment if exists else to MediaLibrary
-            att = None
+            att = PostAttachment()
+            att.title = title
             try:
-                if PostAttachment is not None:
-                    att = PostAttachment()
-                    att.title = title
-                    try:
-                        att.uploaded_by = request.user
-                    except Exception:
-                        pass
-                    att.uploaded_at = timezone.now()
-                    if hasattr(att, 'file'):
-                        att.file.name = saved_path
-                    att.save()
-                elif MediaLibrary is not None:
-                    entry = MediaLibrary()
-                    entry.title = title
-                    try:
-                        entry.uploaded_by = request.user
-                    except Exception:
-                        pass
-                    entry.uploaded_at = timezone.now()
-                    if hasattr(entry, 'file'):
-                        entry.file.name = saved_path
-                    entry.save()
+                att.uploaded_by = request.user
             except Exception:
-                logger.exception("Saving attachment entry failed (continue)")
-
-            return JsonResponse({'success': True, 'id': getattr(att, 'id', None), 'url': url, 'title': title})
+                pass
+            att.uploaded_at = timezone.now()
+            saved_path = default_storage.save(f'post_attachments/{timezone.now().strftime("%Y/%m/%d")}/{upload.name}', ContentFile(upload.read()))
+            try:
+                if hasattr(att, 'file'):
+                    att.file.name = saved_path
+            except Exception:
+                pass
+            att.save()
+            url = default_storage.url(saved_path)
+            return JsonResponse({'success': True, 'id': getattr(att, 'id', None), 'url': url, 'title': att.title})
         except Exception:
             logger.exception("Upload failed")
             return JsonResponse({'success': False, 'error': 'upload_failed'}, status=500)
 
-    # GET
-    attachments = []
-    try:
-        qs = PostAttachment.objects.all().order_by('-uploaded_at')[:500] if PostAttachment is not None else []
-        for a in qs:
-            try:
-                file_field = getattr(a, 'file', None)
-                url = ''
-                if file_field:
-                    try:
-                        url = file_field.url
-                    except Exception:
-                        url = ''
-                title = a.title if getattr(a, 'title', None) else (os.path.basename(file_field.name) if file_field and getattr(file_field, 'name', None) else '')
-                attachments.append({
-                    'id': getattr(a, 'id', None),
-                    'title': title,
-                    'url': url,
-                })
-            except Exception:
-                logger.exception("Error serializing attachment id=%s", getattr(a, 'id', None))
-                continue
-    except Exception:
-        logger.exception("Error fetching attachments for media library")
-
+    attachments = PostAttachment.objects.all().order_by('-uploaded_at')[:500] if PostAttachment is not None else []
     is_xhr = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json'
     if is_xhr:
-        return JsonResponse({'attachments': attachments})
-    return render(request, 'admin/media_library.html', {'attachments': attachments})
-
-
-@require_POST
-def admin_tiptap_upload_view(request):
-    """
-    Endpoint to accept file uploads from TipTap editor (drag'n'drop or file selector).
-    Returns JSON { success: True, url: '...' } or error.
-    """
-    if not request.user.is_staff:
-        return JsonResponse({'success': False, 'error': 'permission denied'}, status=403)
-
-    upload = request.FILES.get("file") or request.FILES.get("image")
-    if not upload:
-        return JsonResponse({'success': False, 'error': 'no_file'}, status=400)
-
-    try:
-        folder = timezone.now().strftime("post_uploads/%Y/%m/%d/")
-        path = default_storage.save(folder + upload.name, ContentFile(upload.read()))
-        url = default_storage.url(path)
-
-        # Optionally persist to PostAttachment or MediaLibrary
-        try:
-            if PostAttachment is not None:
-                att = PostAttachment.objects.create(
-                    title=upload.name,
-                    uploaded_by=request.user if getattr(request, 'user', None) else None,
-                    uploaded_at=timezone.now()
-                )
-                if hasattr(att, 'file'):
-                    att.file.name = path
-                    att.save()
-        except Exception:
-            logger.debug("Could not save PostAttachment for uploaded file", exc_info=True)
-
-        return JsonResponse({'success': True, 'url': url})
-    except Exception:
-        logger.exception("admin_tiptap_upload_view: upload failed")
-        return JsonResponse({'success': False, 'error': 'upload_failed'}, status=500)
+        data = [{'id': a.id, 'title': a.title or os.path.basename(getattr(a.file, 'name', '')), 'url': getattr(a.file, 'url', '')} for a in attachments]
+        return JsonResponse({'attachments': data})
+    context = {'attachments': attachments}
+    return render(request, 'admin/media_library.html', context)
 
 
 @require_POST
 def admin_preview_token_view(request):
-    """
-    Create a signed token for previewing a post draft in frontend.
-    Expects JSON body with title/content/excerpt/featured_image.
-    """
     if not request.user.is_staff:
         return JsonResponse({'detail': 'permission denied'}, status=403)
     try:
@@ -246,10 +306,6 @@ def admin_preview_token_view(request):
 
 @require_POST
 def admin_autosave_view(request):
-    """
-    Autosave endpoint used by editor JS. Accepts JSON body,
-    creates or updates a Draft post and returns { success: True, id: <post_id> }.
-    """
     if not request.user.is_staff:
         return JsonResponse({'success': False, 'message': 'permission denied'}, status=403)
     try:
@@ -270,10 +326,7 @@ def admin_autosave_view(request):
 
     for f in ('title', 'excerpt', 'content', 'featured_image'):
         if f in payload:
-            try:
-                setattr(post, f, payload[f])
-            except Exception:
-                pass
+            setattr(post, f, payload[f])
     if 'content_json' in payload:
         try:
             post.content_json = payload['content_json']
@@ -293,7 +346,7 @@ def admin_autosave_view(request):
                     reversion.set_user(request.user)
                     reversion.set_comment("Autosave")
         except Exception:
-            logger.debug("reversion skipped on autosave", exc_info=True)
+            logger.debug("reversion skipped", exc_info=True)
         return JsonResponse({'success': True, 'id': post.id})
     except Exception:
         logger.exception("Autosave failed")
@@ -302,10 +355,6 @@ def admin_autosave_view(request):
 
 @require_POST
 def admin_post_update_view(request):
-    """
-    Inline post field update used by admin UI (AJAX).
-    Payload: { post_id, field, value }
-    """
     if not request.user.is_staff:
         return JsonResponse({'success': False, 'message': 'permission denied'}, status=403)
     try:
@@ -332,10 +381,7 @@ def admin_post_update_view(request):
             return JsonResponse({'success': False, 'message': 'Invalid datetime'}, status=400)
         post.published_at = dt
     else:
-        try:
-            setattr(post, field, value)
-        except Exception:
-            return JsonResponse({'success': False, 'message': 'Invalid value'}, status=400)
+        setattr(post, field, value)
     try:
         post.save()
         return JsonResponse({'success': True, 'post_id': post.id, 'field': field, 'value': getattr(post, field)})
@@ -346,10 +392,6 @@ def admin_post_update_view(request):
 
 @require_GET
 def admin_stats_api(request):
-    """
-    Returns simple time series (posts/comments/views) for the admin dashboard chart.
-    ?days=30
-    """
     if not request.user.is_staff:
         return JsonResponse({'detail': 'permission denied'}, status=403)
     try:
@@ -401,10 +443,8 @@ def admin_stats_api(request):
     views_series = build_series(views_qs)
     return JsonResponse({'labels': labels, 'posts': posts_series, 'comments': comments_series, 'views': views_series})
 
-
 @require_GET
 def admin_dashboard_view(request):
-    """Renders admin dashboard page (custom)."""
     if not request.user.is_staff:
         raise Http404("permission denied")
     posts_count = Post.objects.count() if Post else 0
@@ -412,136 +452,18 @@ def admin_dashboard_view(request):
     users_count = CustomUser.objects.count() if CustomUser else 0
     app_list = []
     try:
-        app_list = admin.site.get_app_list(request)
+        if custom_admin_site:
+            app_list = custom_admin_site.get_app_list(request)
+        else:
+            app_list = admin.site.get_app_list(request)
     except Exception:
         app_list = []
-    ctx_base = admin.site.each_context(request)
+    ctx_base = custom_admin_site.each_context(request) if custom_admin_site else admin.site.each_context(request)
     context = dict(ctx_base, title="Admin dashboard", posts_count=posts_count, comments_count=comments_count, users_count=users_count, app_list=app_list)
     return render(request, "admin/dashboard.html", context)
 
-
 # -----------------------
-# Admin classes (ModelAdmin)
-# -----------------------
-class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("title", "slug", "post_count")
-    prepopulated_fields = {"slug": ("title",)}
-
-    def post_count(self, obj):
-        try:
-            return obj.posts.count()
-        except Exception:
-            return 0
-    post_count.short_description = "Постов"
-
-
-class TagAdmin(admin.ModelAdmin):
-    list_display = ("title", "slug", "post_count")
-    prepopulated_fields = {"slug": ("title",)}
-
-    def post_count(self, obj):
-        try:
-            return obj.posts.count()
-        except Exception:
-            return 0
-    post_count.short_description = "Постов"
-
-
-class CommentAdmin(admin.ModelAdmin):
-    list_display = ("shorter_name", "post_link", "user", "short_content", "is_public", "is_moderated", "created_at")
-    list_editable = ("is_public", "is_moderated")
-
-    def shorter_name(self, obj):
-        return getattr(obj, "name", "")[:30]
-
-    def post_link(self, obj):
-        try:
-            post = getattr(obj, "post", None)
-            site_name = getattr(custom_admin_site, "name", None) if 'custom_admin_site' in globals() else None
-            url = get_admin_change_url_for_obj(post, site_name=site_name)
-            if post and url:
-                from django.utils.html import format_html
-                return format_html('<a href="{}">{}</a>', url, getattr(post, "title", ""))
-        except Exception:
-            pass
-        return "-"
-
-    def short_content(self, obj):
-        txt = getattr(obj, "content", "") or ""
-        return txt[:100] + ("..." if len(txt) > 100 else "")
-
-
-class PostReactionAdmin(admin.ModelAdmin):
-    list_display = ("post", "likes_count", "updated_at")
-
-    def likes_count(self, obj):
-        try:
-            return obj.likes_count()
-        except Exception:
-            return 0
-
-
-class MediaLibraryAdmin(admin.ModelAdmin):
-    list_display = ("title", "uploaded_by", "uploaded_at", "post_link")
-
-    def post_link(self, obj):
-        try:
-            if getattr(obj, "post", None):
-                site_name = getattr(custom_admin_site, "name", None) if 'custom_admin_site' in globals() else None
-                url = get_admin_change_url_for_obj(obj.post, site_name=site_name)
-                from django.utils.html import format_html
-                if url:
-                    return format_html('<a href="{}">{}</a>', url, obj.post.title)
-        except Exception:
-            pass
-        return "-"
-
-    def changelist_view(self, request, extra_context=None):
-        # Redirect to unified admin media library route
-        return redirect("admin-media-library")
-
-
-# -----------------------
-# Post admin form & registration
-# -----------------------
-# Use external PostAdminForm if provided; else we declare our own with TipTap widget
-if ExternalPostAdminForm:
-    PostAdminForm = ExternalPostAdminForm
-else:
-    try:
-        from .widgets import TipTapWidget  # ensure name exists
-    except Exception:
-        TipTapWidget = None
-
-    class PostAdminForm(forms.ModelForm):
-        class Meta:
-            model = Post
-            fields = "__all__"
-            widgets = {}
-            if TipTapWidget is not None:
-                widgets['content'] = TipTapWidget(
-                    attrs={'class': 'admin-tiptap-textarea'},
-                    upload_url='/admin/blog/upload-image/',
-                    preview_token_url='/admin/posts/preview-token/'
-                )
-
-# Define PostAdmin (robust)
-@admin.register(Post)
-class PostAdmin(admin.ModelAdmin):
-    form = PostAdminForm
-    change_form_template = 'admin/blog/post/change_form.html'
-    list_display = ("title", "status", "author", "published_at")
-    search_fields = ("title", "content")
-    prepopulated_fields = {"slug": ("title",)}
-    ordering = ("-published_at",)
-
-    class Media:
-        js = ('admin/js/tiptap_admin_extra.js',)
-        css = {'all': ('admin/css/tiptap_admin.css',)}
-
-
-# -----------------------
-# Registration helper & attach custom URLs
+# Registration helpers & main entrypoint
 # -----------------------
 def _ensure_registered(site_obj, model, admin_class=None):
     if model is None:
@@ -558,88 +480,105 @@ def _ensure_registered(site_obj, model, admin_class=None):
         logger.exception("Could not register %s on %s", getattr(model, "__name__", model), getattr(site_obj, "name", site_obj))
 
 
-custom_admin_site = None  # will be set by register_admin_models()
-
+# The global variable that will be set by register_admin_models
+custom_admin_site = None
 
 def register_admin_models(site_obj):
-    """
-    Register admin models into provided admin site (safe).
-    Also attaches a few custom admin URLs.
-    """
     global custom_admin_site
     custom_admin_site = site_obj or admin.site
 
-    # Register models
+    def _choose_post_admin():
+        try:
+            ev = os.environ.get("EMERGENCY_ADMIN", "").strip().lower()
+            if ev in ("1", "true", "yes", "on"):
+                class EmergencyPostAdmin(admin.ModelAdmin):
+                    list_display = ("title", "status", "author", "published_at")
+                    fields = ("title", "slug", "author", "status", "published_at", "excerpt", "content", "featured_image")
+                    search_fields = ("title",)
+                    ordering = ("-published_at",)
+                    filter_horizontal = ()
+                return EmergencyPostAdmin
+        except Exception:
+            pass
+        return BasePostAdmin
+
+    post_admin_cls = _choose_post_admin()
+
     try:
-        _ensure_registered(custom_admin_site, Post, PostAdmin)
+        _ensure_registered(admin.site, Post, post_admin_cls)
+        _ensure_registered(custom_admin_site, Post, post_admin_cls)
+
+        _ensure_registered(admin.site, Category, CategoryAdmin)
         _ensure_registered(custom_admin_site, Category, CategoryAdmin)
+
+        _ensure_registered(admin.site, Tag, TagAdmin)
         _ensure_registered(custom_admin_site, Tag, TagAdmin)
+
+        _ensure_registered(admin.site, Comment, CommentAdmin)
         _ensure_registered(custom_admin_site, Comment, CommentAdmin)
+
+        _ensure_registered(admin.site, PostReaction, PostReactionAdmin)
         _ensure_registered(custom_admin_site, PostReaction, PostReactionAdmin)
 
         if PostAttachment is not None:
+            _ensure_registered(admin.site, MediaLibrary, MediaLibraryAdmin)
             _ensure_registered(custom_admin_site, MediaLibrary, MediaLibraryAdmin)
             try:
+                _ensure_registered(admin.site, PostAttachment, MediaLibraryAdmin)
                 _ensure_registered(custom_admin_site, PostAttachment, MediaLibraryAdmin)
             except Exception:
                 pass
 
         try:
+            _ensure_registered(admin.site, CustomUser)
             _ensure_registered(custom_admin_site, CustomUser)
         except Exception:
             pass
     except Exception:
         logger.exception("bulk registration failed")
 
-    # Add custom admin URLs (wrap get_urls)
-    def get_admin_urls(original_get_urls):
-        def wrapped_get_urls():
-            try:
-                base_urls = original_get_urls()
-            except Exception:
-                try:
-                    base_urls = super(type(custom_admin_site), custom_admin_site).get_urls()
-                except Exception:
-                    base_urls = []
-
-            custom_urls = [
-                path("dashboard/", admin_dashboard_view, name="admin-dashboard"),
-                path("dashboard/stats-data/", admin_stats_api, name="admin-dashboard-stats"),
-                path("media-library/", admin_media_library_view, name="admin-media-library"),
-                path("posts/update/", admin_post_update_view, name="admin-post-update"),
-                path("posts/autosave/", admin_autosave_view, name="admin-autosave"),
-                path("posts/preview-token/", admin_preview_token_view, name="admin-preview-token"),
-                path("upload-image/", admin_tiptap_upload_view, name="admin-blog-upload"),
-            ]
-            return custom_urls + base_urls
-        return wrapped_get_urls
+    def get_admin_urls(urls):
+        custom_urls = [
+            path("dashboard/", admin_dashboard_view, name="admin-dashboard"),
+            path("dashboard/stats-data/", admin_stats_api, name="admin-dashboard-stats"),
+            path("media-library/", admin_media_library_view, name="admin-media-library"),
+            path("posts/update/", admin_post_update_view, name="admin-post-update"),
+            path("posts/autosave/", admin_autosave_view, name="admin-autosave"),
+            path("posts/preview-token/", admin_preview_token_view, name="admin-preview-token"),
+        ]
+        return custom_urls + urls
 
     try:
         current_get_urls = getattr(custom_admin_site, "get_urls", None)
         already_wrapped = getattr(current_get_urls, "_is_wrapped_by_blog_admin", False)
         if not already_wrapped:
-            orig_get_urls = current_get_urls or (lambda: super(type(custom_admin_site), custom_admin_site).get_urls())
-            wrapped = get_admin_urls(orig_get_urls)
-            setattr(wrapped, "_is_wrapped_by_blog_admin", True)
-            custom_admin_site.get_urls = wrapped
+            orig_get_urls = current_get_urls
+            def wrapped_get_urls():
+                try:
+                    base = orig_get_urls()
+                except Exception:
+                    base = super(type(custom_admin_site), custom_admin_site).get_urls()
+                return get_admin_urls(base)
+            setattr(wrapped_get_urls, "_is_wrapped_by_blog_admin", True)
+            custom_admin_site.get_urls = wrapped_get_urls
     except Exception:
         logger.exception("Failed to attach custom urls to custom_admin_site", exc_info=True)
 
     return True
 
 
-# Ensure default registrations on import (safe)
-try:
-    # register into default admin.site as well (if not already)
-    _ensure_registered(admin.site, Category, CategoryAdmin)
-    _ensure_registered(admin.site, Tag, TagAdmin)
-    _ensure_registered(admin.site, Comment, CommentAdmin)
-    _ensure_registered(admin.site, PostReaction, PostReactionAdmin)
-    if PostAttachment is not None:
-        _ensure_registered(admin.site, MediaLibrary, MediaLibraryAdmin)
-        try:
-            _ensure_registered(admin.site, PostAttachment, MediaLibraryAdmin)
-        except Exception:
-            pass
-except Exception:
-    logger.exception("Initial safe registrations failed")
+class PostAdminForm(forms.ModelForm):
+    class Meta:
+        model = Post
+        fields = '__all__'
+        widgets = {
+            'content': TipTapWidget(attrs={'class':'admin-tiptap-textarea'}),
+        }
+
+@admin.register(Post)
+class PostAdmin(admin.ModelAdmin):
+    form = PostAdminForm
+    change_form_template = 'admin/blog/post/change_form.html'
+    class Media:
+        js = ('admin/js/tiptap_admin_extra.js',)
+        css = {'all': ('admin/css/tiptap_admin.css',)}
