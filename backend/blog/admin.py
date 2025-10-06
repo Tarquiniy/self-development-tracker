@@ -578,7 +578,10 @@ class PostAdminForm(forms.ModelForm):
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
     form = PostAdminForm
-    change_form_template = 'admin/blog/post/change_form.html'
+    # временно отключаем кастомный шаблон/JS — вернём позже после отладки
+    change_form_template = None
+
     class Media:
-        js = ('admin/js/tiptap_admin_extra.js',)
-        css = {'all': ('admin/css/tiptap_admin.css',)}
+        # убираем кастомные файлы до того, как разберёмся с проблемами статических файлов
+        js = ()
+        css = {}
