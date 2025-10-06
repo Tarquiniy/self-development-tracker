@@ -2,6 +2,7 @@
 import os
 import json
 import logging
+
 from django import forms
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
@@ -16,11 +17,10 @@ from django.core import signing
 from django.contrib.auth import get_user_model
 from django.db.models.functions import TruncDate
 from django.db.models import Count
-from django.db import models
 
 logger = logging.getLogger(__name__)
 
-# Optional reversion support
+# Optional reversion support (best-effort)
 try:
     import reversion
     from reversion.admin import VersionAdmin
@@ -29,7 +29,7 @@ except Exception:
     class VersionAdmin(admin.ModelAdmin):
         pass
 
-# Defensive import of models (log exceptions but don't crash import)
+# Defensive import of models (do not crash import if models missing)
 try:
     from .models import (
         Post, Category, Tag, Comment,
@@ -39,37 +39,28 @@ except Exception:
     Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = None
     logger.exception("Could not import blog.models")
 
-# Try to import TipTap widget (optional)
-TipTapWidget = None
-try:
-    from .widgets import TipTapWidget as _TipTapWidget
-    TipTapWidget = _TipTapWidget
-except Exception:
-    # Not critical — will fallback to summernote or textarea
-    TipTapWidget = None
-    logger.debug("TipTapWidget not available; falling back to other editors.")
-
-# Try to import django-summernote widget (recommended fallback)
+# Try to use django-summernote as guaranteed visual editor if available
 SummernoteWidget = None
 try:
     from django_summernote.widgets import SummernoteWidget as _SummernoteWidget
     SummernoteWidget = _SummernoteWidget
 except Exception:
     SummernoteWidget = None
-    logger.debug("django_summernote not available as widget fallback.")
+    logger.debug("django_summernote not available - will fallback to simple Textarea for content field.")
 
-# Optional admin form (may be imported from forms.py in your app)
+# If external form exists in forms.py, we try to import but won't fail if missing
+PostAdminFormExternal = None
 try:
-    from .forms import PostAdminForm as ExternalPostAdminForm
-    PostAdminForm = ExternalPostAdminForm
+    from .forms import PostAdminForm as PostAdminFormExternal
+    PostAdminFormExternal = PostAdminFormExternal or PostAdminFormExternal
 except Exception:
-    PostAdminForm = None
+    PostAdminFormExternal = None
 
 CustomUser = get_user_model()
 PREVIEW_SALT = "post-preview-salt"
 
 # -----------------------
-# Helpers
+# Helper utilities
 # -----------------------
 def get_admin_change_url_for_obj(obj, site_name=None):
     if obj is None:
@@ -92,7 +83,6 @@ def get_admin_change_url_for_obj(obj, site_name=None):
     except Exception:
         return None
 
-
 def _pretty_change_message(raw):
     if not raw:
         return ""
@@ -105,41 +95,16 @@ def _pretty_change_message(raw):
         except Exception:
             return str(raw)
 
-
 # -----------------------
 # Admin classes
 # -----------------------
 class BasePostAdmin(VersionAdmin):
     """
-    Robust Post admin:
-    - safe use of optional PostAdminForm (TipTap/Summernote) via get_form fallback,
-    - uses change_form_template only if template exists in project.
+    Stable Post admin:
+      - Use SummernoteWidget for content if available
+      - fallback to textarea
+      - avoid fragile custom widgets/templates
     """
-    # dynamic form selection in get_form
-    change_form_template = None
-    try:
-        # check for template existence in SETTINGS TEMPLATES DIRS or local project templates path
-        template_name = os.path.join('admin', 'blog', 'post', 'change_form.html')
-        from django.conf import settings as _settings
-        dirs = []
-        try:
-            dirs = _settings.TEMPLATES[0].get('DIRS', []) if getattr(_settings, 'TEMPLATES', None) else []
-        except Exception:
-            dirs = []
-        found = False
-        for d in dirs:
-            if os.path.exists(os.path.join(d, template_name)):
-                found = True
-                break
-        if not found:
-            alt = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates', 'admin', 'blog', 'post', 'change_form.html'))
-            if os.path.exists(alt):
-                found = True
-        if found:
-            change_form_template = 'admin/blog/post/change_form.html'
-    except Exception:
-        change_form_template = None
-
     list_display = ("title", "status", "author", "published_at")
     list_filter = ("status", "published_at") if Post is not None else ()
     search_fields = ("title", "content") if Post is not None else ()
@@ -157,18 +122,41 @@ class BasePostAdmin(VersionAdmin):
     )
 
     def get_form(self, request, obj=None, **kwargs):
-        # try to use PostAdminForm if present; on error, fall back to default admin form
-        if PostAdminForm:
+        """
+        Prefer external PostAdminForm if provided; otherwise construct a safe modelform with
+        Summernote (if available) or plain Textarea for 'content'.
+        """
+        # If project provided a custom PostAdminForm (e.g. more advanced), try to use it
+        if PostAdminFormExternal:
             try:
-                return super().get_form(request, obj, form=PostAdminForm, **kwargs)
+                return super().get_form(request, obj, form=PostAdminFormExternal, **kwargs)
             except Exception:
-                logger.exception("PostAdminForm raised during get_form — falling back to default admin form.")
+                logger.exception("PostAdminFormExternal failed during get_form; falling back to safe form.")
+
+        # Build safe modelform dynamically
+        from django.forms import modelform_factory
         try:
-            return super().get_form(request, obj, **kwargs)
+            form = modelform_factory(Post, fields="__all__")
         except Exception:
-            logger.exception("admin.get_form failed; falling back to modelform_factory")
-            from django.forms import modelform_factory
-            return modelform_factory(self.model, fields="__all__")
+            # if Post is missing or modelform_factory fails, fall back to base admin implementation
+            try:
+                return super().get_form(request, obj, **kwargs)
+            except Exception:
+                logger.exception("Failed to get admin form; returning default ModelForm from ModelAdmin.")
+                return modelform_factory(self.model, fields="__all__")
+
+        # attach safe widget for 'content'
+        try:
+            content_widget = SummernoteWidget() if SummernoteWidget is not None else forms.Textarea(attrs={'rows': 20, 'cols': 80})
+            # create subclass to set widget
+            class SafeForm(form):
+                class Meta(form.Meta):
+                    widgets = getattr(form.Meta, 'widgets', {}).copy() if getattr(form.Meta, 'widgets', None) else {}
+                    widgets.update({'content': content_widget})
+            return SafeForm
+        except Exception:
+            logger.exception("Failed to build SafeForm with rich widget - returning original form")
+            return form
 
     def make_published(self, request, queryset):
         updated = queryset.update(status="published")
@@ -263,8 +251,10 @@ class MediaLibraryAdmin(admin.ModelAdmin):
 
 
 # -----------------------
-# Views (exported)
+# Admin helper views (media library, autosave, preview, stats etc.)
+# These are best-effort copies similar to original project but defensive.
 # -----------------------
+
 @require_http_methods(["GET", "POST"])
 def admin_media_library_view(request):
     if not request.user.is_staff:
@@ -487,7 +477,7 @@ def admin_dashboard_view(request):
     return render(request, "admin/dashboard.html", context)
 
 # -----------------------
-# Registration helpers & main entrypoint
+# Registration & wiring
 # -----------------------
 def _ensure_registered(site_obj, model, admin_class=None):
     if model is None:
@@ -503,24 +493,16 @@ def _ensure_registered(site_obj, model, admin_class=None):
     except Exception:
         logger.exception("Could not register %s on %s", getattr(model, "__name__", model), getattr(site_obj, "name", site_obj))
 
-
-# The global variable that will be set by register_admin_models
 custom_admin_site = None
 
 def register_admin_models(site_obj):
-    """
-    Register all admin models into provided admin site.
-    Call this AFTER custom_admin_site is created in core.admin to avoid import cycles.
-    """
     global custom_admin_site
     custom_admin_site = site_obj or admin.site
 
-    # choose post admin class (allow emergency switch by env)
     def _choose_post_admin():
         try:
             ev = os.environ.get("EMERGENCY_ADMIN", "").strip().lower()
             if ev in ("1", "true", "yes", "on"):
-                # define emergency minimal admin
                 class EmergencyPostAdmin(admin.ModelAdmin):
                     list_display = ("title", "status", "author", "published_at")
                     fields = ("title", "slug", "author", "status", "published_at", "excerpt", "content", "featured_image")
@@ -567,7 +549,7 @@ def register_admin_models(site_obj):
     except Exception:
         logger.exception("bulk registration failed")
 
-    # Attach custom urls by wrapping original get_urls (avoid recursion)
+    # attach urls
     def get_admin_urls(urls):
         custom_urls = [
             path("dashboard/", admin_dashboard_view, name="admin-dashboard"),
@@ -597,56 +579,10 @@ def register_admin_models(site_obj):
 
     return True
 
-
-# Helper: choose best available rich text widget
-def get_rich_widget():
-    """
-    Return the best rich widget available in this environment:
-    1) TipTapWidget (if present and importable)
-    2) django-summernote SummernoteWidget (if installed)
-    3) fallback: basic textarea
-    """
-    if TipTapWidget is not None:
-        try:
-            return TipTapWidget
-        except Exception:
-            logger.debug("TipTapWidget import exists but failed to use it.")
-    if SummernoteWidget is not None:
-        try:
-            return SummernoteWidget
-        except Exception:
-            logger.debug("SummernoteWidget exists but failed to use it.")
-    # fallback
-    return forms.Textarea
-
-
-# If external PostAdminForm not provided, build a safe ModelForm that uses the best widget
-if PostAdminForm is None:
-    class PostAdminForm(forms.ModelForm):
-        class Meta:
-            model = Post
-            fields = '__all__'
-            widgets = {
-                'content': get_rich_widget()(attrs={'class': 'admin-rich-text-area', 'rows': 20}),
-            }
-else:
-    # keep whatever form external author provided
-    PostAdminForm = PostAdminForm
-
-
-# Register PostAdmin with safe defaults: no fragile custom templates/js
-@admin.register(Post)
-class PostAdmin(admin.ModelAdmin):
-    form = PostAdminForm
-    # DO NOT force a custom change_form_template here — leave flexible and safe
-    change_form_template = None
-
-    # We intentionally do not include custom tiptap JS by default (was causing CORS / mime / 500 issues).
-    # Summernote will inject its own media when used. If TipTap is available and you want it, enable manually.
-    class Media:
-        js = ()
-        css = {}
-
-
-# If you want to register automatically when module imported by core.admin, provide register function exported.
-# (register_admin_models defined above will handle this when called from core)
+# Finally, register a safe PostAdmin class for direct import use (fallback)
+if Post is not None:
+    try:
+        admin.site.register(Post, BasePostAdmin)
+    except Exception:
+        # registration may already be done by register_admin_models or custom site
+        pass
