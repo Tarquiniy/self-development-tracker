@@ -1,28 +1,37 @@
-{# templates/admin/widgets/tiptap_widget.html #}
+{# backend/templates/admin/widgets/tiptap_widget.html #}
 {% load static %}
-<div class="admin-tiptap-widget"
-     data-upload-url="{{ widget.attrs.data_upload_url|default:'/admin/blog/upload-image/' }}">
-  <textarea name="{{ widget.name }}" id="{{ widget.attrs.id }}" style="display:none;">{{ widget.value|default:"" }}</textarea>
+{# widget context:
+    widget.name, widget.value, widget.attrs (dict),
+    upload_url, preview_token_url, attrs_json
+#}
 
-  {# placeholding element; editor script will attach here #}
-  <div class="tiptap-placeholder">
+<div class="admin-tiptap-widget-wrapper">
+  {# Скрытый textarea (Django использует его при сабмите формы) #}
+  <textarea
+    name="{{ widget.name }}"
+    id="{{ widget.attrs.id }}"
+    class="{{ widget.attrs.class }}"
+    style="display:none;"
+    >{{ widget.value|default:"" }}</textarea>
+
+  {# Контейнер, в который JS поместит интерфейс редактора (toolbar + editable) #}
+  <div class="admin-tiptap-widget"
+       data-upload-url="{{ upload_url }}"
+       data-preview-token-url="{{ preview_token_url }}"
+       data-attrs='{{ attrs_json|escapejs }}'
+       aria-label="Tiptap editor">
     <div class="tiptap-toolbar" aria-hidden="true"></div>
     <div class="tiptap-editor"></div>
   </div>
 </div>
 
-{# подключаем локальный модуль JS, который инициализирует TipTap (или fallback) #}
+{# Подключаем локальный JS (ES module) — убедись, что collectstatic положил файл сюда #}
 <script type="module" src="{% static 'admin/js/tiptap_admin_extra.js' %}"></script>
 
+{# Базовые стили (можно вынести в отдельный CSS-файл) #}
 <style>
-.admin-tiptap-widget .tiptap-toolbar {
-  margin-bottom: 8px;
-  display:flex; gap:6px; flex-wrap:wrap;
-}
-.admin-tiptap-widget .tiptap-toolbar button {
-  padding:6px 8px; border-radius:6px; border:1px solid #ddd; background:#fff; cursor:pointer;
-}
-.admin-tiptap-widget .tiptap-editor, .admin-tiptap-widget .tiptap-fallback {
-  min-height:300px; padding:8px; border-radius:6px; background:#fff; border:1px solid #e5e7eb;
-}
+.admin-tiptap-widget-wrapper { margin-top: 8px; }
+.admin-tiptap-widget .tiptap-toolbar { margin-bottom: 8px; display:flex; gap:6px; flex-wrap:wrap; }
+.admin-tiptap-widget .tiptap-toolbar button { padding:6px 8px; border-radius:6px; border:1px solid #ddd; background:#fff; cursor:pointer; }
+.admin-tiptap-widget .tiptap-editor, .admin-tiptap-widget .tiptap-fallback { min-height:360px; padding:12px; border-radius:6px; background:#fff; border:1px solid #e6e6e6; }
 </style>
