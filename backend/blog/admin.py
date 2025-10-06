@@ -475,19 +475,47 @@ def admin_dashboard_view(request):
     posts_count = Post.objects.count() if Post else 0
     comments_count = Comment.objects.count() if Comment else 0
     users_count = CustomUser.objects.count() if CustomUser else 0
-    app_list = []
-    try:
-        if custom_admin_site:
-            app_list = custom_admin_site.get_app_list(request)
-        else:
-            app_list = admin.site.get_app_list(request)
-    except Exception:
-        app_list = []
+
+    # последние посты
+    recent_posts = Post.objects.order_by('-published_at')[:8] if Post else []
+
+    # собираем простую серию за 30 дней (можно переиспользовать admin_stats_api)
+    days = 30
+    now = timezone.now()
+    start = now - timezone.timedelta(days=days - 1)
+    labels = [(start + timezone.timedelta(days=i)).date().isoformat() for i in range(days)]
+
+    def build_series(qs, date_field):
+        mapping = {}
+        try:
+            from django.db.models.functions import TruncDate
+            from django.db.models import Count
+            items = (qs.filter(**{f"{date_field}__date__gte": start.date()})
+                      .annotate(day=TruncDate(date_field))
+                      .values('day').annotate(count=Count('id')).order_by('day'))
+            mapping = {item['day'].isoformat(): item['count'] for item in items}
+        except Exception:
+            mapping = {}
+        return [mapping.get(d, 0) for d in labels]
+
+    posts_series = build_series(Post.objects, 'created_at') if Post else [0]*days
+    comments_series = build_series(Comment.objects, 'created_at') if Comment else [0]*days
+    views_series = build_series(PostView.objects, 'viewed_at') if PostView else [0]*days
+
     ctx_base = custom_admin_site.each_context(request) if custom_admin_site else admin.site.each_context(request)
-    # prefer a small, modern set of context variables for the custom dashboard template
-    context = dict(ctx_base, title="Admin dashboard", posts_count=posts_count,
-                   comments_count=comments_count, users_count=users_count,
-                   app_list=app_list)
+    context = dict(
+        ctx_base,
+        title="Admin dashboard",
+        posts_count=posts_count,
+        comments_count=comments_count,
+        users_count=users_count,
+        recent_posts=recent_posts,
+        days=days,
+        labels=labels,
+        posts=posts_series,
+        comments=comments_series,
+        views=views_series,
+    )
     return render(request, "admin/dashboard.html", context)
 
 # -----------------------
