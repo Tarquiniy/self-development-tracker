@@ -2,8 +2,6 @@
 import os
 import json
 import logging
-from typing import Optional
-
 from django import forms
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
@@ -18,10 +16,14 @@ from django.core import signing
 from django.contrib.auth import get_user_model
 from django.db.models.functions import TruncDate
 from django.db.models import Count
+from django.db import models
+
+from .widgets import TipTapWidget
+from django.utils.safestring import mark_safe
 
 logger = logging.getLogger(__name__)
 
-# Optional reversion support (best-effort)
+# Optional reversion support
 try:
     import reversion
     from reversion.admin import VersionAdmin
@@ -30,7 +32,7 @@ except Exception:
     class VersionAdmin(admin.ModelAdmin):
         pass
 
-# Safe import of models (do not crash admin import if models file has issues)
+# Defensive import of models (log exceptions but don't crash import)
 try:
     from .models import (
         Post, Category, Tag, Comment,
@@ -40,13 +42,19 @@ except Exception:
     Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = None
     logger.exception("Could not import blog.models")
 
+# Optional admin form (TipTap integration)
+try:
+    from .forms import PostAdminForm
+except Exception:
+    PostAdminForm = None
+
 CustomUser = get_user_model()
 PREVIEW_SALT = "post-preview-salt"
 
 # -----------------------
 # Helpers
 # -----------------------
-def get_admin_change_url_for_obj(obj, site_name: Optional[str] = None):
+def get_admin_change_url_for_obj(obj, site_name=None):
     if obj is None:
         return None
     try:
@@ -67,6 +75,7 @@ def get_admin_change_url_for_obj(obj, site_name: Optional[str] = None):
     except Exception:
         return None
 
+
 def _pretty_change_message(raw):
     if not raw:
         return ""
@@ -79,24 +88,41 @@ def _pretty_change_message(raw):
         except Exception:
             return str(raw)
 
-# -----------------------
-# Admin form widget
-# -----------------------
-class SimpleTextareaWidget(forms.Textarea):
-    """Plain textarea enhanced by local JS for WYSIWYG/Markdown toggling."""
-    pass
 
 # -----------------------
-# Core Admin classes
+# Admin classes
 # -----------------------
 class BasePostAdmin(VersionAdmin):
     """
-    Robust Post admin with advanced local editor:
-      - Uses a plain textarea backed by client-side JS to provide WYSIWYG/Markdown,
-      - Uses a custom, minimal template to avoid third-party CDN includes,
-      - Hooks into autosave/preview endpoints.
+    Robust Post admin:
+    - safe use of optional PostAdminForm (TipTap) via get_form fallback,
+    - uses change_form_template only if template exists in project.
     """
-    change_form_template = 'admin/blog/post/change_form_advanced.html'
+    # dynamic form selection in get_form
+    change_form_template = None
+    try:
+        # check for template existence in SETTINGS TEMPLATES DIRS or local project templates path
+        template_name = os.path.join('admin', 'blog', 'post', 'change_form.html')
+        # first check explicit TEMPLATES dirs if possible
+        from django.conf import settings as _settings
+        dirs = []
+        try:
+            dirs = _settings.TEMPLATES[0].get('DIRS', []) if getattr(_settings, 'TEMPLATES', None) else []
+        except Exception:
+            dirs = []
+        found = False
+        for d in dirs:
+            if os.path.exists(os.path.join(d, template_name)):
+                found = True
+                break
+        if not found:
+            alt = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates', 'admin', 'blog', 'post', 'change_form.html'))
+            if os.path.exists(alt):
+                found = True
+        if found:
+            change_form_template = 'admin/blog/post/change_form.html'
+    except Exception:
+        change_form_template = None
 
     list_display = ("title", "status", "author", "published_at")
     list_filter = ("status", "published_at") if Post is not None else ()
@@ -114,50 +140,19 @@ class BasePostAdmin(VersionAdmin):
         ("SEO", {"fields": ("meta_title", "meta_description", "og_image"), "classes": ("collapse",)}),
     )
 
-    class Media:
-        # Local advanced editor script and styles (no CDN tiptap)
-        js = (
-            'admin/js/advanced_admin_editor.js',
-            'admin/js/media_picker.js',  # helper for picking files from media library
-        )
-        css = {
-            'all': (
-                'admin/css/advanced_admin_editor.css',
-            )
-        }
-
     def get_form(self, request, obj=None, **kwargs):
-        # Try to use custom PostAdminForm if exists in forms.py; else build safe form with our widget override
-        try:
-            from .forms import PostAdminForm as ExternalPostAdminForm  # optional custom form
-        except Exception:
-            ExternalPostAdminForm = None
-
-        if ExternalPostAdminForm:
+        # try to use PostAdminForm if present; on error, fall back to default admin form
+        if PostAdminForm:
             try:
-                return super().get_form(request, obj, form=ExternalPostAdminForm, **kwargs)
+                return super().get_form(request, obj, form=PostAdminForm, **kwargs)
             except Exception:
-                logger.exception("External PostAdminForm failed; falling back to built-in safe form.")
-
-        # build a safe modelform and override widget for 'content'
-        if Post is None:
-            return super().get_form(request, obj, **kwargs)
-        from django.forms import modelform_factory
+                logger.exception("PostAdminForm raised during get_form — falling back to default admin form.")
         try:
-            BaseForm = modelform_factory(Post, fields="__all__")
-            class SafeForm(BaseForm):
-                class Meta(BaseForm.Meta):
-                    widgets = getattr(BaseForm.Meta, 'widgets', {}).copy() if getattr(BaseForm.Meta, 'widgets', None) else {}
-                    widgets.update({
-                        'content': SimpleTextareaWidget(attrs={
-                            'class': 'admin-advanced-editor admin-simple-editor',
-                            'rows': 20,
-                        })
-                    })
-            return SafeForm
-        except Exception:
-            logger.exception("get_form: failed to build SafeForm; using default")
             return super().get_form(request, obj, **kwargs)
+        except Exception:
+            logger.exception("admin.get_form failed; falling back to modelform_factory")
+            from django.forms import modelform_factory
+            return modelform_factory(self.model, fields="__all__")
 
     def make_published(self, request, queryset):
         updated = queryset.update(status="published")
@@ -252,10 +247,8 @@ class MediaLibraryAdmin(admin.ModelAdmin):
 
 
 # -----------------------
-# Admin helper views (media library, autosave, preview, inline update, stats, dashboard)
-# These are based on earlier code you had — kept robust & defensive.
+# Views (exported)
 # -----------------------
-
 @require_http_methods(["GET", "POST"])
 def admin_media_library_view(request):
     if not request.user.is_staff:
@@ -289,8 +282,7 @@ def admin_media_library_view(request):
             logger.exception("Upload failed")
             return JsonResponse({'success': False, 'error': 'upload_failed'}, status=500)
 
-    attachments = (PostAttachment.objects.all().order_by('-uploaded_at')[:500]
-                   if PostAttachment is not None else [])
+    attachments = PostAttachment.objects.all().order_by('-uploaded_at')[:500] if PostAttachment is not None else []
     is_xhr = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json'
     if is_xhr:
         data = [{'id': a.id, 'title': a.title or os.path.basename(getattr(a.file, 'name', '')), 'url': getattr(a.file, 'url', '')} for a in attachments]
@@ -457,7 +449,24 @@ def admin_stats_api(request):
     posts_series = build_series(posts_qs)
     comments_series = build_series(comments_qs)
     views_series = build_series(views_qs)
-    return JsonResponse({'labels': labels, 'posts': posts_series, 'comments': comments_series, 'views': views_series})
+    # also return summary counts for convenience
+    total_posts = Post.objects.count() if Post is not None else 0
+    published_posts = Post.objects.filter(status='published').count() if Post is not None else 0
+    draft_posts = Post.objects.filter(status='draft').count() if Post is not None else 0
+    total_comments = Comment.objects.count() if Comment is not None else 0
+    total_views = PostView.objects.count() if PostView is not None else 0
+
+    return JsonResponse({
+        'labels': labels,
+        'posts': posts_series,
+        'comments': comments_series,
+        'views': views_series,
+        'total_posts': total_posts,
+        'published_posts': published_posts,
+        'draft_posts': draft_posts,
+        'total_comments': total_comments,
+        'total_views': total_views,
+    })
 
 
 @require_GET
@@ -480,7 +489,7 @@ def admin_dashboard_view(request):
     return render(request, "admin/dashboard.html", context)
 
 # -----------------------
-# Registration helpers & wiring
+# Registration helpers & main entrypoint
 # -----------------------
 def _ensure_registered(site_obj, model, admin_class=None):
     if model is None:
@@ -497,19 +506,25 @@ def _ensure_registered(site_obj, model, admin_class=None):
         logger.exception("Could not register %s on %s", getattr(model, "__name__", model), getattr(site_obj, "name", site_obj))
 
 
+# The global variable that will be set by register_admin_models
 custom_admin_site = None
 
 def register_admin_models(site_obj):
     """
-    Register admin models to provided site_obj. Call this after custom_admin_site created in core.admin.
+    Register all admin models into provided admin site.
+    Call this AFTER custom_admin_site is created in core.admin to avoid import cycles.
+    This function also sets the admin index template to our custom dashboard template
+    so that /admin/ will show the modern dashboard UI.
     """
     global custom_admin_site
     custom_admin_site = site_obj or admin.site
 
+    # choose post admin class (allow emergency switch by env)
     def _choose_post_admin():
         try:
             ev = os.environ.get("EMERGENCY_ADMIN", "").strip().lower()
             if ev in ("1", "true", "yes", "on"):
+                # define emergency minimal admin
                 class EmergencyPostAdmin(admin.ModelAdmin):
                     list_display = ("title", "status", "author", "published_at")
                     fields = ("title", "slug", "author", "status", "published_at", "excerpt", "content", "featured_image")
@@ -524,13 +539,6 @@ def register_admin_models(site_obj):
     post_admin_cls = _choose_post_admin()
 
     try:
-        # unregister existing registration to avoid AlreadyRegistered problems
-        try:
-            if Post is not None and Post in getattr(admin.site, "_registry", {}):
-                admin.site.unregister(Post)
-        except Exception:
-            pass
-
         _ensure_registered(admin.site, Post, post_admin_cls)
         _ensure_registered(custom_admin_site, Post, post_admin_cls)
 
@@ -563,7 +571,7 @@ def register_admin_models(site_obj):
     except Exception:
         logger.exception("bulk registration failed")
 
-    # attach custom urls
+    # Attach custom urls by wrapping original get_urls (avoid recursion)
     def get_admin_urls(urls):
         custom_urls = [
             path("dashboard/", admin_dashboard_view, name="admin-dashboard"),
@@ -591,16 +599,77 @@ def register_admin_models(site_obj):
     except Exception:
         logger.exception("Failed to attach custom urls to custom_admin_site", exc_info=True)
 
+    # --- IMPORTANT: make admin index use our custom template so /admin/ shows the dashboard ---
+    try:
+        # prefer explicit custom_admin_site (if provided)
+        if custom_admin_site:
+            try:
+                custom_admin_site.index_template = 'admin/index.html'
+            except Exception:
+                logger.debug("Could not set custom_admin_site.index_template", exc_info=True)
+        # also set the default global admin.site so default site uses dashboard too
+        try:
+            admin.site.index_template = 'admin/index.html'
+        except Exception:
+            logger.debug("Could not set admin.site.index_template", exc_info=True)
+    except Exception:
+        logger.exception("Failed to set index_template for admin site")
+
     return True
 
-# Final safety register fallback for simple local admin site
-if Post is not None:
-    try:
-        try:
-            if Post in getattr(admin.site, "_registry", {}):
-                admin.site.unregister(Post)
-        except Exception:
-            pass
-        admin.site.register(Post, BasePostAdmin)
-    except Exception:
-        logger.exception("Could not register Post admin (final fallback)")
+
+class PostAdminForm(forms.ModelForm):
+    class Meta:
+        model = Post
+        fields = '__all__'
+        widgets = {
+            'content': TipTapWidget(attrs={'class':'admin-tiptap-textarea'}),
+        }
+
+# Register a simple Post admin as a fallback if direct decorator-based registration fails
+try:
+    if Post is not None:
+        @admin.register(Post)
+        class PostAdmin(admin.ModelAdmin):
+            form = PostAdminForm if PostAdminForm else None
+            change_form_template = 'admin/blog/post/change_form.html'  # our override if template exists
+            list_display = ("title", "status", "author", "published_at")
+            search_fields = ("title",)
+            ordering = ("-published_at",)
+            filter_horizontal = ("categories", "tags") if Post is not None else ()
+            class Media:
+                js = ('admin/js/tiptap_admin_extra.js',)
+                css = {'all': ('admin/css/tiptap_admin.css',)}
+except Exception:
+    # registration may be handled later by register_admin_models
+    logger.debug("Inline Post registration skipped; will register via register_admin_models", exc_info=True)
+
+
+# Also register other models locally if possible (defensive)
+try:
+    if Category is not None:
+        admin.site.register(Category, CategoryAdmin)
+except Exception:
+    pass
+try:
+    if Tag is not None:
+        admin.site.register(Tag, TagAdmin)
+except Exception:
+    pass
+try:
+    if Comment is not None:
+        admin.site.register(Comment, CommentAdmin)
+except Exception:
+    pass
+try:
+    if PostReaction is not None:
+        admin.site.register(PostReaction, PostReactionAdmin)
+except Exception:
+    pass
+try:
+    if MediaLibrary is not None:
+        admin.site.register(MediaLibrary, MediaLibraryAdmin)
+except Exception:
+    pass
+
+# End of file
