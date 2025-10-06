@@ -468,7 +468,6 @@ def admin_stats_api(request):
         'total_views': total_views,
     })
 
-
 @require_GET
 def admin_dashboard_view(request):
     if not request.user.is_staff:
@@ -485,7 +484,10 @@ def admin_dashboard_view(request):
     except Exception:
         app_list = []
     ctx_base = custom_admin_site.each_context(request) if custom_admin_site else admin.site.each_context(request)
-    context = dict(ctx_base, title="Admin dashboard", posts_count=posts_count, comments_count=comments_count, users_count=users_count, app_list=app_list)
+    # prefer a small, modern set of context variables for the custom dashboard template
+    context = dict(ctx_base, title="Admin dashboard", posts_count=posts_count,
+                   comments_count=comments_count, users_count=users_count,
+                   app_list=app_list)
     return render(request, "admin/dashboard.html", context)
 
 # -----------------------
@@ -513,8 +515,8 @@ def register_admin_models(site_obj):
     """
     Register all admin models into provided admin site.
     Call this AFTER custom_admin_site is created in core.admin to avoid import cycles.
-    This function also sets the admin index template to our custom dashboard template
-    so that /admin/ will show the modern dashboard UI.
+    This function also forces the admin root ('/admin/') to use our admin_dashboard_view
+    by injecting an index route into the admin site's urls.
     """
     global custom_admin_site
     custom_admin_site = site_obj or admin.site
@@ -573,7 +575,9 @@ def register_admin_models(site_obj):
 
     # Attach custom urls by wrapping original get_urls (avoid recursion)
     def get_admin_urls(urls):
+        # We put the index route as the first item so it takes precedence over default admin index.
         custom_urls = [
+            path("", admin_dashboard_view, name="index"),
             path("dashboard/", admin_dashboard_view, name="admin-dashboard"),
             path("dashboard/stats-data/", admin_stats_api, name="admin-dashboard-stats"),
             path("media-library/", admin_media_library_view, name="admin-media-library"),
@@ -596,18 +600,17 @@ def register_admin_models(site_obj):
                 return get_admin_urls(base)
             setattr(wrapped_get_urls, "_is_wrapped_by_blog_admin", True)
             custom_admin_site.get_urls = wrapped_get_urls
+            logger.info("Wrapped admin site get_urls and injected custom dashboard index.")
     except Exception:
         logger.exception("Failed to attach custom urls to custom_admin_site", exc_info=True)
 
-    # --- IMPORTANT: make admin index use our custom template so /admin/ shows the dashboard ---
+    # Also attempt to set index_template as a fallback (some admin skins use template)
     try:
-        # prefer explicit custom_admin_site (if provided)
         if custom_admin_site:
             try:
                 custom_admin_site.index_template = 'admin/index.html'
             except Exception:
                 logger.debug("Could not set custom_admin_site.index_template", exc_info=True)
-        # also set the default global admin.site so default site uses dashboard too
         try:
             admin.site.index_template = 'admin/index.html'
         except Exception:

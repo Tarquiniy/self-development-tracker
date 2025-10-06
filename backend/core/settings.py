@@ -67,11 +67,11 @@ SUMMERNOTE_CONFIG = {
 
 # 🎨 Jazzmin кастомизация
 JAZZMIN_SETTINGS = {
-    "site_title": "SDTracker Admin",
-    "site_header": "SDTracker Панель",
-    "site_brand": "SDTracker",
+    "site_title": "Positive Theta Admin",
+    "site_header": "Positive Theta Панель",
+    "site_brand": "Positive Theta",
     "welcome_sign": "Добро пожаловать в панель управления",
-    "copyright": "SDTracker © 2025",
+    "copyright": "Positive Theta © 2025",
     "show_ui_builder": True,
     "icons": {
         "auth": "fas fa-users-cog",
