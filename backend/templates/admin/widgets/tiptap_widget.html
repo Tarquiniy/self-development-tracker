@@ -1,143 +1,28 @@
+{# templates/admin/widgets/tiptap_widget.html #}
 {% load static %}
-<div class="tiptap-editor-container">
-  <div id="tiptap-toolbar"></div>
-  <div id="tiptap-editor" class="tiptap-editor"></div>
-  <textarea name="{{ widget.name }}" id="id_{{ widget.name }}" hidden>{{ widget.value|safe }}</textarea>
+<div class="admin-tiptap-widget"
+     data-upload-url="{{ widget.attrs.data_upload_url|default:'/admin/blog/upload-image/' }}">
+  <textarea name="{{ widget.name }}" id="{{ widget.attrs.id }}" style="display:none;">{{ widget.value|default:"" }}</textarea>
+
+  {# placeholding element; editor script will attach here #}
+  <div class="tiptap-placeholder">
+    <div class="tiptap-toolbar" aria-hidden="true"></div>
+    <div class="tiptap-editor"></div>
+  </div>
 </div>
 
-<!-- Core TipTap + Extensions (latest stable CDN, CORS-safe) -->
-<script src="https://cdn.jsdelivr.net/npm/@tiptap/core@2.1.12/dist/tiptap-core.umd.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@2.1.12/dist/tiptap-starter-kit.umd.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-link@2.1.12/dist/tiptap-extension-link.umd.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-image@2.1.12/dist/tiptap-extension-image.umd.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-code-block-lowlight@2.1.12/dist/tiptap-extension-code-block-lowlight.umd.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tiptap/extension-placeholder@2.1.12/dist/tiptap-extension-placeholder.umd.min.js" crossorigin="anonymous"></script>
-
-<!-- Lowlight syntax highlighting -->
-<script src="https://cdn.jsdelivr.net/npm/lowlight@3.0.0/lib/core.min.js" crossorigin="anonymous"></script>
-
-<!-- Font Awesome + CSS -->
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" rel="stylesheet">
+{# подключаем локальный модуль JS, который инициализирует TipTap (или fallback) #}
+<script type="module" src="{% static 'admin/js/tiptap_admin_extra.js' %}"></script>
 
 <style>
-  .tiptap-editor-container {
-    border: 1px solid #444;
-    border-radius: 12px;
-    background: #1e1e1e;
-    color: #f5f5f5;
-    font-family: "Source Sans Pro", sans-serif;
-    padding: 12px;
-  }
-
-  .tiptap-editor {
-    min-height: 400px;
-    padding: 10px;
-    outline: none;
-    white-space: pre-wrap;
-  }
-
-  .tiptap-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 10px;
-  }
-
-  .tiptap-toolbar button {
-    background: #333;
-    color: #f5f5f5;
-    border: none;
-    padding: 6px 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: 0.2s;
-  }
-
-  .tiptap-toolbar button.active {
-    background: #007bff;
-  }
-
-  .tiptap-toolbar button:hover {
-    background: #555;
-  }
-
-  .ProseMirror img {
-    max-width: 100%;
-    border-radius: 6px;
-  }
-
-  .ProseMirror pre {
-    background: #2b2b2b;
-    color: #eee;
-    padding: 8px;
-    border-radius: 6px;
-    overflow-x: auto;
-  }
-
-  .ProseMirror a {
-    color: #4dabf7;
-  }
+.admin-tiptap-widget .tiptap-toolbar {
+  margin-bottom: 8px;
+  display:flex; gap:6px; flex-wrap:wrap;
+}
+.admin-tiptap-widget .tiptap-toolbar button {
+  padding:6px 8px; border-radius:6px; border:1px solid #ddd; background:#fff; cursor:pointer;
+}
+.admin-tiptap-widget .tiptap-editor, .admin-tiptap-widget .tiptap-fallback {
+  min-height:300px; padding:8px; border-radius:6px; background:#fff; border:1px solid #e5e7eb;
+}
 </style>
-
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const { Editor } = window['@tiptap/core'];
-  const StarterKit = window['@tiptap/starter-kit'].StarterKit;
-  const Link = window['@tiptap/extension-link'].Link;
-  const Image = window['@tiptap/extension-image'].Image;
-  const CodeBlockLowlight = window['@tiptap/extension-code-block-lowlight'].CodeBlockLowlight;
-  const Placeholder = window['@tiptap/extension-placeholder'].Placeholder;
-
-  const textarea = document.getElementById("id_{{ widget.name }}");
-  const editorElement = document.getElementById("tiptap-editor");
-  const toolbar = document.getElementById("tiptap-toolbar");
-
-  if (!textarea) return;
-
-  const editor = new Editor({
-    element: editorElement,
-    extensions: [
-      StarterKit,
-      Link.configure({ openOnClick: false }),
-      Image,
-      CodeBlockLowlight.configure({ lowlight: window.lowlight }),
-      Placeholder.configure({ placeholder: "Начните писать здесь..." }),
-    ],
-    content: textarea.value || "",
-    onUpdate: ({ editor }) => {
-      textarea.value = editor.getHTML();
-    },
-  });
-
-  const buttons = [
-    { cmd: "toggleBold", icon: "fa-bold" },
-    { cmd: "toggleItalic", icon: "fa-italic" },
-    { cmd: "toggleStrike", icon: "fa-strikethrough" },
-    { cmd: "toggleCodeBlock", icon: "fa-code" },
-    { cmd: "toggleBulletList", icon: "fa-list-ul" },
-    { cmd: "toggleOrderedList", icon: "fa-list-ol" },
-    { cmd: "setLink", icon: "fa-link" },
-    { cmd: "setImage", icon: "fa-image" },
-    { cmd: "undo", icon: "fa-rotate-left" },
-    { cmd: "redo", icon: "fa-rotate-right" },
-  ];
-
-  buttons.forEach(b => {
-    const btn = document.createElement("button");
-    btn.innerHTML = `<i class="fa ${b.icon}"></i>`;
-    btn.addEventListener("click", async e => {
-      e.preventDefault();
-      if (b.cmd === "setLink") {
-        const url = prompt("Введите URL:");
-        if (url) editor.chain().focus().setLink({ href: url }).run();
-      } else if (b.cmd === "setImage") {
-        const url = prompt("Введите URL изображения:");
-        if (url) editor.chain().focus().setImage({ src: url }).run();
-      } else if (editor.chain().focus()[b.cmd]) {
-        editor.chain().focus()[b.cmd]().run();
-      }
-    });
-    toolbar.appendChild(btn);
-  });
-});
-</script>
