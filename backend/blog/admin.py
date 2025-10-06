@@ -39,28 +39,11 @@ except Exception:
     Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = None
     logger.exception("Could not import blog.models")
 
-# Try to use django-summernote as guaranteed visual editor if available
-SummernoteWidget = None
-try:
-    from django_summernote.widgets import SummernoteWidget as _SummernoteWidget
-    SummernoteWidget = _SummernoteWidget
-except Exception:
-    SummernoteWidget = None
-    logger.debug("django_summernote not available - will fallback to simple Textarea for content field.")
-
-# If external form exists in forms.py, we try to import but won't fail if missing
-PostAdminFormExternal = None
-try:
-    from .forms import PostAdminForm as PostAdminFormExternal
-    PostAdminFormExternal = PostAdminFormExternal or PostAdminFormExternal
-except Exception:
-    PostAdminFormExternal = None
-
 CustomUser = get_user_model()
 PREVIEW_SALT = "post-preview-salt"
 
 # -----------------------
-# Helper utilities
+# Utility helpers
 # -----------------------
 def get_admin_change_url_for_obj(obj, site_name=None):
     if obj is None:
@@ -98,12 +81,15 @@ def _pretty_change_message(raw):
 # -----------------------
 # Admin classes
 # -----------------------
+class SimpleTextareaWidget(forms.Textarea):
+    """Plain textarea; we will enhance with small client-side JS for toolbar + preview."""
+    pass
+
 class BasePostAdmin(VersionAdmin):
     """
-    Stable Post admin:
-      - Use SummernoteWidget for content if available
-      - fallback to textarea
-      - avoid fragile custom widgets/templates
+    Minimal, robust Post admin:
+    - Always uses a textarea for 'content' (enhanced via our simple JS)
+    - Avoids fragile external widgets/CDNs
     """
     list_display = ("title", "status", "author", "published_at")
     list_filter = ("status", "published_at") if Post is not None else ()
@@ -121,42 +107,32 @@ class BasePostAdmin(VersionAdmin):
         ("SEO", {"fields": ("meta_title", "meta_description", "og_image"), "classes": ("collapse",)}),
     )
 
-    def get_form(self, request, obj=None, **kwargs):
-        """
-        Prefer external PostAdminForm if provided; otherwise construct a safe modelform with
-        Summernote (if available) or plain Textarea for 'content'.
-        """
-        # If project provided a custom PostAdminForm (e.g. more advanced), try to use it
-        if PostAdminFormExternal:
-            try:
-                return super().get_form(request, obj, form=PostAdminFormExternal, **kwargs)
-            except Exception:
-                logger.exception("PostAdminFormExternal failed during get_form; falling back to safe form.")
+    class Media:
+        # Local static files (we provide JS/CSS below). These paths must exist under blog/static/...
+        js = (
+            'admin/js/simple_admin_editor.js',
+        )
+        css = {
+            'all': ('admin/css/simple_admin_editor.css',)
+        }
 
-        # Build safe modelform dynamically
+    def get_form(self, request, obj=None, **kwargs):
+        # Build a simple ModelForm and set our SimpleTextareaWidget for 'content'
         from django.forms import modelform_factory
+        if Post is None:
+            # fallback
+            return super().get_form(request, obj, **kwargs)
         try:
             form = modelform_factory(Post, fields="__all__")
-        except Exception:
-            # if Post is missing or modelform_factory fails, fall back to base admin implementation
-            try:
-                return super().get_form(request, obj, **kwargs)
-            except Exception:
-                logger.exception("Failed to get admin form; returning default ModelForm from ModelAdmin.")
-                return modelform_factory(self.model, fields="__all__")
-
-        # attach safe widget for 'content'
-        try:
-            content_widget = SummernoteWidget() if SummernoteWidget is not None else forms.Textarea(attrs={'rows': 20, 'cols': 80})
-            # create subclass to set widget
+            # create subclass to override widget
             class SafeForm(form):
                 class Meta(form.Meta):
                     widgets = getattr(form.Meta, 'widgets', {}).copy() if getattr(form.Meta, 'widgets', None) else {}
-                    widgets.update({'content': content_widget})
+                    widgets.update({'content': SimpleTextareaWidget(attrs={'class': 'admin-simple-editor', 'rows': 20})})
             return SafeForm
         except Exception:
-            logger.exception("Failed to build SafeForm with rich widget - returning original form")
-            return form
+            logger.exception("get_form: failed to build SafeForm")
+            return super().get_form(request, obj, **kwargs)
 
     def make_published(self, request, queryset):
         updated = queryset.update(status="published")
@@ -252,14 +228,11 @@ class MediaLibraryAdmin(admin.ModelAdmin):
 
 # -----------------------
 # Admin helper views (media library, autosave, preview, stats etc.)
-# These are best-effort copies similar to original project but defensive.
 # -----------------------
-
 @require_http_methods(["GET", "POST"])
 def admin_media_library_view(request):
     if not request.user.is_staff:
         raise Http404("permission denied")
-
     if request.method == "POST":
         upload = request.FILES.get("file") or request.FILES.get("image")
         title = request.POST.get("title") or (upload.name if upload else "")
@@ -579,10 +552,9 @@ def register_admin_models(site_obj):
 
     return True
 
-# Finally, register a safe PostAdmin class for direct import use (fallback)
+# Register Post on default admin site (safe fallback)
 if Post is not None:
     try:
         admin.site.register(Post, BasePostAdmin)
     except Exception:
-        # registration may already be done by register_admin_models or custom site
         pass
