@@ -17,8 +17,6 @@ from django.contrib.auth import get_user_model
 from django.db.models.functions import TruncDate
 from django.db.models import Count
 from django.db import models
-
-from .widgets import TipTapWidget
 from django.utils.safestring import mark_safe
 
 logger = logging.getLogger(__name__)
@@ -42,14 +40,20 @@ except Exception:
     Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = None
     logger.exception("Could not import blog.models")
 
-# Optional admin form (TipTap integration)
+# Try to import a pre-made PostAdminForm (project-level override)
 try:
-    from .forms import PostAdminForm
+    from .forms import PostAdminForm as ProjectPostAdminForm
 except Exception:
-    PostAdminForm = None
+    ProjectPostAdminForm = None
 
 CustomUser = get_user_model()
 PREVIEW_SALT = "post-preview-salt"
+
+# Try import TipTapWidget if available
+try:
+    from .widgets import TipTapWidget
+except Exception:
+    TipTapWidget = None
 
 # -----------------------
 # Helpers
@@ -95,7 +99,7 @@ def _pretty_change_message(raw):
 class BasePostAdmin(VersionAdmin):
     """
     Robust Post admin:
-    - safe use of optional PostAdminForm (TipTap) via get_form fallback,
+    - safe use of optional PostAdminForm via get_form fallback,
     - uses change_form_template only if template exists in project.
     """
     # dynamic form selection in get_form
@@ -141,12 +145,12 @@ class BasePostAdmin(VersionAdmin):
     )
 
     def get_form(self, request, obj=None, **kwargs):
-        # try to use PostAdminForm if present; on error, fall back to default admin form
-        if PostAdminForm:
+        # try to use ProjectPostAdminForm if present; on error, fall back to default admin form
+        if ProjectPostAdminForm:
             try:
-                return super().get_form(request, obj, form=PostAdminForm, **kwargs)
+                return super().get_form(request, obj, form=ProjectPostAdminForm, **kwargs)
             except Exception:
-                logger.exception("PostAdminForm raised during get_form — falling back to default admin form.")
+                logger.exception("Project PostAdminForm raised during get_form — falling back to default admin form.")
         try:
             return super().get_form(request, obj, **kwargs)
         except Exception:
@@ -449,24 +453,7 @@ def admin_stats_api(request):
     posts_series = build_series(posts_qs)
     comments_series = build_series(comments_qs)
     views_series = build_series(views_qs)
-    # also return summary counts for convenience
-    total_posts = Post.objects.count() if Post is not None else 0
-    published_posts = Post.objects.filter(status='published').count() if Post is not None else 0
-    draft_posts = Post.objects.filter(status='draft').count() if Post is not None else 0
-    total_comments = Comment.objects.count() if Comment is not None else 0
-    total_views = PostView.objects.count() if PostView is not None else 0
-
-    return JsonResponse({
-        'labels': labels,
-        'posts': posts_series,
-        'comments': comments_series,
-        'views': views_series,
-        'total_posts': total_posts,
-        'published_posts': published_posts,
-        'draft_posts': draft_posts,
-        'total_comments': total_comments,
-        'total_views': total_views,
-    })
+    return JsonResponse({'labels': labels, 'posts': posts_series, 'comments': comments_series, 'views': views_series})
 
 @require_GET
 def admin_dashboard_view(request):
@@ -475,47 +462,16 @@ def admin_dashboard_view(request):
     posts_count = Post.objects.count() if Post else 0
     comments_count = Comment.objects.count() if Comment else 0
     users_count = CustomUser.objects.count() if CustomUser else 0
-
-    # последние посты
-    recent_posts = Post.objects.order_by('-published_at')[:8] if Post else []
-
-    # собираем простую серию за 30 дней (можно переиспользовать admin_stats_api)
-    days = 30
-    now = timezone.now()
-    start = now - timezone.timedelta(days=days - 1)
-    labels = [(start + timezone.timedelta(days=i)).date().isoformat() for i in range(days)]
-
-    def build_series(qs, date_field):
-        mapping = {}
-        try:
-            from django.db.models.functions import TruncDate
-            from django.db.models import Count
-            items = (qs.filter(**{f"{date_field}__date__gte": start.date()})
-                      .annotate(day=TruncDate(date_field))
-                      .values('day').annotate(count=Count('id')).order_by('day'))
-            mapping = {item['day'].isoformat(): item['count'] for item in items}
-        except Exception:
-            mapping = {}
-        return [mapping.get(d, 0) for d in labels]
-
-    posts_series = build_series(Post.objects, 'created_at') if Post else [0]*days
-    comments_series = build_series(Comment.objects, 'created_at') if Comment else [0]*days
-    views_series = build_series(PostView.objects, 'viewed_at') if PostView else [0]*days
-
+    app_list = []
+    try:
+        if custom_admin_site:
+            app_list = custom_admin_site.get_app_list(request)
+        else:
+            app_list = admin.site.get_app_list(request)
+    except Exception:
+        app_list = []
     ctx_base = custom_admin_site.each_context(request) if custom_admin_site else admin.site.each_context(request)
-    context = dict(
-        ctx_base,
-        title="Admin dashboard",
-        posts_count=posts_count,
-        comments_count=comments_count,
-        users_count=users_count,
-        recent_posts=recent_posts,
-        days=days,
-        labels=labels,
-        posts=posts_series,
-        comments=comments_series,
-        views=views_series,
-    )
+    context = dict(ctx_base, title="Admin dashboard", posts_count=posts_count, comments_count=comments_count, users_count=users_count, app_list=app_list)
     return render(request, "admin/dashboard.html", context)
 
 # -----------------------
@@ -543,8 +499,6 @@ def register_admin_models(site_obj):
     """
     Register all admin models into provided admin site.
     Call this AFTER custom_admin_site is created in core.admin to avoid import cycles.
-    This function also forces the admin root ('/admin/') to use our admin_dashboard_view
-    by injecting an index route into the admin site's urls.
     """
     global custom_admin_site
     custom_admin_site = site_obj or admin.site
@@ -603,9 +557,7 @@ def register_admin_models(site_obj):
 
     # Attach custom urls by wrapping original get_urls (avoid recursion)
     def get_admin_urls(urls):
-        # We put the index route as the first item so it takes precedence over default admin index.
         custom_urls = [
-            path("", admin_dashboard_view, name="index"),
             path("dashboard/", admin_dashboard_view, name="admin-dashboard"),
             path("dashboard/stats-data/", admin_stats_api, name="admin-dashboard-stats"),
             path("media-library/", admin_media_library_view, name="admin-media-library"),
@@ -628,79 +580,132 @@ def register_admin_models(site_obj):
                 return get_admin_urls(base)
             setattr(wrapped_get_urls, "_is_wrapped_by_blog_admin", True)
             custom_admin_site.get_urls = wrapped_get_urls
-            logger.info("Wrapped admin site get_urls and injected custom dashboard index.")
     except Exception:
         logger.exception("Failed to attach custom urls to custom_admin_site", exc_info=True)
-
-    # Also attempt to set index_template as a fallback (some admin skins use template)
-    try:
-        if custom_admin_site:
-            try:
-                custom_admin_site.index_template = 'admin/index.html'
-            except Exception:
-                logger.debug("Could not set custom_admin_site.index_template", exc_info=True)
-        try:
-            admin.site.index_template = 'admin/index.html'
-        except Exception:
-            logger.debug("Could not set admin.site.index_template", exc_info=True)
-    except Exception:
-        logger.exception("Failed to set index_template for admin site")
 
     return True
 
 
-class PostAdminForm(forms.ModelForm):
-    class Meta:
-        model = Post
-        fields = '__all__'
-        widgets = {
-            'content': TipTapWidget(attrs={'class':'admin-tiptap-textarea'}),
-        }
+# -----------------------
+# Editor selection & PostAdminForm
+# -----------------------
+# Determine best available editor in order of preference
+_editor_choice = None  # one of: 'tiptap', 'summernote', 'ckeditor', 'simple'
 
-# Register a simple Post admin as a fallback if direct decorator-based registration fails
+if TipTapWidget:
+    _editor_choice = 'tiptap'
+else:
+    try:
+        from django_summernote.widgets import SummernoteWidget
+        _editor_choice = 'summernote'
+    except Exception:
+        SummernoteWidget = None
+        try:
+            from ckeditor.widgets import CKEditorWidget
+            _editor_choice = 'ckeditor'
+        except Exception:
+            CKEditorWidget = None
+            _editor_choice = 'simple'
+
+# If project provided a custom PostAdminForm, use it; otherwise define a form that uses chosen editor
+if ProjectPostAdminForm:
+    PostAdminForm = ProjectPostAdminForm
+else:
+    class PostAdminForm(forms.ModelForm):
+        class Meta:
+            model = Post
+            fields = '__all__'
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            try:
+                if _editor_choice == 'tiptap' and TipTapWidget:
+                    # TipTapWidget usually expects attrs param
+                    self.fields['content'].widget = TipTapWidget(attrs={'class': 'admin-tiptap-textarea'})
+                elif _editor_choice == 'summernote' and SummernoteWidget:
+                    # Summernote is iframe-based and easy to integrate
+                    self.fields['content'].widget = SummernoteWidget()
+                elif _editor_choice == 'ckeditor' and CKEditorWidget:
+                    self.fields['content'].widget = CKEditorWidget()
+                else:
+                    # Simple fallback: contentEditable enhancer (simple_admin_editor.js)
+                    self.fields['content'].widget = forms.Textarea(attrs={'class': 'simple-admin-editor', 'rows': 20})
+            except Exception:
+                # Last-resort: plain textarea
+                logger.exception("Failed to attach rich widget; falling back to plain textarea.")
+                self.fields['content'].widget = forms.Textarea(attrs={'rows': 20})
+
+
+# -----------------------
+# PostAdmin registration with editor media handling
+# -----------------------
+# We avoid hardcoding tiptap-only media; include assets conditionally via property media
+class PostAdmin(BasePostAdmin):
+    form = PostAdminForm
+    # keep custom change_form_template if present in BasePostAdmin
+    change_form_template = BasePostAdmin.change_form_template or 'admin/blog/post/change_form.html'
+
+    def media(self):
+        # start with default admin media
+        media = super().media
+        try:
+            if _editor_choice == 'tiptap':
+                # if TipTap is available in project, it probably adds its own media inside widget; keep compatibility
+                extra = forms.Media(
+                    js=('admin/js/tiptap_admin_extra.js',),
+                    css={'all': ('admin/css/tiptap_admin.css',)}
+                )
+                return media + extra
+            elif _editor_choice == 'summernote':
+                # Summernote widget usually injects its own media, but add small helpers if needed
+                extra = forms.Media(
+                    js=(),
+                    css={'all': ()}
+                )
+                return media + extra
+            elif _editor_choice == 'ckeditor':
+                # CKEditor usually provides its own media; no extra required
+                return media
+            else:
+                # simple fallback — add our simple editor's JS/CSS (already present in static)
+                extra = forms.Media(
+                    js=('admin/js/simple_admin_editor.js',),
+                    css={'all': ('admin/css/simple_admin_editor.css',)}
+                )
+                return media + extra
+        except Exception:
+            logger.exception("Building PostAdmin.media failed; returning default media")
+            return media
+
+    # `media` should be a property for ModelAdmin
+    media = property(media)
+
+    # small UX improvement: expose quick links in the change view via custom template (if provided)
+    class Media:
+        # keep empty — dynamic media property handles runtime additions
+        js = ()
+        css = {'all': ()}
+
+
+# Use decorator registration so default admin still gets this admin if module imported
 try:
     if Post is not None:
-        @admin.register(Post)
-        class PostAdmin(admin.ModelAdmin):
-            form = PostAdminForm if PostAdminForm else None
-            change_form_template = 'admin/blog/post/change_form.html'  # our override if template exists
-            list_display = ("title", "status", "author", "published_at")
-            search_fields = ("title",)
-            ordering = ("-published_at",)
-            filter_horizontal = ("categories", "tags") if Post is not None else ()
-            class Media:
-                js = ('admin/js/tiptap_admin_extra.js',)
-                css = {'all': ('admin/css/tiptap_admin.css',)}
+        admin.site.register(Post, PostAdmin)
+except AlreadyRegistered:
+    # if already registered elsewhere, ignore
+    pass
 except Exception:
-    # registration may be handled later by register_admin_models
-    logger.debug("Inline Post registration skipped; will register via register_admin_models", exc_info=True)
+    logger.exception("Could not register Post with admin.site")
 
 
-# Also register other models locally if possible (defensive)
+# Keep other registrations available via helper
 try:
-    if Category is not None:
-        admin.site.register(Category, CategoryAdmin)
+    _ensure_registered(admin.site, Category, CategoryAdmin)
+    _ensure_registered(admin.site, Tag, TagAdmin)
+    _ensure_registered(admin.site, Comment, CommentAdmin)
+    _ensure_registered(admin.site, PostReaction, PostReactionAdmin)
+    if PostAttachment is not None:
+        _ensure_registered(admin.site, MediaLibrary, MediaLibraryAdmin)
+        _ensure_registered(admin.site, PostAttachment, MediaLibraryAdmin)
 except Exception:
-    pass
-try:
-    if Tag is not None:
-        admin.site.register(Tag, TagAdmin)
-except Exception:
-    pass
-try:
-    if Comment is not None:
-        admin.site.register(Comment, CommentAdmin)
-except Exception:
-    pass
-try:
-    if PostReaction is not None:
-        admin.site.register(PostReaction, PostReactionAdmin)
-except Exception:
-    pass
-try:
-    if MediaLibrary is not None:
-        admin.site.register(MediaLibrary, MediaLibraryAdmin)
-except Exception:
-    pass
-
-# End of file
+    logger.exception("Post-registration of other admin models failed")
