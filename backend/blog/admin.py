@@ -41,7 +41,7 @@ except Exception:
     Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = None
     logger.exception("Could not import blog.models")
 
-# Try to import a project-provided PostAdminForm (optional)
+# Optional admin form (TipTap integration)
 try:
     from .forms import PostAdminForm as ProjectPostAdminForm
 except Exception:
@@ -56,7 +56,6 @@ PREVIEW_SALT = "post-preview-salt"
 # Prefer a project-provided widget at blog.widgets.TipTapWidget, otherwise use this internal implementation.
 TipTapWidget = None
 try:
-    # prefer project-provided widget if present
     from .widgets import TipTapWidget as ProjectTipTapWidget  # noqa: F401
     TipTapWidget = ProjectTipTapWidget
 except Exception:
@@ -66,35 +65,27 @@ if TipTapWidget is None:
     class TipTapWidget(forms.Widget):
         """
         Renders:
-          - a hidden textarea (actual form field),
-          - a <div class="tiptap-editor" data-config='...'> container which frontend initialization will convert to TipTap.
-        This avoids using Django templates (so no TemplateSyntaxError with weird characters).
+         - a visible textarea with class 'admin-tiptap-textarea' (so fallback works),
+         - plus a wrapper div '.admin-tiptap-widget' which the frontend will enhance.
         """
-        template_name = None  # we don't use template engine to avoid parsing issues
-
         def __init__(self, attrs=None, upload_url="/api/blog/media/upload/"):
             super().__init__(attrs or {})
             self.upload_url = upload_url
 
         def get_config(self, name, value, attrs):
-            """
-            Build a JSON configuration for the frontend initializer.
-            Keep it simple and safe: only pass strings/primitives.
-            """
             cfg = {
                 "name": name,
                 "uploadUrl": self.upload_url,
                 "placeholder": (self.attrs.get("placeholder") if isinstance(self.attrs, dict) else None) or "Введите текст...",
             }
-            # copy some attrs to config if present
+            # copy some simple attrs if present
             if attrs:
                 for k, v in attrs.items():
-                    # avoid injecting callable or complex objects
                     if isinstance(v, (str, bool, int, float)):
                         cfg[k] = v
             return cfg
 
-        def value_as_textarea(self, value):
+        def value_as_text(self, value):
             if value is None:
                 return ""
             try:
@@ -103,71 +94,60 @@ if TipTapWidget is None:
                 return ""
 
         def render(self, name, value, attrs=None, renderer=None):
-            """
-            Render HTML string: a <textarea name=... style="display:none"> for form submission
-            plus a container <div class="tiptap-widget" data-config='...'> which the JS will transform.
-            We avoid template rendering entirely.
-            """
             final_attrs = {} if attrs is None else dict(attrs)
-            textarea_value = escape(self.value_as_textarea(value))
+            # ensure expected class so JS can find it
+            css_class = final_attrs.get("class", "")
+            classes = (css_class + " admin-tiptap-textarea").strip()
+            textarea_value = escape(self.value_as_text(value))
 
-            # build textarea attributes safely
             textarea_attrs = {
                 "name": name,
-                "style": "display:none;",
+                "class": classes,
+                "rows": final_attrs.get("rows", 20),
+                "id": final_attrs.get("id", f"id_{name}"),
+                "data-post-id": final_attrs.get("data-post-id", final_attrs.get("data_post_id", "")),
             }
-            # Merge any id/class passed
-            if "id" in final_attrs:
-                textarea_attrs["id"] = final_attrs["id"]
-            if "class" in final_attrs:
-                textarea_attrs["class"] = final_attrs["class"]
 
-            # Build attribute string without nested f-string issues
-            attr_parts = []
+            # build attribute string safely
+            parts = []
             for k, v in textarea_attrs.items():
-                if v is None:
-                    # avoid rendering attributes with None value
+                if v is None or v == "":
                     continue
-                # escape attribute values
-                attr_parts.append(f'{k}="{escape(v)}"')
-            attr_str = " ".join(attr_parts)
+                parts.append(f'{k}="{escape(str(v))}"')
+            attr_str = " ".join(parts)
 
             config = self.get_config(name, value, final_attrs)
             try:
-                config_json = json.dumps(config, ensure_ascii=False)
+                cfg_json = json.dumps(config, ensure_ascii=False)
             except Exception:
-                config_json = json.dumps({}, ensure_ascii=False)
+                cfg_json = "{}"
 
-            # container id - prefer predictable id where possible
-            container_id = textarea_attrs.get("id", f"id_{name}_tiptap")
-            container_html = (
-                f'<div id="{escape(container_id)}_container" class="tiptap-widget-container" '
-                f'data-tiptap-config="{escape(config_json)}"></div>'
+            # wrapper for the visual editor
+            wrapper_html = (
+                f'<div class="admin-tiptap-widget" data-tiptap-config="{escape(cfg_json)}" '
+                f'id="{escape(textarea_attrs.get("id"))}_tiptap_wrapper">'
+                # toolbar+editor placeholders will be filled by JS
+                f'<div class="tiptap-toolbar"></div><div class="tiptap-editor" contenteditable="true"></div>'
+                f'</div>'
             )
 
             textarea_html = f'<textarea {attr_str}>{textarea_value}</textarea>'
 
-            # small noscript fallback
-            noscript_html = '<noscript><p>Включите JavaScript для использования визуального редактора. Поле доступно в виде простого textarea.</p></noscript>'
+            noscript_html = '<noscript><p>Включите JavaScript для использования визуального редактора; доступен простой textarea.</p></noscript>'
 
-            # initialization hint: the admin's static JS (admin/js/tiptap_admin_extra.js) will pick up .tiptap-widget-container
-            html = textarea_html + container_html + noscript_html
-            return mark_safe(html)
+            return mark_safe(textarea_html + wrapper_html + noscript_html)
 
         class Media:
-            # we include both CDN and local fallbacks; front-end script should handle failures gracefully.
+            # Try to use local static tiptap UMD files first (avoid CORS). Put these files into static/admin/vendor/tiptap/
             js = (
-                # core tiptap CDN (may be blocked by some environments; local fallback must exist)
-                "https://cdn.jsdelivr.net/npm/@tiptap/core@2.0.0-beta.153/dist/tiptap-core.umd.min.js",
-                "https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@2.0.0-beta.143/dist/tiptap-starter-kit.umd.min.js",
-                "https://cdn.jsdelivr.net/npm/@tiptap/extension-link@2.0.0-beta.37/dist/tiptap-extension-link.umd.min.js",
-                "https://cdn.jsdelivr.net/npm/@tiptap/extension-image@2.0.0-beta.37/dist/tiptap-extension-image.umd.min.js",
-                # initialization glue (local). This file should exist in your staticfiles.
+                "admin/vendor/tiptap/tiptap-core.umd.min.js",
+                "admin/vendor/tiptap/tiptap-starter-kit.umd.min.js",
+                "admin/vendor/tiptap/tiptap-extension-link.umd.min.js",
+                "admin/vendor/tiptap/tiptap-extension-image.umd.min.js",
+                # local glue that will do initialization + graceful fallback
                 "admin/js/tiptap_admin_extra.js",
             )
-            css = {
-                'all': ("admin/css/tiptap_admin.css",)
-            }
+            css = {'all': ("admin/css/tiptap_admin.css",)}
 
 # -----------------------
 # Helpers
@@ -209,19 +189,11 @@ def _pretty_change_message(raw):
 
 # -----------------------
 # Admin classes
+# (оставил логику как в твоём файле — для краткости я не менял остальные админы)
 # -----------------------
 class BasePostAdmin(VersionAdmin):
-    """
-    Robust Post admin:
-    - safe use of optional PostAdminForm via get_form fallback,
-    - uses change_form_template only if template exists in project.
-    """
-    # dynamic form selection in get_form
     change_form_template = None
     try:
-        # check for template existence in SETTINGS TEMPLATES DIRS or local project templates path
-        template_name = os.path.join('admin', 'blog', 'post', 'change_form.html')
-        # first check explicit TEMPLATES dirs if possible
         from django.conf import settings as _settings
         dirs = []
         try:
@@ -229,6 +201,7 @@ class BasePostAdmin(VersionAdmin):
         except Exception:
             dirs = []
         found = False
+        template_name = os.path.join('admin', 'blog', 'post', 'change_form.html')
         for d in dirs:
             if os.path.exists(os.path.join(d, template_name)):
                 found = True
@@ -701,10 +674,9 @@ def register_admin_models(site_obj):
 
 
 # -----------------------
-# PostAdminForm + PostAdmin (use TipTap)
+# PostAdminForm + PostAdmin
 # -----------------------
 if ProjectPostAdminForm:
-    # prefer project-provided form if exists
     PostAdminForm = ProjectPostAdminForm
 else:
     class PostAdminForm(forms.ModelForm):
@@ -715,16 +687,14 @@ else:
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             try:
-                # Prefer TipTapWidget (project widget or internal one)
+                # ВАЖНО: передаём класс admin-tiptap-textarea чтобы наш JS нашёл textarea
                 if TipTapWidget:
-                    self.fields['content'].widget = TipTapWidget()
+                    self.fields['content'].widget = TipTapWidget(attrs={'class': 'admin-tiptap-textarea'})
                 else:
-                    # fallback to textarea that will be enhanced by simple editor
-                    self.fields['content'].widget = forms.Textarea(attrs={'class': 'simple-admin-editor', 'rows': 20})
+                    self.fields['content'].widget = forms.Textarea(attrs={'class': 'admin-tiptap-textarea simple-admin-editor', 'rows': 20})
             except Exception:
                 logger.exception("Failed to attach widget to content field; using plain textarea")
                 self.fields['content'].widget = forms.Textarea(attrs={'rows': 20})
-
 
 class PostAdmin(BasePostAdmin):
     form = PostAdminForm
@@ -733,35 +703,25 @@ class PostAdmin(BasePostAdmin):
     def media(self):
         media = super().media
         try:
-            # If TipTapWidget (internal or project) is present, attempt to load TipTap-related assets
-            if TipTapWidget:
-                extra = forms.Media(
-                    js=(
-                        # CDN attempts first (fast if allowed). Some environments may block extension-image; frontend should handle gracefully.
-                        "https://cdn.jsdelivr.net/npm/@tiptap/core@2.0.0-beta.153/dist/tiptap-core.umd.min.js",
-                        "https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@2.0.0-beta.143/dist/tiptap-starter-kit.umd.min.js",
-                        "https://cdn.jsdelivr.net/npm/@tiptap/extension-link@2.0.0-beta.37/dist/tiptap-extension-link.umd.min.js",
-                        "https://cdn.jsdelivr.net/npm/@tiptap/extension-image@2.0.0-beta.37/dist/tiptap-extension-image.umd.min.js",
-                        # local initialization glue - should detect whether tiptap loaded and fallback to simple editor if not
-                        "admin/js/tiptap_admin_extra.js",
-                    ),
-                    css={'all': ("admin/css/tiptap_admin.css",)}
-                )
-                return media + extra
-            else:
-                # no TipTap available — use simple contentEditable editor assets as fallback
-                extra = forms.Media(
-                    js=("admin/js/simple_admin_editor.js",),
-                    css={'all': ("admin/css/simple_admin_editor.css",)}
-                )
-                return media + extra
+            # Prefer local static UMDs (avoid CORS). If they are missing, browser will load tiptap_admin_extra.js
+            extra = forms.Media(
+                js=(
+                    "admin/vendor/tiptap/tiptap-core.umd.min.js",
+                    "admin/vendor/tiptap/tiptap-starter-kit.umd.min.js",
+                    "admin/vendor/tiptap/tiptap-extension-link.umd.min.js",
+                    "admin/vendor/tiptap/tiptap-extension-image.umd.min.js",
+                    "admin/js/tiptap_admin_extra.js",
+                ),
+                css={'all': ("admin/css/tiptap_admin.css",)}
+            )
+            return media + extra
         except Exception:
             logger.exception("Error building PostAdmin.media; returning default media")
             return media
 
     media = property(media)
 
-# Register Post admin
+# Register admin classes safely
 try:
     if Post is not None:
         admin.site.register(Post, PostAdmin)
