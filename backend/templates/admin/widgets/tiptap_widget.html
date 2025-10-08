@@ -21,11 +21,10 @@
   <div class="tiptap-editor" contenteditable="true" spellcheck="true"></div>
 </div>
 
-<link rel="stylesheet" href="{% static 'admin/css/tiptap_admin.css' %}">
-{# Load local UMD first if you included it with that name (safe if not present) #}
+<link rel="stylesheet" href="{% static 'admin/css/sdr_tiptap_admin.css' %}">
+{# We load our local UMD through our script loader in sdr_tiptap_admin_extra.js #}
 <script>
-  // if you want to override path at runtime, define window.ADMIN_TIPTAP_UMD_PATH before this script runs
-  // Example: window.ADMIN_TIPTAP_UMD_PATH = '/static/admin/vendor/tiptap/tiptap-umd.js';
+  // optionally override path:
+  // window.ADMIN_TIPTAP_UMD_PATH = '{% static "admin/vendor/tiptap/tiptap-umd.js" %}';
 </script>
 <script src="{% static 'admin/js/sdr_tiptap_admin_extra.js' %}"></script>
-<link rel="stylesheet" href="{% static 'admin/css/sdr_tiptap_admin.css' %}">
