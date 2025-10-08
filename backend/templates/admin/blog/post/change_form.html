@@ -9,7 +9,9 @@
   <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@tiptap/extension-image@2.0.0-beta.37/dist/tiptap-extension-image.umd.min.js"></script>
   <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@tiptap/extension-link@2.0.0-beta.37/dist/tiptap-extension-link.umd.min.js"></script>
   <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@tiptap/extension-code-block-lowlight@2.0.0-beta.19/dist/tiptap-extension-code-block-lowlight.umd.min.js"></script>
-  <script src="{% static 'admin/js/tiptap-editor.js' %}"></script>
+  <script src="{% static 'admin/vendor/tiptap/tiptap-umd.js' %}"></script>
+<script src="{% static 'admin/js/sdr_tiptap_admin_extra.js' %}"></script>
+<link rel="stylesheet" href="{% static 'admin/css/sdr_tiptap_admin.css' %}">
 
   <style>
     .tiptap-editor-container { border: 1px solid #e6edf3; border-radius: 6px; padding: 12px; min-height: 240px; background: #fff; }
