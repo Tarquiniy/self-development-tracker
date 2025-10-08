@@ -1,9 +1,7 @@
 {# templates/admin/widgets/tiptap_widget.html #}
 {% load static %}
-{# Renders a normal textarea (so admin form handling works) and
-   also outputs a visual editor container that the JS will initialize. #}
+{# Полностью локальный виджет TipTap для Django admin #}
 
-{# Use the built-in textarea rendering to preserve attrs id, name etc. #}
 <textarea
   name="{{ widget.name }}"
   id="{{ widget.attrs.id|default:'id_'|add:widget.name }}"
@@ -14,15 +12,16 @@
   {% endfor %}
 >{{ widget.value|default_if_none:''|escape }}</textarea>
 
-{# Editor container used by JS. Data attributes mirror textarea attrs (upload/preview). #}
 <div class="admin-tiptap-widget"
-     data-upload-url="{{ widget.attrs.data-upload-url|default:"/api/blog/media/upload/" }}"
-     data-preview-token-url="{{ widget.attrs.data-preview-token-url|default:"/admin/posts/preview-token/" }}"
+     data-upload-url="{{ widget.attrs.data_upload_url|default:"/api/blog/media/upload/" }}"
+     data-preview-token-url="{{ widget.attrs.data_preview_token_url|default:"/admin/posts/preview-token/" }}"
+     data-editor="{{ widget.attrs.data_editor|default:"auto" }}"
      aria-hidden="false">
-  <div class="tiptap-toolbar"></div>
-  <div class="tiptap-editor" contenteditable="true"></div>
+  <div class="tiptap-toolbar" role="toolbar" aria-label="Editor toolbar"></div>
+  <div class="tiptap-editor" contenteditable="true" spellcheck="true"></div>
 </div>
 
-{# Local static JS/CSS that initialize the editor. Load only once — but safe to include. #}
+{# локальные статические файлы: сначала бандл TipTap, потом инициализатор и css #}
 <link rel="stylesheet" href="{% static 'admin/css/tiptap_admin.css' %}">
+<script src="{% static 'admin/vendor/tiptap/tiptap.bundle.min.js' %}"></script>
 <script src="{% static 'admin/js/tiptap_admin_extra.js' %}"></script>

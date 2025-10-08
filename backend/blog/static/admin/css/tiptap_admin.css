@@ -1,6 +1,46 @@
-/* minimal styles for fallback editor */
-.admin-tiptap-widget { margin: 8px 0; }
-.tiptap-toolbar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
-.tiptap-btn { background:#f8f9fa; border:1px solid #ddd; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:13px; }
-.tiptap-editor { min-height:360px; padding:12px; border-radius:6px; border:1px solid #e6e6e6; background:#fff; overflow:auto; }
-.tiptap-editor img { max-width:100%; height:auto; display:block; margin:8px 0; }
+/* static/admin/css/tiptap_admin.css - минимальные стили для админ-редактора */
+.admin-tiptap-widget {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 6px;
+  background: #fff;
+  margin-top: 6px;
+}
+
+.tiptap-toolbar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.tiptap-btn {
+  background: #f4f4f4;
+  border: 1px solid #ddd;
+  padding: 6px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.tiptap-btn:hover { filter: brightness(.98); }
+
+.tiptap-editor {
+  min-height: 220px;
+  padding: 12px;
+  outline: none;
+}
+
+.tiptap-editor:focus {
+  box-shadow: 0 0 0 3px rgba(21,156,228,0.12);
+  border-radius: 4px;
+}
+
+.tiptap-upload-placeholder {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #f2f2f2;
+  border-radius: 4px;
+  color: #666;
+  margin-left: 6px;
+}

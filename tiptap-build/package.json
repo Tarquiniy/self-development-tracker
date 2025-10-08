@@ -1,0 +1,25 @@
+{
+  "name": "tiptap-build",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bundle TipTap v3 and selected extensions into a single IIFE bundle for Django Admin",
+  "scripts": {
+    "install-deps": "npm ci",
+    "build": "rollup -c",
+    "build:prod": "NODE_ENV=production rollup -c"
+  },
+  "devDependencies": {
+    "rollup": "4.52.4",
+    "@rollup/plugin-node-resolve": "16.0.1",
+    "@rollup/plugin-replace": "6.0.2",
+    "@rollup/plugin-terser": "0.4.4"
+  },
+  "dependencies": {
+    "@tiptap/core": "3.6.5",
+    "@tiptap/starter-kit": "3.4.2",
+    "@tiptap/extension-link": "3.6.5",
+    "@tiptap/extension-image": "3.6.5",
+    "@tiptap/extension-code-block-lowlight": "3.6.2",
+    "lowlight": "3.3.0"
+  }
+}

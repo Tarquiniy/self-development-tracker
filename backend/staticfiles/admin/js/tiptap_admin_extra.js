@@ -1,259 +1,238 @@
 // static/admin/js/tiptap_admin_extra.js
-// Type: module
-// Надёжная загрузка TipTap через esm.sh + graceful fallback.
-// Должен быть доступен по /static/admin/js/tiptap_admin_extra.js
-
-const DEBUG = true;
-
-function log(...args){
-  if (DEBUG) console.log('[tiptap_admin_extra]', ...args);
-}
-
-function getCSRF(){
-  const m = document.cookie.match(/csrftoken=([^;]+)/);
-  if (m) return m[1];
-  const meta = document.querySelector('meta[name="csrfmiddlewaretoken"]');
-  return meta ? meta.content : '';
-}
-
-async function dynamicImport(spec){
-  // ESM CDN через esm.sh поддерживает CORS (обычно).
-  // Возвращает модуль namespace.
-  try {
-    return await import(spec);
-  } catch (err) {
-    log('dynamicImport failed for', spec, err);
-    throw err;
-  }
-}
-
-async function initTipTapForNode(wrapper){
-  const textarea = wrapper.querySelector('textarea');
-  const contentEl = wrapper.querySelector('.tiptap-editor') || document.createElement('div');
-  contentEl.classList.add('tiptap-content-target');
-  // Ensure content element is in DOM
-  if (!wrapper.querySelector('.tiptap-editor')) {
-    wrapper.appendChild(contentEl);
+(function () {
+  // helper functions
+  function qs(selector, ctx){ return (ctx || document).querySelector(selector); }
+  function qsa(selector, ctx){ return Array.from((ctx || document).querySelectorAll(selector)); }
+  function getCookie(name) {
+    const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
   }
 
-  // Try to load TipTap modules from esm.sh (CORS-friendly)
-  try {
-    const [
-      coreMod,
-      starterMod,
-      linkMod,
-      imageMod,
-      placeholderMod,
-      underlineMod,
-      tableMod,
-      tableRowMod,
-      tableCellMod,
-      codeLowlightMod,
-      historyMod
-    ] = await Promise.all([
-      dynamicImport('https://esm.sh/@tiptap/core@2.0.0'),
-      dynamicImport('https://esm.sh/@tiptap/starter-kit@2.0.0'),
-      dynamicImport('https://esm.sh/@tiptap/extension-link@2.0.0'),
-      dynamicImport('https://esm.sh/@tiptap/extension-image@2.0.0'),
-      dynamicImport('https://esm.sh/@tiptap/extension-placeholder@2.0.0'),
-      dynamicImport('https://esm.sh/@tiptap/extension-underline@2.0.0'),
-      dynamicImport('https://esm.sh/@tiptap/extension-table@2.0.0'),
-      dynamicImport('https://esm.sh/@tiptap/extension-table-row@2.0.0'),
-      dynamicImport('https://esm.sh/@tiptap/extension-table-cell@2.0.0'),
-      dynamicImport('https://esm.sh/@tiptap/extension-code-block-lowlight@2.0.0'),
-      dynamicImport('https://esm.sh/@tiptap/extension-history@2.0.0'),
-    ]);
+  function uploadFileToServer(file, uploadUrl) {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    // optional fields can be appended here (title, post_id)
+    return fetch(uploadUrl, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: fd
+    }).then(resp => {
+      if (!resp.ok) throw new Error('Upload failed: ' + resp.status);
+      return resp.json();
+    }).then(json => {
+      // support multiple response shapes
+      if (json.attachment && json.attachment.url) return json.attachment.url;
+      if (json.url) return json.url;
+      if (json.uploaded && json.uploaded.length && json.uploaded[0].url) return json.uploaded[0].url;
+      throw new Error('No URL returned from upload');
+    });
+  }
 
-    const Editor = coreMod.Editor || coreMod.default;
-    const StarterKit = starterMod.default || starterMod;
-    const Link = linkMod.default || linkMod;
-    const Image = imageMod.default || imageMod;
-    const Placeholder = placeholderMod.default || placeholderMod;
-    const Underline = underlineMod.default || underlineMod;
-    const Table = tableMod.default || tableMod;
-    const TableRow = tableRowMod.default || tableRowMod;
-    const TableCell = tableCellMod.default || tableCellMod;
-    const CodeBlockLowlight = codeLowlightMod.default || codeLowlightMod;
-    const History = historyMod.default || historyMod;
+  function ensureEditorConstructors() {
+    // accepts global window.Editor etc. (set by bundle)
+    if (typeof window.Editor === 'undefined') {
+      console.warn('TipTap bundle missing — editor will fall back to basic contentEditable.');
+      return false;
+    }
+    return true;
+  }
 
-    // Try to import lowlight for code highlighting (optional)
-    let lowlight = null;
+  function initEditorFor(widget) {
     try {
-      const lowlightMod = await dynamicImport('https://esm.sh/lowlight@2.4.0/lib/core');
-      lowlight = lowlightMod && (lowlightMod.default || lowlightMod);
-      // try register a couple of languages if available
-      try {
-        const jsLang = await dynamicImport('https://esm.sh/highlight.js@10.7.2/lib/languages/javascript');
-        if (lowlight && jsLang && jsLang.default) lowlight.registerLanguage('javascript', jsLang.default);
-      } catch(e){}
-      try {
-        const pyLang = await dynamicImport('https://esm.sh/highlight.js@10.7.2/lib/languages/python');
-        if (lowlight && pyLang && pyLang.default) lowlight.registerLanguage('python', pyLang.default);
-      } catch(e){}
-    } catch(e){
-      log('lowlight import failed, codeblocks will be plain', e);
-    }
+      const textarea = widget.previousElementSibling && widget.previousElementSibling.tagName === 'TEXTAREA'
+        ? widget.previousElementSibling
+        : null;
+      if (!textarea) return;
 
-    const extensions = [
-      StarterKit.default ? StarterKit.default() : StarterKit(),
-      Link.configure ? Link.configure({ openOnClick: false }) : Link(),
-      Image && Image.configure ? Image.configure({ inline: false }) : (Image ? Image() : []),
-      Placeholder && Placeholder.configure ? Placeholder.configure({ placeholder: 'Начните вводить текст...' }) : Placeholder(),
-      Underline && Underline(),
-      History && History(),
-      Table && Table(),
-      TableRow && TableRow(),
-      TableCell && TableCell(),
-      ...(CodeBlockLowlight && lowlight ? [ CodeBlockLowlight.configure({ lowlight }) ] : [])
-    ];
+      // avoid double init
+      if (widget.dataset._inited_for === textarea.id) return;
+      widget.dataset._inited_for = textarea.id;
 
-    // Create editor
-    const editor = new Editor({
-      element: contentEl,
-      extensions,
-      content: textarea.value && textarea.value.trim() ? textarea.value : '<p></p>',
-      onUpdate: ({ editor }) => {
-        textarea.value = editor.getHTML();
-        textarea.dispatchEvent(new Event('change', { bubbles: true }));
+      const uploadUrl = widget.dataset.uploadUrl || widget.dataset.uploadUrl || widget.getAttribute('data-upload-url') || '/api/blog/media/upload/';
+      const editorMode = (widget.getAttribute('data-editor') || 'auto').toLowerCase();
+
+      // find editor root
+      const editorEl = qs('.tiptap-editor', widget);
+      const toolbar = qs('.tiptap-toolbar', widget);
+
+      // fallback simple contentEditable (if TipTap not available)
+      if (!ensureEditorConstructors() || editorMode === 'fallback') {
+        initFallback(textarea, widget);
+        return;
       }
-    });
 
-    // Toolbar (simple)
-    let toolbar = wrapper.querySelector('.tiptap-toolbar');
-    if (!toolbar){
-      toolbar = document.createElement('div');
-      toolbar.className = 'tiptap-toolbar';
-      wrapper.insertBefore(toolbar, contentEl);
-    }
+      // create TipTap editor
+      const EditorClass = window.Editor;
+      const StarterKit = window.StarterKit;
+      const Link = window.Link;
+      const ImageExt = window.Image;
+      const CodeBlockLowlight = window.CodeBlockLowlight;
+      const lowlight = window.lowlight;
 
-    function addButton(html, onClick){
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.innerHTML = html;
-      btn.addEventListener('click', onClick);
-      toolbar.appendChild(btn);
-      return btn;
-    }
-
-    addButton('<b>B</b>', ()=>editor.chain().focus().toggleBold().run());
-    addButton('<i>I</i>', ()=>editor.chain().focus().toggleItalic().run());
-    addButton('<s>S</s>', ()=>editor.chain().focus().toggleStrike().run());
-    addButton('H1', ()=>editor.chain().focus().toggleHeading({ level:1 }).run());
-    addButton('UL', ()=>editor.chain().focus().toggleBulletList().run());
-    addButton('OL', ()=>editor.chain().focus().toggleOrderedList().run());
-    addButton('Code', ()=>editor.chain().focus().toggleCodeBlock().run());
-    addButton('Table', ()=>editor.chain().focus().insertTable({ rows:3, cols:3 }).run());
-    addButton('Link', ()=>{
-      const url = prompt('URL (https://...)');
-      if (url) editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-    });
-
-    // Image upload button + input
-    const uploadBtn = addButton('Image', ()=>uploadInput.click());
-    const uploadInput = document.createElement('input');
-    uploadInput.type = 'file';
-    uploadInput.accept = 'image/*';
-    uploadInput.style.display = 'none';
-    wrapper.appendChild(uploadInput);
-    uploadInput.addEventListener('change', async (ev)=>{
-      const f = ev.target.files && ev.target.files[0];
-      if (!f) return;
-      try {
-        const fd = new FormData();
-        fd.append('file', f);
-        const uploadUrl = wrapper.dataset.uploadUrl || wrapper.getAttribute('data-upload-url') || '/admin/blog/upload-image/';
-        const res = await fetch(uploadUrl, {
-          method: 'POST',
-          body: fd,
-          credentials: 'same-origin',
-          headers: { 'X-CSRFToken': getCSRF() }
-        });
-        const j = await res.json();
-        const url = j.url || (j.uploaded && j.uploaded[0] && j.uploaded[0].url);
-        if (url) editor.chain().focus().setImage({ src: url }).run();
-        else alert('Загружено, но URL не возвращён. Посмотри логи сервера.');
-      } catch (e){
-        console.error('upload error', e);
-        alert('Ошибка загрузки изображения');
-      } finally {
-        uploadInput.value = '';
-      }
-    });
-
-    // Drag and drop support
-    contentEl.addEventListener('drop', async (ev)=>{
-      ev.preventDefault();
-      const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
-      if (f){
-        try {
-          const fd = new FormData(); fd.append('file', f);
-          const uploadUrl = wrapper.dataset.uploadUrl || wrapper.getAttribute('data-upload-url') || '/admin/blog/upload-image/';
-          const res = await fetch(uploadUrl, {
-            method: 'POST',
-            body: fd,
-            credentials: 'same-origin',
-            headers: { 'X-CSRFToken': getCSRF() }
-          });
-          const j = await res.json();
-          const url = j.url || (j.uploaded && j.uploaded[0] && j.uploaded[0].url);
-          if (url) editor.chain().focus().setImage({ src: url }).run();
-        } catch (e){
-          console.error('drop upload failed', e);
+      const editor = new EditorClass({
+        element: editorEl,
+        content: textarea.value || '<p></p>',
+        extensions: [
+          StarterKit,
+          Link,
+          ImageExt.configure({ inline: false }),
+          CodeBlockLowlight.configure({ lowlight })
+        ],
+        onUpdate: ({ editor }) => {
+          const html = editor.getHTML();
+          textarea.value = html;
+          textarea.dispatchEvent(new Event('change', { bubbles: true }));
         }
+      });
+
+      // sync before form submit
+      const form = textarea.closest('form');
+      if (form) {
+        form.addEventListener('submit', function () {
+          textarea.value = editor.getHTML();
+        });
       }
-    });
 
-    // Save initial HTML into textarea (so Django form sees existing content)
-    textarea.value = editor.getHTML();
+      // build toolbar (basic set)
+      function addBtn(label, title, fn) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.title = title || '';
+        b.className = 'tiptap-btn';
+        b.innerHTML = label;
+        b.addEventListener('click', function (e) {
+          e.preventDefault();
+          try { fn(editor); } catch (err) { console.error(err); }
+          editor.focus();
+        });
+        toolbar.appendChild(b);
+        return b;
+      }
 
-    // Ensure on form submit textarea is synced
-    const form = textarea.closest('form');
-    if (form){
-      form.addEventListener('submit', ()=>{ textarea.value = editor.getHTML(); });
+      addBtn('<b>B</b>', 'Bold', (ed) => ed.chain().focus().toggleBold().run());
+      addBtn('<i>I</i>', 'Italic', (ed) => ed.chain().focus().toggleItalic().run());
+      addBtn('U', 'Underline', (ed) => ed.chain().focus().toggleUnderline().run());
+      addBtn('H1', 'Heading 1', (ed) => ed.chain().focus().toggleHeading({ level: 1 }).run());
+      addBtn('• List', 'Bulleted list', (ed) => ed.chain().focus().toggleBulletList().run());
+      addBtn('1. List', 'Ordered list', (ed) => ed.chain().focus().toggleOrderedList().run());
+      addBtn('</> Code', 'Code block', (ed) => ed.chain().focus().toggleCodeBlock().run());
+      addBtn('❝', 'Blockquote', (ed) => ed.chain().focus().toggleBlockquote().run());
+      addBtn('🔗', 'Insert link', (ed) => {
+        const url = prompt('Введите URL (https://...)');
+        if (url) ed.chain().focus().setLink({ href: url }).run();
+      });
+
+      // Image insertion button -> supports file upload or URL
+      const imgBtn = addBtn('🖼️', 'Insert image (upload or URL)', (ed) => {
+        const method = confirm('Нажми OK для загрузки файла с компьютера, Отмена — вставить URL');
+        if (method) {
+          // upload flow
+          const inp = document.createElement('input');
+          inp.type = 'file';
+          inp.accept = 'image/*';
+          inp.addEventListener('change', async function () {
+            const f = this.files && this.files[0];
+            if (!f) return;
+            const placeholder = document.createElement('span');
+            placeholder.className = 'tiptap-upload-placeholder';
+            placeholder.textContent = 'Uploading...';
+            editor.view.dom.appendChild(placeholder);
+            try {
+              const url = await uploadFileToServer(f, uploadUrl);
+              placeholder.remove();
+              ed.chain().focus().setImage({ src: url }).run();
+            } catch (err) {
+              placeholder.remove();
+              alert('Ошибка при загрузке изображения: ' + err.message);
+            }
+          });
+          inp.click();
+        } else {
+          const url = prompt('Вставьте URL изображения (https://...)');
+          if (url) ed.chain().focus().setImage({ src: url }).run();
+        }
+      });
+
+      // simple autosave (every 30s) to revisions endpoint
+      (function autosaveLoop() {
+        const INTERVAL = 30000;
+        let timer = null;
+        function schedule() {
+          timer = setTimeout(async function () {
+            try {
+              const payload = {
+                id: textarea.dataset.postId || null,
+                title: (document.querySelector('#id_title') && document.querySelector('#id_title').value) || '',
+                excerpt: (document.querySelector('#id_excerpt') && document.querySelector('#id_excerpt').value) || '',
+                content: editor.getHTML(),
+                content_json: null,
+                published_at: (document.querySelector('#id_published_at') && document.querySelector('#id_published_at').value) || null,
+                featured_image: (document.querySelector('#id_featured_image') && document.querySelector('#id_featured_image').value) || ''
+              };
+              const resp = await fetch('/api/blog/revisions/autosave/', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'Content-Type':'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+                body: JSON.stringify(payload)
+              });
+              if (resp.ok) {
+                try {
+                  const data = await resp.json();
+                  if (data && data.success && data.id) textarea.dataset.postId = data.id;
+                } catch (e) {}
+              }
+            } catch (e) {
+              // ignore autosave errors silently
+              console.debug('autosave error', e);
+            } finally {
+              schedule();
+            }
+          }, INTERVAL);
+        }
+        schedule();
+        // stop autosave when leaving page
+        window.addEventListener('beforeunload', function () { if (timer) clearTimeout(timer); });
+      })();
+
+    } catch (err) {
+      console.error('TipTap init error', err);
+      // fallback handled by fallback initializer if needed
     }
-
-    log('TipTap initialized for wrapper', wrapper);
-    return editor;
-
-  } catch (err){
-    // If anything fails (CORS, import error, etc.) — fallback to simple contenteditable
-    log('TipTap init failed, using fallback contenteditable', err);
-
-    // Create a contenteditable area bound to textarea
-    let fallback = wrapper.querySelector('.tiptap-fallback');
-    if (!fallback){
-      fallback = document.createElement('div');
-      fallback.className = 'tiptap-fallback';
-      fallback.contentEditable = 'true';
-      fallback.style.minHeight = '300px';
-      fallback.style.border = '1px solid #ddd';
-      fallback.style.padding = '8px';
-      fallback.innerHTML = textarea.value || '<p></p>';
-      wrapper.appendChild(fallback);
-    }
-
-    const sync = ()=>{ textarea.value = fallback.innerHTML; };
-    fallback.addEventListener('input', sync);
-    const form = textarea.closest('form');
-    if (form) form.addEventListener('submit', sync);
-
-    return null;
   }
-}
 
-function initAll() {
-  // find all wrappers rendered by widget
-  const wrappers = document.querySelectorAll('.admin-tiptap-widget');
-  wrappers.forEach(w => {
-    // prevent double init
-    if (w.dataset.tiptapInit) return;
-    w.dataset.tiptapInit = '1';
-    initTipTapForNode(w).catch(e=>console.error(e));
-  });
-}
+  function initFallback(textarea, widget) {
+    // basic contentEditable fallback — won't be used if TipTap bundle is present
+    try {
+      let ed = widget.querySelector('.tiptap-editor');
+      if (!ed) {
+        ed = document.createElement('div');
+        ed.className = 'tiptap-editor';
+        ed.contentEditable = true;
+        widget.appendChild(ed);
+      }
+      ed.innerHTML = textarea.value || '';
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initAll);
-} else {
-  initAll();
-}
+      ed.addEventListener('input', function () {
+        textarea.value = ed.innerHTML;
+        textarea.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+
+      const form = textarea.closest('form');
+      if (form) form.addEventListener('submit', function(){ textarea.value = ed.innerHTML; });
+    } catch (e) { console.warn('fallback init failed', e); }
+  }
+
+  function bootstrapAll() {
+    const widgets = qsa('.admin-tiptap-widget');
+    widgets.forEach(initEditorFor);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootstrapAll);
+  } else {
+    bootstrapAll();
+  }
+})();
