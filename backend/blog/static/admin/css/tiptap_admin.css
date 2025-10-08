@@ -1,46 +1,49 @@
-/* static/admin/css/tiptap_admin.css - минимальные стили для админ-редактора */
+/* backend/static/admin/css/tiptap_admin.css */
+/* Minimal, clean styles for admin TipTap widget + fallback */
+
 .admin-tiptap-widget {
   border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 6px;
+  border-radius: 8px;
+  padding: 8px;
   background: #fff;
-  margin-top: 6px;
+  box-shadow: inset 0 1px 0 rgba(0,0,0,0.02);
+  margin-top: 8px;
 }
 
-.tiptap-toolbar {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 6px;
+.admin-tiptap-widget .tiptap-toolbar {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-bottom:8px;
 }
 
 .tiptap-btn {
-  background: #f4f4f4;
-  border: 1px solid #ddd;
-  padding: 6px 8px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 13px;
+  background: #f4f4f8;
+  border: 1px solid #e3e6eb;
+  border-radius:6px;
+  padding:6px 8px;
+  cursor:pointer;
+  font-size:13px;
 }
 
-.tiptap-btn:hover { filter: brightness(.98); }
+.tiptap-btn:hover { filter: brightness(0.98); }
 
 .tiptap-editor {
   min-height: 220px;
-  padding: 12px;
+  padding: 10px;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  font-size: 14px;
+  line-height: 1.6;
   outline: none;
 }
 
-.tiptap-editor:focus {
-  box-shadow: 0 0 0 3px rgba(21,156,228,0.12);
-  border-radius: 4px;
+.admin-tiptap-textarea {
+  display: none; /* keep textarea hidden because widget is used for editing */
 }
 
-.tiptap-upload-placeholder {
-  display: inline-block;
-  padding: 2px 6px;
-  background: #f2f2f2;
-  border-radius: 4px;
-  color: #666;
-  margin-left: 6px;
+/* Simple responsive */
+@media (prefers-color-scheme: dark) {
+  .admin-tiptap-widget { background: #111216; border-color: #222; color: #ddd; }
+  .tiptap-btn { background: #1b1d20; border-color: #2a2c30; color: #ddd; }
+  .tiptap-editor { background: transparent; color: #ddd; }
 }

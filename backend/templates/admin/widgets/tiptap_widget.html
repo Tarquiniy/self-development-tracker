@@ -3,7 +3,6 @@
 {# Renders a normal textarea (so admin form handling works) and
    also outputs a visual editor container that the JS will initialize. #}
 
-{# Use the built-in textarea rendering to preserve attrs id, name etc. #}
 <textarea
   name="{{ widget.name }}"
   id="{{ widget.attrs.id|default:'id_'|add:widget.name }}"
@@ -14,15 +13,18 @@
   {% endfor %}
 >{{ widget.value|default_if_none:''|escape }}</textarea>
 
-{# Editor container used by JS. Data attributes mirror textarea attrs (upload/preview). #}
 <div class="admin-tiptap-widget"
      data-upload-url="{{ widget.attrs.data-upload-url|default:"/api/blog/media/upload/" }}"
      data-preview-token-url="{{ widget.attrs.data-preview-token-url|default:"/admin/posts/preview-token/" }}"
      aria-hidden="false">
-  <div class="tiptap-toolbar"></div>
-  <div class="tiptap-editor" contenteditable="true"></div>
+  <div class="tiptap-toolbar" aria-hidden="true"></div>
+  <div class="tiptap-editor" contenteditable="true" spellcheck="true"></div>
 </div>
 
-{# Local static JS/CSS that initialize the editor. Load only once — but safe to include. #}
 <link rel="stylesheet" href="{% static 'admin/css/tiptap_admin.css' %}">
+{# Load local UMD first if you included it with that name (safe if not present) #}
+<script>
+  // if you want to override path at runtime, define window.ADMIN_TIPTAP_UMD_PATH before this script runs
+  // Example: window.ADMIN_TIPTAP_UMD_PATH = '/static/admin/vendor/tiptap/tiptap-umd.js';
+</script>
 <script src="{% static 'admin/js/tiptap_admin_extra.js' %}"></script>
