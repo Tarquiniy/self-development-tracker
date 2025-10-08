@@ -1,6 +1,49 @@
-/* minimal styles for fallback editor */
-.admin-tiptap-widget { margin: 8px 0; }
-.tiptap-toolbar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
-.tiptap-btn { background:#f8f9fa; border:1px solid #ddd; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:13px; }
-.tiptap-editor { min-height:360px; padding:12px; border-radius:6px; border:1px solid #e6e6e6; background:#fff; overflow:auto; }
-.tiptap-editor img { max-width:100%; height:auto; display:block; margin:8px 0; }
+/* backend/static/admin/css/tiptap_admin.css */
+/* Minimal, clean styles for admin TipTap widget + fallback */
+
+.admin-tiptap-widget {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgba(0,0,0,0.02);
+  margin-top: 8px;
+}
+
+.admin-tiptap-widget .tiptap-toolbar {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-bottom:8px;
+}
+
+.tiptap-btn {
+  background: #f4f4f8;
+  border: 1px solid #e3e6eb;
+  border-radius:6px;
+  padding:6px 8px;
+  cursor:pointer;
+  font-size:13px;
+}
+
+.tiptap-btn:hover { filter: brightness(0.98); }
+
+.tiptap-editor {
+  min-height: 220px;
+  padding: 10px;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  font-size: 14px;
+  line-height: 1.6;
+  outline: none;
+}
+
+.admin-tiptap-textarea {
+  display: none; /* keep textarea hidden because widget is used for editing */
+}
+
+/* Simple responsive */
+@media (prefers-color-scheme: dark) {
+  .admin-tiptap-widget { background: #111216; border-color: #222; color: #ddd; }
+  .tiptap-btn { background: #1b1d20; border-color: #2a2c30; color: #ddd; }
+  .tiptap-editor { background: transparent; color: #ddd; }
+}
