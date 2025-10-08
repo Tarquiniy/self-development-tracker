@@ -145,9 +145,10 @@ if TipTapWidget is None:
                 "admin/vendor/tiptap/tiptap-extension-link.umd.min.js",
                 "admin/vendor/tiptap/tiptap-extension-image.umd.min.js",
                 # local glue that will do initialization + graceful fallback
-                "admin/js/tiptap_admin_extra.js",
+                "admin/vendor/tiptap/tiptap-umd.js",
+                "admin/js/sdr_tiptap_admin_extra.js",
             )
-            css = {'all': ("admin/css/tiptap_admin.css",)}
+            css = {'all': ("admin/css/sdr_tiptap_admin.css",)}
 
 # -----------------------
 # Helpers
@@ -710,7 +711,8 @@ class PostAdmin(BasePostAdmin):
                     "admin/vendor/tiptap/tiptap-starter-kit.umd.min.js",
                     "admin/vendor/tiptap/tiptap-extension-link.umd.min.js",
                     "admin/vendor/tiptap/tiptap-extension-image.umd.min.js",
-                    "admin/js/tiptap_admin_extra.js",
+                    "admin/vendor/tiptap/tiptap-umd.js",
+                    "admin/js/sdr_tiptap_admin_extra.js",
                 ),
                 css={'all': ("admin/css/tiptap_admin.css",)}
             )
