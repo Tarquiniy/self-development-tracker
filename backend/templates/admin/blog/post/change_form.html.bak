@@ -1,14 +1,14 @@
-{% load static %}
 {% extends "admin/change_form.html" %}
 {% load static i18n %}
 
 {% block extrahead %}
   {{ block.super }}
   <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
-<script src="{% static 'admin/vendor/tiptap/tiptap-umd.js' %}"></script>
-<script src="{% static 'admin/js/sdr_tiptap_admin_extra.js' %}"></script>
-<link rel="stylesheet" href="{% static 'admin/css/sdr_tiptap_admin.css' %}">
-
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@tiptap/core@2.0.0-beta.153/dist/tiptap-core.umd.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@2.0.0-beta.143/dist/tiptap-starter-kit.umd.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@tiptap/extension-image@2.0.0-beta.37/dist/tiptap-extension-image.umd.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@tiptap/extension-link@2.0.0-beta.37/dist/tiptap-extension-link.umd.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@tiptap/extension-code-block-lowlight@2.0.0-beta.19/dist/tiptap-extension-code-block-lowlight.umd.min.js"></script>
   <script src="{% static 'admin/vendor/tiptap/tiptap-umd.js' %}"></script>
 <script src="{% static 'admin/js/sdr_tiptap_admin_extra.js' %}"></script>
 <link rel="stylesheet" href="{% static 'admin/css/sdr_tiptap_admin.css' %}">
