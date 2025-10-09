@@ -79,3 +79,4 @@ django_filebrowser_no_grappelli==4.0.2
 django-admin-sortable2==2.2.8
 filebrowser==1.2.0
 bleach==6.2.0
+django-extensions==4.1
