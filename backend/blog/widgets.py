@@ -5,8 +5,8 @@ Robust admin textarea widget for TipTap / fallback editor.
 Behaviour:
 - Renders a plain <textarea> with marker classes.
 - Renders a small widget container and an inline script that:
-  - tries to initialise TipTap using a conservative test (so it won't throw if TipTap is not globally available),
-  - if a global loader (window._sdr_tiptap_bootstrapOne) exists — calls it and defers to it,
+  - if a global loader exists (window._sdr_tiptap_bootstrapOne) — defers init to it,
+  - otherwise tries a conservative TipTap init only when StarterKit (schema) is present,
   - otherwise initialises a solid contentEditable fallback (toolbar, image upload, autosave hook and preview hook).
 - All attribute values are escaped safely. We protect against literal </textarea> in value.
 - Default data attributes:
@@ -113,8 +113,8 @@ class _BaseSimpleTextarea(forms.Widget):
         # Inline initializer script (idempotent)
         # Strategy:
         # 1) If global loader exists (window._sdr_tiptap_bootstrapOne) - call it for this textarea and exit.
-        # 2) Otherwise try a conservative tiptap init if obvious globals exist.
-        # 3) If that fails, initialise the fallback rich text (contentEditable toolbar + upload/autosave).
+        # 2) Otherwise try a conservative tiptap init only if StarterKit is present (to avoid "schema missing doc").
+        # 3) Otherwise initialize the fallback rich text (contentEditable toolbar + upload/autosave).
         #
         # The script avoids creating globals and uses 'use strict'. All potentially-throwing operations
         # are wrapped in try/catch to avoid breaking the admin page.
@@ -123,13 +123,13 @@ class _BaseSimpleTextarea(forms.Widget):
             '<script>(function(){\n'
             "  'use strict';\n"
             "  try {\n"
-            f'    var textarea = document.getElementById("{textarea_id}");\n'
+            f'    var textarea = document.getElementById(\"{textarea_id}\");\n'
             "    if (!textarea) return;\n"
-            "    // If global bootstrap function is present, defer to it (no duplicate heavy logic here)\n"
+            "    // If there is a global loader (sdr script), defer to it — it handles UMD + starter-kit loading reliably.\n"
             "    if (typeof window !== 'undefined' && window._sdr_tiptap_bootstrapOne && typeof window._sdr_tiptap_bootstrapOne === 'function') {\n"
             "      try { window._sdr_tiptap_bootstrapOne(textarea); return; } catch(e) { console && console.warn && console.warn('global bootstrapOne failed', e); }\n"
             "    }\n"
-            "    // Helper utilities (local only)\n"
+            "    // Local helpers (no globals)\n"
             "    function qs(sel, ctx){ return (ctx || document).querySelector(sel); }\n"
             "    function qsa(sel, ctx){ return Array.from((ctx || document).querySelectorAll(sel)); }\n"
             "    function getCookie(name) {\n"
@@ -147,9 +147,6 @@ class _BaseSimpleTextarea(forms.Widget):
             "      range.deleteContents(); range.insertNode(frag);\n"
             "      sel.removeAllRanges(); var newRange = document.createRange(); newRange.setStartAfter(frag.lastChild || frag); newRange.collapse(true); sel.addRange(newRange);\n"
             "    }\n"
-            "    function syncEditableToTextarea(ed, ta) {\n"
-            "      try { ta.value = ed.innerHTML; ta.dispatchEvent(new Event('change', {bubbles:true})); } catch(e) { console && console.warn && console.warn('sync failed', e); }\n"
-            "    }\n"
             "    async function uploadImage(file, uploadUrl) {\n"
             "      var fd = new FormData(); fd.append('file', file, file.name);\n"
             "      var csrf = getCookie('csrftoken');\n"
@@ -157,7 +154,9 @@ class _BaseSimpleTextarea(forms.Widget):
             "      if (!resp.ok) { var txt = ''; try{ txt = await resp.text(); }catch(e){}; throw new Error('Upload failed: ' + resp.status + ' ' + txt); }\n"
             "      var j = await resp.json(); return j && (j.url || (j.uploaded && j.uploaded[0] && j.uploaded[0].url)) || null;\n"
             "    }\n"
-            "\n"
+            "    function syncEditableToTextarea(ed, ta) {\n"
+            "      try { ta.value = ed.innerHTML; ta.dispatchEvent(new Event('change', {bubbles:true})); } catch(e) { console && console.warn && console.warn('sync failed', e); }\n"
+            "    }\n"
             "    // Fallback editor init (contentEditable + toolbar + upload + autosave)\n"
             "    function initFallbackForWidget(ta, widget) {\n"
             "      try {\n"
@@ -203,38 +202,35 @@ class _BaseSimpleTextarea(forms.Widget):
             "      } catch(e) { console && console.warn && console.warn('fallback editor init failed', e); return false; }\n"
             "    }\n"
             "\n"
-            "    // Conservative TipTap init attempt for single widget (only if obvious APIs exist)\n"
+            "    // Conservative TipTap init attempt for single widget\n"
+            "    // IMPORTANT: only attempt TipTap init locally if StarterKit (schema) is present to avoid 'schema missing doc' errors\n"
             "    function tryInitTipTapForWidget(ta, widget) {\n"
             "      try {\n"
-            "        var TipTapCore = (window.tiptap && window.tiptap.Editor) ? window.tiptap : (window.TipTap ? window.TipTap : null);\n"
-            "        var CoreEditor = null;\n"
-            "        if (window.tiptap && window.tiptap.Editor) CoreEditor = window.tiptap.Editor;\n            else if (window.tiptapCore && window.tiptapCore.Editor) CoreEditor = window.tiptapCore.Editor;\n            else if (window['@tiptap/core'] && window['@tiptap/core'].Editor) CoreEditor = window['@tiptap/core'].Editor;\n"
+            "        // require both Editor and StarterKit to be present (otherwise core-only leads to schema errors)\n"
+            "        var hasEditor = (window.tiptap && window.tiptap.Editor) || (window.tiptapCore && window.tiptapCore.Editor) || (window['@tiptap/core'] && window['@tiptap/core'].Editor);\n"
+            "        var hasStarter = (window.tiptap && window.tiptap.StarterKit) || (window.TipTap && window.TipTap.StarterKit) || (window['@tiptap/starter-kit']);\n"
+            "        if (!hasEditor || !hasStarter) return false;\n"
+            "        var CoreEditor = window.tiptap && window.tiptap.Editor ? window.tiptap.Editor : (window.tiptapCore && window.tiptapCore.Editor) || (window['@tiptap/core'] && window['@tiptap/core'].Editor);\n"
             "        if (!CoreEditor) return false;\n"
             "        var el = widget.querySelector('.tiptap-editor'); if (!el) { el = document.createElement('div'); el.className = 'tiptap-editor'; widget.appendChild(el); }\n"
-            "        var editor = new CoreEditor({ element: el, content: ta.value || '', onUpdate: function(payload){ try { var e = payload && payload.editor ? payload.editor : payload; var html = (e && typeof e.getHTML === 'function') ? e.getHTML() : (el && el.innerHTML) || ''; ta.value = html; ta.dispatchEvent(new Event('change', {bubbles:true})); } catch(e){ /* ignore */ } } });\n"
+            "        // Use StarterKit from global exports (most common UMD exposes window.tiptap.StarterKit)\n"
+            "        var Starter = (window.tiptap && window.tiptap.StarterKit) || (window.TipTap && window.TipTap.StarterKit) || (window['@tiptap/starter-kit'] && window['@tiptap/starter-kit'].default) || null;\n"
+            "        var extensions = [];\n"
+            "        if (Starter) {\n"
+            "          try { extensions.push(typeof Starter === 'function' ? Starter() : (Starter.default && typeof Starter.default === 'function' ? Starter.default() : Starter)); } catch(e) { try { extensions.push(Starter); } catch(_){} }\n"
+            "        }\n"
+            "        var editor = new CoreEditor({ element: el, content: ta.value || '', extensions: extensions, onUpdate: function(payload){ try { var e = payload && payload.editor ? payload.editor : payload; var html = (e && typeof e.getHTML === 'function') ? e.getHTML() : (el && el.innerHTML) || ''; ta.value = html; ta.dispatchEvent(new Event('change', {bubbles:true})); } catch(err) {} } });\n"
             "        widget._tiptap_editor = editor;\n"
-            "        widget.dataset._inited_for = ta.id;\n            return true;\n"
-            "      } catch(e) { console && console.warn && console.warn('TipTap init attempt failed, falling back', e); return false; }\n"
+            "        widget.dataset._inited_for = ta.id;\n"
+            "        return true;\n"
+            "      } catch(err) { console && console.warn && console.warn('TipTap init attempt failed, falling back', err); return false; }\n"
             "    }\n"
             "\n"
-            "    // bootstrap logic: prefer tiptap if available and healthy, otherwise fallback\n"
+            "    // bootstrap logic: prefer global loader, then conservative tiptap (only if StarterKit present), otherwise fallback\n"
             "    (function(){\n"
             "      try {\n"
             "        var widget = textarea.nextElementSibling && textarea.nextElementSibling.classList && textarea.nextElementSibling.classList.contains('admin-tiptap-widget') ? textarea.nextElementSibling : (textarea.parentNode && textarea.parentNode.querySelector ? textarea.parentNode.querySelector('.admin-tiptap-widget') : null);\n"
-            "        if (!widget) return;\n"
-            "        if (widget.dataset && widget.dataset._inited_for === textarea.id) return;\n"
-            "        var mode = (widget.dataset && widget.dataset.editor) ? widget.dataset.editor.toLowerCase() : 'auto';\n"
-            "        if (mode === 'fallback') { initFallbackForWidget(textarea, widget); return; }\n"
-            "        // if auto or tiptap: try conservative tiptap init first\n"
-            "        var tried = false;\n"
-            "        if (typeof window !== 'undefined' && (window.tiptap || window['@tiptap/core'] || window.tiptapCore)) {\n"
-            "          tried = tryInitTipTapForWidget(textarea, widget);\n"
-            "          if (tried) return;\n"
-            "        }\n"
-            "        // else fallback\n"
-            "        initFallbackForWidget(textarea, widget);\n"
-            "      } catch(e) { console && console.warn && console.warn('bootstrapOne failed', e); try { initFallbackForWidget(textarea, widget); } catch(_) {} }\n"
-            "    })();\n"
+            "        if (!widget) return;\n            if (widget.dataset && widget.dataset._inited_for === textarea.id) return;\n            var mode = (widget.dataset && widget.dataset.editor) ? widget.dataset.editor.toLowerCase() : 'auto';\n            if (mode === 'fallback') { initFallbackForWidget(textarea, widget); return; }\n            // if a global loader has become available meanwhile, call it\n            if (typeof window !== 'undefined' && window._sdr_tiptap_bootstrapOne && typeof window._sdr_tiptap_bootstrapOne === 'function') {\n              try { window._sdr_tiptap_bootstrapOne(textarea); return; } catch(e) { console && console.warn && console.warn('deferred global bootstrapOne failed', e); }\n            }\n            // Try conservative TipTap init only if StarterKit is present (to avoid schema errors)\n            var tried = false;\n            try {\n              var hasStarterNow = (window.tiptap && window.tiptap.StarterKit) || (window.TipTap && window.TipTap.StarterKit) || (window['@tiptap/starter-kit']);\n              if (hasStarterNow) {\n                tried = tryInitTipTapForWidget(textarea, widget);\n                if (tried) return;\n              }\n            } catch(e) { console && console.debug && console.debug('local tiptap attempt error', e); }\n            // fallback\n            initFallbackForWidget(textarea, widget);\n      } catch(e) { console && console.warn && console.warn('bootstrapOne failed', e); try { initFallbackForWidget(textarea, widget); } catch(_) {} }\n    })();\n"
             "\n"
             "  } catch (e) {\n"
             "    try { console && console.warn && console.warn('tiptap widget inline script top-level error', e); } catch(_){}\n"
