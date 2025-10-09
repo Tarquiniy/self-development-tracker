@@ -1,188 +1,209 @@
-// static/admin/js/tiptap-editor.js
-(function(){
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
-        }
-      }
-    }
-    return cookieValue;
-  }
+// static/admin/js/sdr_tiptap_admin_extra.js
+(function () {
+  if (window._sdr_tiptap_loader) return;
+  window._sdr_tiptap_loader = true;
 
-  function buildToolbar(Editor){
-    const wrapper = document.createElement('div');
-    wrapper.className = 'tiptap-toolbar';
-    const buttons = [
-      {cmd: 'bold', label: 'B'},
-      {cmd: 'italic', label: 'I'},
-      {cmd: 'strike', label: 'S'},
-      {cmd: 'bulletList', label: '• List'},
-      {cmd: 'orderedList', label: '1.'},
-      {cmd: 'heading', label: 'H2', attrs:{level:2}},
-      {cmd: 'blockquote', label: '"'},
-      {cmd: 'codeBlock', label: '</>'},
-      {cmd: 'link', label: 'Link'},
-      {cmd: 'image', label: 'Image'},
-    ];
-    buttons.forEach(b => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.innerText = b.label;
-      btn.className = 'tiptap-btn';
-      btn.addEventListener('click', function(ev){
-        ev.preventDefault();
-        if (b.cmd==='bold') Editor.chain().focus().toggleBold().run();
-        if (b.cmd==='italic') Editor.chain().focus().toggleItalic().run();
-        if (b.cmd==='strike') Editor.chain().focus().toggleStrike().run();
-        if (b.cmd==='bulletList') Editor.chain().focus().toggleBulletList().run();
-        if (b.cmd==='orderedList') Editor.chain().focus().toggleOrderedList().run();
-        if (b.cmd==='heading') Editor.chain().focus().toggleHeading(b.attrs).run();
-        if (b.cmd==='blockquote') Editor.chain().focus().toggleBlockquote().run();
-        if (b.cmd==='codeBlock') Editor.chain().focus().toggleCodeBlock().run();
-        if (b.cmd==='link') {
-          const url = prompt('URL');
-          if (url) Editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-        }
-        if (b.cmd==='image') {
-          const inp = document.createElement('input'); inp.type='file'; inp.accept='image/*';
-          inp.onchange = function(){
-            const f = inp.files[0];
-            uploadImage(f, Editor, window.TIPTAP_CONFIG.uploadUrl);
-          };
-          inp.click();
-        }
-      });
-      wrapper.appendChild(btn);
+  function qsa(sel, ctx) { return Array.from((ctx || document).querySelectorAll(sel)); }
+  function qs(sel, ctx) { return (ctx || document).querySelector(sel); }
+  const LOCAL_UMD = window.ADMIN_TIPTAP_UMD_PATH || '/static/admin/vendor/tiptap/tiptap-umd.js';
+
+  function loadScript(src, timeout = 8000) {
+    return new Promise((resolve, reject) => {
+      if (window.tiptap && window.tiptap.Editor) return resolve(true);
+      const s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.crossOrigin = 'anonymous';
+      let done = false;
+      s.onload = () => { done = true; setTimeout(() => resolve(true), 20); };
+      s.onerror = (e) => { if (!done) reject(new Error('Failed to load ' + src)); };
+      document.head.appendChild(s);
+      setTimeout(() => { if (!done) reject(new Error('Timeout loading ' + src)); }, timeout);
     });
-    return wrapper;
   }
 
-  async function uploadImage(file, Editor, uploadUrl){
-    const fd = new FormData(); fd.append('file', file);
-    const csrftoken = getCookie('csrftoken');
-    const resp = await fetch(uploadUrl, {method: 'POST', body: fd, headers: {'X-CSRFToken': csrftoken}});
-    const j = await resp.json();
-    if (j && j.success && j.url) {
-      Editor.chain().focus().setImage({ src: j.url }).run();
-    } else {
-      alert('Upload failed: ' + (j.error || JSON.stringify(j)));
+  function normalizeCandidates(raw) {
+    // produce candidate representations for an export:
+    // raw (as is), raw.default, raw() if function, raw.configure() if has configure
+    const res = [];
+    if (!raw && raw !== 0) return res;
+    res.push(raw);
+    if (raw.default && raw.default !== raw) res.push(raw.default);
+    try { if (typeof raw === 'function') res.push(raw); } catch(e) {}
+    try { if (typeof raw === 'function') { let inst = raw(); if (inst) res.push(inst); } } catch(e) {}
+    try { if (raw && typeof raw.configure === 'function') res.push(raw.configure()); } catch(e) {}
+    // unique
+    return res.filter((v,i,arr)=>v!=null && arr.indexOf(v)===i);
+  }
+
+  function tryCreateEditorWithExtensions(extensions) {
+    // try to construct a short-lived Editor to validate schema
+    try {
+      const Editor = (window.tiptap && window.tiptap.Editor) || (window.tiptapCore && window.tiptapCore.Editor) || (window['@tiptap/core'] && window['@tiptap/core'].Editor);
+      if (!Editor) { return { ok: false, err: new Error('Editor not found') }; }
+      // ephemeral element not attached to DOM
+      const el = document.createElement('div');
+      const inst = new Editor({ element: el, content: '', extensions: extensions });
+      // validate schema has top node 'doc'
+      const hasDoc = inst && inst.schema && inst.schema.nodes && inst.schema.nodes.doc;
+      // destroy editor if possible to avoid leaks
+      try { inst.destroy && inst.destroy(); } catch(e){/*ignore*/ }
+      return { ok: !!hasDoc, err: hasDoc ? null : new Error('schema missing doc') };
+    } catch (e) {
+      return { ok: false, err: e };
     }
   }
 
-  window.initAdminTipTap = function(){
-    const textareas = document.querySelectorAll('textarea[data-tiptap]');
-    if (!textareas.length) return;
-    textareas.forEach(function(textarea){
-      const uploadUrl = textarea.dataset.uploadUrl || '/admin/blog/media-library/';
-      const previewTokenUrl = textarea.dataset.previewTokenUrl || '/admin/blog/preview-token/';
-      window.TIPTAP_CONFIG = window.TIPTAP_CONFIG || {};
-      window.TIPTAP_CONFIG.uploadUrl = uploadUrl;
-      window.TIPTAP_CONFIG.previewTokenUrl = previewTokenUrl;
+  function buildExtensionCandidates(StarterKitRaw, ImageRaw) {
+    const starterCands = normalizeCandidates(StarterKitRaw);
+    const imageCands = normalizeCandidates(ImageRaw);
 
-      const content = textarea.value || '';
-      textarea.style.display = 'none';
+    const combos = [];
 
-      // ensure there is a hidden input for JSON
-      let jsonInput = document.getElementById('id_content_json');
-      if (!jsonInput) {
-        jsonInput = document.createElement('input');
-        jsonInput.type = 'hidden';
-        jsonInput.name = 'content_json';
-        jsonInput.id = 'id_content_json';
-        textarea.parentNode.insertBefore(jsonInput, textarea.nextSibling);
-      } else {
-        // preserve existing value (if any)
-        try {
-          const existing = document.getElementById('id_content_json').value;
-          if (existing) {
-            // try to hydrate editor content from JSON if available
-          }
-        } catch(e){}
+    // produce combinations: [starter, image], [starter], []
+    starterCands.forEach(s => {
+      // try with image variants
+      if (imageCands.length) {
+        imageCands.forEach(img => combos.push([s, img]));
       }
+      combos.push([s]);
+    });
 
-      const wrapper = document.createElement('div');
-      wrapper.className = 'admin-tiptap-wrapper';
+    // final fallback: no starter (probably won't work)
+    combos.push([]);
 
-      const toolbar = document.createElement('div'); toolbar.className = 'admin-tiptap-toolbar';
-      const editorEl = document.createElement('div'); editorEl.className = 'admin-tiptap-editor';
+    // unique combos by JSON-ish fingerprint (not perfect but ok)
+    const seen = new Set();
+    const uniq = combos.filter(c => {
+      const key = c.map(x => (x && x.name) || (x && x.constructor && x.constructor.name) || String(x)).join('|');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
-      textarea.parentNode.insertBefore(wrapper, textarea);
-      wrapper.appendChild(toolbar);
-      wrapper.appendChild(editorEl);
-      wrapper.appendChild(textarea);
+    return uniq;
+  }
 
-      const Editor = window['@tiptap/core'].Editor;
-      const StarterKit = window['@tiptap/starter-kit'].StarterKit;
-      const Image = window['@tiptap/extension-image'].Image;
-      const Link = window['@tiptap/extension-link'].Link;
-      const CodeBlock = window['@tiptap/extension-code-block-lowlight'].CodeBlockLowlight || null;
-
-      const extensions = [StarterKit, Image, Link];
-      if (CodeBlock) extensions.push(CodeBlock);
-
-      // Try to initialize content from content_json if present, otherwise HTML
-      let initContent = content;
-      const jsonVal = (document.getElementById('id_content_json') && document.getElementById('id_content_json').value) || null;
+  // attempt to find working extensions set and return it (or null)
+  function detectWorkingExtensions(StarterKitRaw, ImageRaw) {
+    const combos = buildExtensionCandidates(StarterKitRaw, ImageRaw);
+    for (let i = 0; i < combos.length; i++) {
+      const candidate = combos[i];
       try {
-        if (jsonVal) {
-          initContent = JSON.parse(jsonVal);
+        const res = tryCreateEditorWithExtensions(candidate);
+        console.debug('Trying candidate', i, candidate, '=>', res.ok, res.err && res.err.message);
+        if (res.ok) {
+          console.info('Found working TipTap extensions candidate at index', i);
+          return candidate;
         }
-      } catch(e) {
-        // ignore, fall back to html string
-        initContent = content;
+      } catch (e) {
+        console.warn('Candidate test error', e);
       }
+    }
+    return null;
+  }
 
+  function initFallback(textarea, widget) {
+    try {
+      const ed = widget.querySelector('.tiptap-editor') || (function(){ const d=document.createElement('div'); d.className='tiptap-editor'; widget.appendChild(d); return d; })();
+      ed.contentEditable = 'true';
+      ed.innerHTML = textarea.value || '';
+      function sync() { textarea.value = ed.innerHTML; textarea.dispatchEvent(new Event('change', { bubbles: true })); }
+      ed.addEventListener('input', sync);
+      widget.dataset._inited_for = textarea.id;
+      console.warn('TipTap fallback initialized (contentEditable).');
+      return true;
+    } catch (e) { console.warn('fallback failed', e); return false; }
+  }
+
+  function initTipTapWithGivenExtensions(textarea, widget, extensions) {
+    try {
+      const Editor = (window.tiptap && window.tiptap.Editor) || (window.tiptapCore && window.tiptapCore.Editor) || (window['@tiptap/core'] && window['@tiptap/core'].Editor);
+      if (!Editor) return false;
+      const el = widget.querySelector('.tiptap-editor') || (function(){ const d=document.createElement('div'); d.className='tiptap-editor'; widget.appendChild(d); return d; })();
       const editor = new Editor({
-        element: editorEl,
+        element: el,
+        content: textarea.value || '',
         extensions: extensions,
-        content: initContent,
-        onUpdate: ({editor}) => {
-          textarea.value = editor.getHTML();
-          try {
-            const doc = editor.getJSON();
-            jsonInput.value = JSON.stringify(doc);
-          } catch (e) {
-            console.warn('Could not serialize editor JSON', e);
+        onUpdate: ({ editor: e }) => {
+          let html = '';
+          try { html = typeof e.getHTML === 'function' ? e.getHTML() : (e.getHTML ? e.getHTML() : ''); } catch (err) {}
+          if (!html) html = el.innerHTML;
+          textarea.value = html || '';
+          textarea.dispatchEvent(new Event('change', { bubbles: true }));
+        },
+      });
+      widget._tiptap_editor = editor;
+      widget.dataset._inited_for = textarea.id;
+      console.info('TipTap initialized successfully (live).');
+      return true;
+    } catch (e) {
+      console.warn('TipTap live init failed', e);
+      return false;
+    }
+  }
+
+  async function bootstrapOne(textarea) {
+    let widget = textarea.nextElementSibling && textarea.nextElementSibling.classList && textarea.nextElementSibling.classList.contains('admin-tiptap-widget')
+      ? textarea.nextElementSibling
+      : (textarea.parentNode ? textarea.parentNode.querySelector('.admin-tiptap-widget') : null);
+
+    if (!widget) return;
+    if (widget.dataset._inited_for === textarea.id) return;
+
+    // try if already available
+    try {
+      if (window.tiptap && (window.tiptap.Editor || (window.tiptapCore && window.tiptapCore.Editor))) {
+        // detect best candidate on the fly
+        const StarterKitRaw = (window.tiptap && window.tiptap.StarterKit) || (window.TipTap && window.TipTap.StarterKit);
+        const ImageRaw = (window.tiptap && window.tiptap.Image) || (window.TipTap && window.TipTap.Image);
+        if (StarterKitRaw || ImageRaw) {
+          const good = detectWorkingExtensions(StarterKitRaw, ImageRaw);
+          if (good) {
+            if (initTipTapWithGivenExtensions(textarea, widget, good)) return;
+          }
+        } else {
+          // try generic init with whatever exists
+          if (initTipTapWithGivenExtensions(textarea, widget, [ (window.tiptap && window.tiptap.StarterKit) || (window.TipTap && window.TipTap.StarterKit) ])) {
+            return;
           }
         }
-      });
+      }
+    } catch (e) {
+      console.warn('Preload init attempt failed', e);
+    }
 
-      const tb = buildToolbar(editor);
-      toolbar.appendChild(tb);
+    // load UMD if needed
+    try {
+      await loadScript(LOCAL_UMD, 10000);
+    } catch (e) {
+      console.warn('UMD load failed', e);
+    }
 
-      let autosaveTimer = setInterval(function(){
-        const payload = {title: document.getElementById('id_title') ? document.getElementById('id_title').value : '', content: textarea.value};
-        fetch(previewTokenUrl, {method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken': getCookie('csrftoken')}, body: JSON.stringify(payload)}).then(()=>{}).catch(()=>{});
-      }, 20000);
+    // after load, attempt detection again
+    try {
+      const StarterKitRaw = (window.tiptap && window.tiptap.StarterKit) || (window.TipTap && window.TipTap.StarterKit);
+      const ImageRaw = (window.tiptap && window.tiptap.Image) || (window.TipTap && window.TipTap.Image);
+      const good = detectWorkingExtensions(StarterKitRaw, ImageRaw);
+      if (good) {
+        if (initTipTapWithGivenExtensions(textarea, widget, good)) return;
+      }
+    } catch (e) {
+      console.warn('Post-load detection failed', e);
+    }
 
-      textarea.addEventListener('blur', function(){
-        textarea.value = editor.getHTML();
-        try {
-          const doc = editor.getJSON();
-          jsonInput.value = JSON.stringify(doc);
-        } catch (e) {}
-      });
-
-      editorEl.addEventListener('drop', function(ev){
-        ev.preventDefault();
-        const f = ev.dataTransfer.files && ev.dataTransfer.files[0];
-        if (f && f.type.startsWith('image/')) {
-          uploadImage(f, editor, uploadUrl);
-        }
-      });
-
-    });
-  };
-
-  if (document.readyState === 'complete' || document.readyState === 'interactive'){
-    setTimeout(window.initAdminTipTap, 10);
-  } else {
-    document.addEventListener('DOMContentLoaded', window.initAdminTipTap);
+    // final fallback
+    initFallback(textarea, widget);
   }
+
+  function bootstrapAll() {
+    qsa('textarea.admin-tiptap-textarea').forEach(bootstrapOne);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootstrapAll);
+  } else {
+    bootstrapAll();
+  }
+
 })();
