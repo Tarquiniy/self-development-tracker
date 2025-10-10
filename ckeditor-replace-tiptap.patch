@@ -1,0 +1,763 @@
+diff --git a/backend/blog/widgets.py b/backend/blog/widgets.py
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/backend/blog/widgets.py
+@@ -0,0 +1,222 @@
++#!/usr/bin/env python
++# -*- coding: utf-8 -*-
++"""
++backend/blog/widgets.py
++CKEditor 5 admin widget replacement for TipTap.
++
++This file defines CKEditorWidget which renders a textarea fallback and a wrapper
++with JSON config that the client-side init script reads to create CKEditor.
++"""
++import json
++from django import forms
++from django.utils.html import escape
++from django.utils.safestring import mark_safe
++
++CKEDITOR_CDN = "https://cdn.jsdelivr.net/npm/@ckeditor/ckeditor5-build-classic@44.3.0/build/ckeditor.js"
++
++
++class CKEditorWidget(forms.Textarea):
++    """
++    Django form widget that renders a textarea plus a div wrapper with
++    data-ckeditor-config which the admin/frontend JS will use to initialize CKEditor.
++    """
++    template_name = None  # we're rendering manually in render()
++
++    class Media:
++        js = (
++            CKEDITOR_CDN,
++            "admin/js/ckeditor_upload_adapter.js",
++            "admin/js/ckeditor_init.js",
++        )
++        css = {
++            "all": (
++                "admin/css/ckeditor_admin.css",
++            )
++        }
++
++    def __init__(self, attrs=None):
++        base_attrs = {
++            "class": "admin-advanced-editor admin-ckeditor-textarea",
++            # defaults that can be overridden via attrs
++            "data-editor": "auto",  # 'auto'|'ckeditor'|'fallback'
++            "data-upload-url": "/api/blog/media/upload/",
++            "data-preview-token-url": "/admin/posts/preview-token/",
++        }
++        if attrs:
++            base_attrs.update(attrs)
++        super().__init__(attrs=base_attrs)
++
++    def get_config(self, name, value, attrs):
++        """
++        Return a serializable config dict for the client-side initializer.
++        """
++        final = attrs or {}
++        cfg = {
++            "editor": final.get("data-editor", "auto"),
++            "uploadUrl": final.get("data-upload-url", "/api/blog/media/upload/"),
++            "previewTokenUrl": final.get("data-preview-token-url", "/admin/posts/preview-token/"),
++            "name": name,
++            "id": final.get("id") or f"id_{name}",
++            "initialData": value or "",
++        }
++        extra = final.get("data-ckeditor-extra")
++        if extra:
++            try:
++                if isinstance(extra, str):
++                    extra_parsed = json.loads(extra)
++                else:
++                    extra_parsed = extra
++                if isinstance(extra_parsed, dict):
++                    cfg.update(extra_parsed)
++            except Exception:
++                pass
++        return cfg
++
++    def render(self, name, value, attrs=None, renderer=None):
++        final_attrs = self.build_attrs(self.attrs, attrs or {})
++        textarea_value = escape(self.format_value(value) or "")
++        # ensure id exists
++        final_id = final_attrs.get("id") or f"id_{name}"
++        final_attrs["id"] = final_id
++
++        # build attribute string safely
++        parts = []
++        for k, v in final_attrs.items():
++            if v is None or v == "":
++                continue
++            parts.append(f'{k}="{escape(str(v))}"')
++        attr_str = " ".join(parts)
++
++        config = self.get_config(name, value, final_attrs)
++        try:
++            cfg_json = json.dumps(config, ensure_ascii=False)
++        except Exception:
++            cfg_json = "{}"
++
++        # wrapper for the visual editor — JS will replace the inner container with CKEditor instance
++        wrapper_html = (
++            f'<div class="admin-ckeditor-widget" data-ckeditor-config="{escape(cfg_json)}" '
++            f'id="{escape(final_id)}_ckeditor_wrapper">'
++            f'<div class="ckeditor-toolbar"></div><div class="ckeditor-editor" contenteditable="true"></div>'
++            f'</div>'
++        )
++
++        textarea_html = f'<textarea {attr_str}>{textarea_value}</textarea>'
++        noscript_html = '<noscript><p>Включите JavaScript для использования визуального редактора; доступен простой textarea.</p></noscript>'
++
++        # Combine: textarea first (keeps forms working without JS), then wrapper
++        html = textarea_html + wrapper_html + noscript_html
++        return mark_safe(html)
++
++
++class SimpleEditorWidget(CKEditorWidget):
++    """
++    Alias for CKEditorWidget — kept for backward compatibility with code that
++    referenced SimpleEditorWidget.
++    """
++    pass
++
++
++__all__ = ["CKEditorWidget", "SimpleEditorWidget"]
++
+diff --git a/backend/blog/admin.py b/backend/blog/admin.py
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/backend/blog/admin.py
+@@ -0,0 +1,426 @@
++#!/usr/bin/env python
++# -*- coding: utf-8 -*-
++"""
++backend/blog/admin.py
++Полный admin.py с интеграцией CKEditor5 (замена TipTap).
++Основная логика оригинального admin.py сохранена; произведены целенаправленные
++замены виджетов/атрибутов/Media (tiptap -> ckeditor).
++Источник оригинала: файл, присланный пользователем.
++"""
++import os
++import json
++import logging
++from django import forms
++from django.contrib import admin
++from django.contrib.admin.sites import AlreadyRegistered
++from django.urls import reverse, path
++from django.shortcuts import render, redirect
++from django.http import JsonResponse, Http404, HttpResponse
++from django.utils import timezone
++from django.views.decorators.http import require_http_methods, require_POST, require_GET
++from django.core.files.storage import default_storage
++from django.core.files.base import ContentFile
++from django.core import signing
++from django.contrib.auth import get_user_model
++from django.db.models.functions import TruncDate
++from django.db.models import Count
++from django.db import models
++from django.utils.safestring import mark_safe
++from django.utils.html import escape
++from django.conf import settings
++
++logger = logging.getLogger(__name__)
++
++# Optional reversion support
++try:
++    import reversion
++    from reversion.admin import VersionAdmin
++except Exception:
++    reversion = None
++    class VersionAdmin(admin.ModelAdmin):
++        pass
++
++# Defensive import of models (log exceptions but don't crash import)
++try:
++    from .models import (
++        Post, Category, Tag, Comment,
++        PostReaction, PostView, PostAttachment, MediaLibrary
++    )
++except Exception:
++    Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = None
++    logger.exception("Could not import blog.models")
++
++# Optional admin form (project-provided)
++try:
++    from .forms import PostAdminForm as ProjectPostAdminForm
++except Exception:
++    ProjectPostAdminForm = None
++
++CustomUser = get_user_model()
++PREVIEW_SALT = "post-preview-salt"
++
++
++# --------------------------------------------------------------------
++# REPLACEMENT: CKEditor widget(s)
++# --------------------------------------------------------------------
++CKEDITOR_CDN = "https://cdn.jsdelivr.net/npm/@ckeditor/ckeditor5-build-classic@44.3.0/build/ckeditor.js"
++
++
++class CKEditorWidget(forms.Textarea):
++    """
++    Универсальный виджет, который рендерит <textarea> (fallback для форм без JS)
++    плюс специальный wrapper, содержащий data-ckeditor-config JSON
++    прочитатель JS инициализирует CKEditor на wrapper.
++    """
++    template_name = None
++
++    class Media:
++        js = (
++            CKEDITOR_CDN,
++            "admin/js/ckeditor_upload_adapter.js",
++            "admin/js/ckeditor_init.js",
++        )
++        css = {
++            "all": (
++                "admin/css/ckeditor_admin.css",
++            )
++        }
++
++    def __init__(self, attrs=None):
++        base_attrs = {
++            "class": "admin-ckeditor-textarea",
++            "rows": 20,
++            "data-editor": "auto",  # 'auto'|'ckeditor'|'fallback'
++            "data-upload-url": "/api/blog/media/upload/",
++        }
++        if attrs:
++            base_attrs.update(attrs)
++        super().__init__(attrs=base_attrs)
++
++    def get_config(self, name, value, attrs):
++        final = attrs or {}
++        cfg = {
++            "editor": final.get("data-editor", "auto"),
++            "uploadUrl": final.get("data-upload-url", "/api/blog/media/upload/"),
++            "previewTokenUrl": final.get("data-preview-token-url", "/admin/posts/preview-token/"),
++            "name": name,
++            "id": final.get("id") or f"id_{name}",
++            "initialData": value or "",
++        }
++        extra = final.get("data-ckeditor-extra")
++        if extra:
++            try:
++                if isinstance(extra, str):
++                    extra_parsed = json.loads(extra)
++                else:
++                    extra_parsed = extra
++                if isinstance(extra_parsed, dict):
++                    cfg.update(extra_parsed)
++            except Exception:
++                pass
++        return cfg
++
++    def render(self, name, value, attrs=None, renderer=None):
++        final_attrs = self.build_attrs(self.attrs, attrs or {})
++        textarea_value = escape(self.format_value(value) or "")
++        final_id = final_attrs.get("id") or f"id_{name}"
++        final_attrs["id"] = final_id
++
++        parts = []
++        for k, v in final_attrs.items():
++            if v is None or v == "":
++                continue
++            parts.append(f'{k}="{escape(str(v))}"')
++        attr_str = " ".join(parts)
++
++        config = self.get_config(name, value, final_attrs)
++        try:
++            cfg_json = json.dumps(config, ensure_ascii=False)
++        except Exception:
++            cfg_json = "{}"
++
++        wrapper_html = (
++            f'<div class="admin-ckeditor-widget" data-ckeditor-config="{escape(cfg_json)}" '
++            f'id="{escape(final_id)}_ckeditor_wrapper">'
++            f'<div class="ckeditor-toolbar"></div><div class="ckeditor-editor" contenteditable="true"></div>'
++            f'</div>'
++        )
++
++        textarea_html = f'<textarea {attr_str}>{textarea_value}</textarea>'
++        noscript_html = '<noscript><p>Включите JavaScript для использования визуального редактора; доступен простой textarea.</p></noscript>'
++
++        html = textarea_html + wrapper_html + noscript_html
++        return mark_safe(html)
++
++
++class AdminRichTextWidget(CKEditorWidget):
++    """
++    Alias for CKEditorWidget; used where ранее использовался TipTap-specific widget.
++    """
++    pass
++
++
++# --------------------------------------------------------------------
++# Post admin integration (форма и регистрация)
++# --------------------------------------------------------------------
++if ProjectPostAdminForm is None:
++    class PostAdminForm(forms.ModelForm):
++        class Meta:
++            model = Post
++            fields = "__all__"
++            widgets = {
++                "content": AdminRichTextWidget(),
++            }
++else:
++    class PostAdminForm(ProjectPostAdminForm):
++        class Meta(ProjectPostAdminForm.Meta):
++            widgets = getattr(ProjectPostAdminForm.Meta, "widgets", {})
++            widgets.update({
++                "content": AdminRichTextWidget(),
++            })
++
++
++class PostAdmin(VersionAdmin):
++    form = PostAdminForm
++
++    list_display = ("title", "status", "author", "published_at")
++    list_filter = ("status", "published_at")
++    search_fields = ("title", "content")
++    ordering = ("-published_at",)
++
++try:
++    if Post is not None:
++        try:
++            admin.site.unregister(Post)
++        except Exception:
++            pass
++        admin.site.register(Post, PostAdmin)
++except AlreadyRegistered:
++    pass
++
++
++# --------------------------------------------------------------------
++# Helper views preserved/ported from original admin.py
++# --------------------------------------------------------------------
++@require_GET
++def admin_media_library(request):
++    if request.method != "GET":
++        return HttpResponse(status=405)
++    attachments = []
++    try:
++        if MediaLibrary is not None:
++            qs = MediaLibrary.objects.order_by("-created_at")[:200]
++            attachments = [{
++                "id": a.id,
++                "title": getattr(a, "title", "") or "",
++                "file": getattr(a.file, "url", "") if getattr(a, "file", None) else ""
++            } for a in qs]
++    except Exception:
++        logger.exception("Failed to load media attachments")
++
++    if request.GET.get("format") == "json":
++        return JsonResponse({"attachments": attachments})
++    return render(request, "admin/media_library.html", {"attachments": attachments})
++
++
++@require_POST
++def admin_media_upload(request):
++    """
++    Upload endpoint used by ckeditor_upload_adapter.js
++    Returns JSON: { "url": "<public url>" }
++    """
++    if request.method != "POST":
++        return HttpResponse(status=405)
++    if not request.FILES:
++        return JsonResponse({"error": "no file"}, status=400)
++    f = request.FILES.get("file")
++    if not f:
++        return JsonResponse({"error": "file key missing"}, status=400)
++    try:
++        base_path = getattr(settings, "BLOG_MEDIA_UPLOAD_PATH", "uploads/blog/")
++        filename = f.name
++        save_path = os.path.join(base_path, filename)
++        save_path = default_storage.save(save_path, ContentFile(f.read()))
++        try:
++            url = default_storage.url(save_path)
++        except Exception:
++            url = save_path
++        if MediaLibrary is not None:
++            try:
++                ml = MediaLibrary.objects.create(title=filename, file=save_path)
++            except Exception:
++                ml = None
++        return JsonResponse({"url": url})
++    except Exception as e:
++        logger.exception("admin_media_upload failed")
++        return JsonResponse({"error": str(e)}, status=500)
++
++
++@require_POST
++def admin_preview_token(request):
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except Exception:
++        payload = {}
++    token = signing.dumps({
++        "payload": payload,
++        "created": timezone.now().isoformat()
++    }, salt=PREVIEW_SALT)
++    return JsonResponse({"token": token})
++
++
++@require_POST
++def admin_autosave(request):
++    try:
++        data = json.loads(request.body.decode("utf-8") or "{}")
++    except Exception:
++        data = {}
++    try:
++        if Post is None:
++            return JsonResponse({"error": "Post model not available"}, status=500)
++        title = data.get("title") or "Untitled"
++        content = data.get("content") or ""
++        post_id = data.get("id")
++        if post_id:
++            p = Post.objects.filter(pk=post_id).first()
++            if not p:
++                return JsonResponse({"error": "not found"}, status=404)
++            p.title = title
++            p.content = content
++            p.status = "draft"
++            p.save()
++            return JsonResponse({"success": True, "id": p.id})
++        else:
++            p = Post.objects.create(title=title, content=content, status="draft", author=request.user if request.user.is_authenticated else None)
++            return JsonResponse({"success": True, "id": p.id})
++    except Exception as e:
++        logger.exception("admin_autosave failed")
++        return JsonResponse({"error": str(e)}, status=500)
++
++
++@require_GET
++def admin_dashboard_stats(request):
++    try:
++        days = int(request.GET.get("days", "30"))
++    except Exception:
++        days = 30
++    data = {}
++    try:
++        if Post is not None:
++            qs = Post.objects.filter(published_at__isnull=False)
++            counts = qs.annotate(d=TruncDate("published_at")).values("d").annotate(n=Count("id")).order_by("d")
++            labels = []
++            posts = []
++            for c in counts:
++                labels.append(c["d"].isoformat())
++                posts.append(c["n"])
++            data = {"labels": labels, "posts": posts}
++    except Exception:
++        logger.exception("admin_dashboard_stats failed")
++    return JsonResponse(data)
++
++
++def get_admin_urls():
++    return [
++        path("media-library/", admin_media_library, name="admin-media-library"),
++        path("media/upload/", admin_media_upload, name="admin-media-upload"),
++        path("preview-token/", admin_preview_token, name="admin-preview-token"),
++        path("autosave/", admin_autosave, name="admin-autosave"),
++        path("dashboard-stats/", admin_dashboard_stats, name="admin-dashboard-stats"),
++    ]
++
++
++admin_urls = get_admin_urls()
++
++# Конец admin.py
++
+diff --git a/static/admin/js/ckeditor_upload_adapter.js b/static/admin/js/ckeditor_upload_adapter.js
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/static/admin/js/ckeditor_upload_adapter.js
+@@ -0,0 +1,165 @@
++// static/admin/js/ckeditor_upload_adapter.js
++// CKEditor 5 — Django / generic upload adapter
++// - Берёт CSRF из cookie (если есть) и добавляет X-CSRFToken
++// - Использует credentials: 'include' чтобы куки проходили
++// - Ожидает JSON-ответ: { "url": "<public file url>" }
++// - Поддерживает abort (через fetch controller)
++
++(function () {
++  "use strict";
++
++  // Получить cookie (Django csrftoken)
++  function getCookie(name) {
++    if (!document.cookie) return null;
++    const cookies = document.cookie.split(";").map(c => c.trim());
++    for (let i = 0; i < cookies.length; i++) {
++      const parts = cookies[i].split("=");
++      if (parts[0] === name) {
++        return decodeURIComponent(parts.slice(1).join("="));
++      }
++    }
++    return null;
++  }
++
++  class DjangoUploadAdapter {
++    constructor(loader, uploadUrl) {
++      this.loader = loader;
++      this.uploadUrl = uploadUrl || "/api/blog/media/upload/";
++      this.xhr = null;
++      this._abortController = null;
++    }
++
++    upload() {
++      return this.loader.file.then(file => {
++        return new Promise((resolve, reject) => {
++          this._abortController = new AbortController();
++          const signal = this._abortController.signal;
++
++          const formData = new FormData();
++          formData.append("file", file);
++
++          const headers = {};
++          const csrfToken = getCookie("csrftoken");
++          if (csrfToken) {
++            headers["X-CSRFToken"] = csrfToken;
++          }
++
++          fetch(this.uploadUrl, {
++            method: "POST",
++            body: formData,
++            credentials: "include",
++            headers: headers,
++            signal: signal,
++          }).then(response => {
++            if (!response.ok) {
++              return response.text().then(text => {
++                let msg = text || response.statusText;
++                try {
++                  const j = JSON.parse(text);
++                  if (j && j.error) msg = j.error;
++                } catch (e) { }
++                throw new Error(msg);
++              });
++            }
++            return response.json();
++          }).then(json => {
++            const fileUrl = json.url || json.file_url || (json.data && json.data.url);
++            if (!fileUrl) {
++              reject("Upload response did not contain a file URL.");
++              return;
++            }
++            resolve({ default: fileUrl });
++          }).catch(err => {
++            if (err.name === "AbortError") {
++              reject("Upload aborted");
++            } else {
++              console.error("Upload error:", err);
++              reject(err.message || "Upload failed");
++            }
++          });
++        });
++      });
++    }
++
++    abort() {
++      if (this._abortController) {
++        this._abortController.abort();
++      }
++    }
++  }
++
++  function DjangoUploadAdapterPlugin(editor) {
++    editor.plugins.get("FileRepository").createUploadAdapter = (loader) => {
++      const configuredUrl = (editor.config.get && editor.config.get("uploader") && editor.config.get("uploader").uploadUrl) || null;
++      return new DjangoUploadAdapter(loader, configuredUrl);
++    };
++  }
++
++  window.DjangoUploadAdapterPlugin = DjangoUploadAdapterPlugin;
++})();
++
+diff --git a/static/admin/js/ckeditor_init.js b/static/admin/js/ckeditor_init.js
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/static/admin/js/ckeditor_init.js
+@@ -0,0 +1,200 @@
++// static/admin/js/ckeditor_init.js
++// Инициализация CKEditor 5 для textarea/wrapper
++
++(function () {
++  "use strict";
++
++  // Utility: parse JSON safely
++  function safeParseJSON(s) {
++    try {
++      return JSON.parse(s);
++    } catch (e) {
++      return null;
++    }
++  }
++
++  // Keep references to editors to destroy if needed
++  const INSTANCES = {};
++
++  function initEditorForWrapper(wrapper) {
++    if (!wrapper) return;
++
++    // already initialized?
++    if (wrapper._ckeditorInitialized) return;
++    wrapper._ckeditorInitialized = true;
++
++    const cfgAttr = wrapper.getAttribute("data-ckeditor-config");
++    let cfg = {};
++    if (cfgAttr) cfg = safeParseJSON(cfgAttr) || {};
++
++    // find the textarea by id (cfg.id)
++    const id = cfg.id || wrapper.id.replace(/_ckeditor_wrapper$/, "");
++    const textarea = document.getElementById(id);
++    if (!textarea) {
++      console.error("CKEditor init: textarea not found for wrapper", wrapper, "expected id:", id);
++      return;
++    }
++
++    // Prepare editor config
++    const editorConfig = {
++      extraPlugins: [window.DjangoUploadAdapterPlugin],
++      toolbar: [
++        "heading", "|",
++        "bold", "italic", "underline", "link", "blockQuote", "|",
++        "bulletedList", "numberedList", "|",
++        "insertTable", "imageUpload", "mediaEmbed", "|",
++        "undo", "redo"
++      ],
++      // If backend URL provided in cfg, pass to adapter via editor.config
++      uploader: {
++        uploadUrl: cfg.uploadUrl || textarea.getAttribute("data-upload-url") || "/api/blog/media/upload/"
++      },
++    };
++
++    // If ClassicEditor is not loaded, log and bail — textarea remains usable
++    if (!window.ClassicEditor || typeof window.ClassicEditor.create !== "function") {
++      console.warn("CKEditor script not loaded (ClassicEditor missing). Editor not initialized for", id);
++      return;
++    }
++
++    // Create editor
++    window.ClassicEditor.create(textarea, editorConfig)
++      .then(editor => {
++        // store instance for cleanup
++        INSTANCES[id] = editor;
++
++        // sync initial data: ensure textarea has current editor data (editor will handle it,
++        // but we also want to keep textarea in sync for non-JS form submission)
++        textarea.value = editor.getData();
++
++        // on change: update underlying textarea
++        editor.model.document.on("change:data", () => {
++          textarea.value = editor.getData();
++        });
++
++        // If the form containing textarea is submitted, destroy the editor after sync
++        const form = textarea.closest("form");
++        if (form) {
++          // prevent multiple bindings
++          if (!form._ckeditorSubmitBound) {
++            form.addEventListener("submit", () => {
++              // ensure latest data is in textarea
++              try {
++                Object.keys(INSTANCES).forEach(k => {
++                  const ed = INSTANCES[k];
++                  if (ed && ed.getData) {
++                    const ta = document.getElementById(k);
++                    if (ta) ta.value = ed.getData();
++                  }
++                });
++              } catch (e) { /* ignore */ }
++            }, { once: false });
++            form._ckeditorSubmitBound = true;
++          }
++        }
++      })
++      .catch(err => {
++        console.error("CKEditor initialization error for", id, err);
++      });
++  }
++
++  // Initialize on DOMContentLoaded
++  document.addEventListener("DOMContentLoaded", () => {
++    // Find all wrappers
++    const wrappers = document.querySelectorAll(".admin-ckeditor-widget");
++    wrappers.forEach(w => initEditorForWrapper(w));
++  });
++
++  // If admin dynamically injects fields (e.g. inlines), observe DOM additions
++  const observer = new MutationObserver(mutations => {
++    for (const m of mutations) {
++      if (!m.addedNodes) continue;
++      m.addedNodes.forEach(node => {
++        if (!(node instanceof HTMLElement)) return;
++        // new wrapper added
++        if (node.classList && node.classList.contains("admin-ckeditor-widget")) {
++          initEditorForWrapper(node);
++        }
++        // or wrapper inside added subtree
++        const inside = node.querySelectorAll && node.querySelectorAll(".admin-ckeditor-widget");
++        if (inside && inside.length) {
++          inside.forEach(w => initEditorForWrapper(w));
++        }
++      });
++    }
++  });
++
++  observer.observe(document.documentElement || document.body, {
++    childList: true,
++    subtree: true
++  });
++
++  // Cleanup on page unload (optional)
++  window.addEventListener("beforeunload", () => {
++    try {
++      Object.keys(INSTANCES).forEach(k => {
++        const ed = INSTANCES[k];
++        if (ed && ed.destroy) ed.destroy();
++      });
++    } catch (e) { /* ignore */ }
++  });
++})();
++
+diff --git a/static/admin/css/ckeditor_admin.css b/static/admin/css/ckeditor_admin.css
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/static/admin/css/ckeditor_admin.css
+@@ -0,0 +1,39 @@
++/* static/admin/css/ckeditor_admin.css */
++.admin-ckeditor-widget {
++  border: 1px solid rgba(0,0,0,0.08);
++  border-radius: 6px;
++  padding: 6px;
++  background: #fff;
++  margin-top: 6px;
++}
++
++.admin-ckeditor-widget .ckeditor-editor {
++  min-height: 220px;
++  max-height: 80vh;
++  overflow: auto;
++}
++
++.admin-ckeditor-widget .ckeditor-toolbar {
++  margin-bottom: 6px;
++}
++
++.admin-ckeditor-textarea {
++  display: block;
++  width: 100%;
++  min-height: 120px;
++  box-sizing: border-box;
++  margin-bottom: 6px;
++}
++
++.admin-ckeditor-textarea.visually-hidden {
++  position: absolute !important;
++  height: 1px; width: 1px;
++  overflow: hidden;
++  clip: rect(1px, 1px, 1px, 1px);
++  white-space: nowrap;
++}

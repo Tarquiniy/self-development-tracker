@@ -1,0 +1,42 @@
+/* static/admin/css/ckeditor_admin.css
+   Базовые стили для админ-интеграции CKEditor.
+   Не обязателен, но улучшает отображение wrapper'а/toolbar в админке.
+*/
+
+.admin-ckeditor-widget {
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 6px;
+  padding: 6px;
+  background: #fff;
+  margin-top: 6px;
+}
+
+/* Высота области редактора будет адаптироваться; зададим минимальную видимую высоту */
+.admin-ckeditor-widget .ckeditor-editor {
+  min-height: 220px;
+  max-height: 80vh;
+  overflow: auto;
+}
+
+/* Toolbar placeholder (если CKEditor не рисует ее автоматически) */
+.admin-ckeditor-widget .ckeditor-toolbar {
+  margin-bottom: 6px;
+}
+
+/* Стили textarea fallback (скрывает textarea визуально, но оставляет в DOM) */
+.admin-ckeditor-textarea {
+  display: block;
+  width: 100%;
+  min-height: 120px;
+  box-sizing: border-box;
+  margin-bottom: 6px;
+}
+
+/* Если нужно полностью скрыть textarea (но оставить для форм), можно добавить класс .visually-hidden */
+.admin-ckeditor-textarea.visually-hidden {
+  position: absolute !important;
+  height: 1px; width: 1px;
+  overflow: hidden;
+  clip: rect(1px, 1px, 1px, 1px);
+  white-space: nowrap;
+}
