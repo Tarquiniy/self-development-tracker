@@ -320,6 +320,9 @@ def admin_dashboard_stats(request):
     return JsonResponse(data)
 
 
+# --------------------------------------------------------------------
+# Compatibility wrappers / view aliases expected by core.urls
+# --------------------------------------------------------------------
 def _get_post_modeladmin():
     """
     Возвращает зарегистрированный ModelAdmin для Post или None.
@@ -366,12 +369,51 @@ def blog_post_changelist(request, *args, **kwargs):
     # Fallback to admin's changelist view implementation if available via admin.site
     if view_fn is None:
         # Try to use the admin site's default change list view via admin.site
-        # This is an unlikely fallback but keep it safe
         try:
             return admin.site.index(request)
         except Exception:
             return HttpResponse(status=501)
     return view_fn(request, *args, **kwargs)
+
+
+# Compatibility: views expected by backend/core/urls.py
+# These variables are imported in core/urls.py; expose them here.
+# They are simple aliases/delegates to the implementations above or to small page views.
+
+# admin_media_library_view: page (HTML) or JSON view for media library
+admin_media_library_view = admin_media_library
+
+# admin_dashboard_view: page view for admin dashboard (renders template; template may fetch stats via AJAX)
+def admin_dashboard_view(request):
+    """
+    Render the admin dashboard page. The page can query admin_dashboard_stats via AJAX.
+    """
+    try:
+        return render(request, "admin/dashboard.html", {})
+    except Exception:
+        # If template missing, return a simple placeholder page
+        return HttpResponse("<h1>Admin dashboard</h1><p>Dashboard template not found. Create admin/dashboard.html to enable.</p>")
+
+# admin_stats_api: JSON API endpoint returning dashboard stats
+admin_stats_api = admin_dashboard_stats
+
+# admin_post_update_view: endpoint for admin post updates (reuse autosave/update handler)
+def admin_post_update_view(request, *args, **kwargs):
+    """
+    Endpoint used by admin UI to update post content or perform quick saves.
+    Delegates to admin_autosave for now (keeps compatibility).
+    """
+    # If it's a POST, forward to autosave handler
+    if request.method == "POST":
+        return admin_autosave(request)
+    # For GET or other methods, return 405
+    return HttpResponse(status=405)
+
+# admin_autosave_view: alias for autosave endpoint
+admin_autosave_view = admin_autosave
+
+# admin_preview_token_view: alias for preview token endpoint
+admin_preview_token_view = admin_preview_token
 
 
 def get_admin_urls():
