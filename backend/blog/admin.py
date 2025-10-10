@@ -332,3 +332,46 @@ def get_admin_urls():
 
 admin_urls = get_admin_urls()
 
+def _get_post_modeladmin():
+    """Возвращает зарегистрированный ModelAdmin для Post или None."""
+    try:
+        return admin.site._registry.get(Post)
+    except Exception:
+        return None
+
+def blog_post_add(request, *args, **kwargs):
+    """
+    Compatibility view named 'blog_post_add'.
+    Delegates to PostAdmin.add_view(request).
+    """
+    model_admin = _get_post_modeladmin()
+    if not model_admin:
+        raise Http404("Post admin not registered")
+    # admin views expect the ModelAdmin instance methods bound to the admin site.
+    return model_admin.add_view(request, *args, **kwargs)
+
+def blog_post_change(request, object_id, *args, **kwargs):
+    """
+    Compatibility view named 'blog_post_change'.
+    Delegates to PostAdmin.change_view(request, object_id).
+    """
+    model_admin = _get_post_modeladmin()
+    if not model_admin:
+        raise Http404("Post admin not registered")
+    return model_admin.change_view(request, str(object_id), *args, **kwargs)
+
+def blog_post_changelist(request, *args, **kwargs):
+    """
+    Compatibility view named 'blog_post_changelist'.
+    Delegates to PostAdmin.changelist_view(request).
+    """
+    model_admin = _get_post_modeladmin()
+    if not model_admin:
+        raise Http404("Post admin not registered")
+    # Some older code calls PostAdmin.changelist_view, some ModelAdmin uses changelist_view
+    # use getattr to be robust.
+    view_fn = getattr(model_admin, "changelist_view", None) or getattr(model_admin, "change_list_view", None)
+    if not view_fn:
+        # fallback: call changelist_view name used by ModelAdmin
+        return HttpResponse(status=501)  # not implemented on server-side
+    return view_fn(request, *args, **kwargs)
