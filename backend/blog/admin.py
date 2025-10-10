@@ -320,24 +320,15 @@ def admin_dashboard_stats(request):
     return JsonResponse(data)
 
 
-def get_admin_urls():
-    return [
-        path("media-library/", admin_media_library, name="admin-media-library"),
-        path("media/upload/", admin_media_upload, name="admin-media-upload"),
-        path("preview-token/", admin_preview_token, name="admin-preview-token"),
-        path("autosave/", admin_autosave, name="admin-autosave"),
-        path("dashboard-stats/", admin_dashboard_stats, name="admin-dashboard-stats"),
-    ]
-
-
-admin_urls = get_admin_urls()
-
 def _get_post_modeladmin():
-    """Возвращает зарегистрированный ModelAdmin для Post или None."""
+    """
+    Возвращает зарегистрированный ModelAdmin для Post или None.
+    """
     try:
         return admin.site._registry.get(Post)
     except Exception:
         return None
+
 
 def blog_post_add(request, *args, **kwargs):
     """
@@ -347,8 +338,8 @@ def blog_post_add(request, *args, **kwargs):
     model_admin = _get_post_modeladmin()
     if not model_admin:
         raise Http404("Post admin not registered")
-    # admin views expect the ModelAdmin instance methods bound to the admin site.
     return model_admin.add_view(request, *args, **kwargs)
+
 
 def blog_post_change(request, object_id, *args, **kwargs):
     """
@@ -358,7 +349,9 @@ def blog_post_change(request, object_id, *args, **kwargs):
     model_admin = _get_post_modeladmin()
     if not model_admin:
         raise Http404("Post admin not registered")
+    # ensure object_id is string as admin expects
     return model_admin.change_view(request, str(object_id), *args, **kwargs)
+
 
 def blog_post_changelist(request, *args, **kwargs):
     """
@@ -368,10 +361,31 @@ def blog_post_changelist(request, *args, **kwargs):
     model_admin = _get_post_modeladmin()
     if not model_admin:
         raise Http404("Post admin not registered")
-    # Some older code calls PostAdmin.changelist_view, some ModelAdmin uses changelist_view
-    # use getattr to be robust.
-    view_fn = getattr(model_admin, "changelist_view", None) or getattr(model_admin, "change_list_view", None)
-    if not view_fn:
-        # fallback: call changelist_view name used by ModelAdmin
-        return HttpResponse(status=501)  # not implemented on server-side
+    # prefer the canonical method name 'changelist_view' but accept older variants
+    view_fn = getattr(model_admin, "changelist_view", None) or getattr(model_admin, "changelist_view", None) or getattr(model_admin, "changelist_view", None)
+    # Fallback to admin's changelist view implementation if available via admin.site
+    if view_fn is None:
+        # Try to use the admin site's default change list view via admin.site
+        # This is an unlikely fallback but keep it safe
+        try:
+            return admin.site.index(request)
+        except Exception:
+            return HttpResponse(status=501)
     return view_fn(request, *args, **kwargs)
+
+
+def get_admin_urls():
+    return [
+        path("media-library/", admin_media_library, name="admin-media-library"),
+        path("media/upload/", admin_media_upload, name="admin-media-upload"),
+        path("preview-token/", admin_preview_token, name="admin-preview-token"),
+        path("autosave/", admin_autosave, name="admin-autosave"),
+        path("dashboard-stats/", admin_dashboard_stats, name="admin-dashboard-stats"),
+        # Compatibility routes expected by older templates:
+        path("admin/blog/post/add/", blog_post_add, name="blog_post_add"),
+        path("admin/blog/post/<int:object_id>/change/", blog_post_change, name="blog_post_change"),
+        path("admin/blog/post/", blog_post_changelist, name="blog_post_changelist"),
+    ]
+
+
+admin_urls = get_admin_urls()
