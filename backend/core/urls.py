@@ -10,11 +10,11 @@ from django.conf.urls.static import static
 from .admin import custom_admin_site
 from blog import views as blog_views
 from django.http import Http404
-
 import logging
+
 logger = logging.getLogger(__name__)
 
-# Import Post model defensively (used by compatibility wrappers)
+# Попытка импортировать модель Post (используется в совместимых wrapper'ах)
 try:
     from blog.models import Post
 except Exception:
@@ -22,13 +22,10 @@ except Exception:
     logger.exception("Could not import blog.models.Post for compatibility URL wrappers")
 
 # -----------------------
-# Compatibility wrappers
-# These ensure that URLs with names blog_post_add, blog_post_change, blog_post_changelist
-# exist regardless of ordering/import problems elsewhere in the project.
-# They delegate to the registered ModelAdmin for Post (if present).
+# Compatibility wrappers: гарантируем существование имен:
+# 'blog_post_add', 'blog_post_change', 'blog_post_changelist'
 # -----------------------
 def _get_post_modeladmin():
-    """Return ModelAdmin instance for Post or None."""
     try:
         if Post is None:
             return None
@@ -38,44 +35,28 @@ def _get_post_modeladmin():
         return None
 
 def blog_post_add(request, *args, **kwargs):
-    """
-    Compatibility view named 'blog_post_add'.
-    Delegates to PostAdmin.add_view(request).
-    """
     model_admin = _get_post_modeladmin()
     if not model_admin:
-        # If not registered, return 404 to avoid NoReverseMatch later
         raise Http404("Post admin not available")
     return model_admin.add_view(request, *args, **kwargs)
 
 def blog_post_change(request, object_id, *args, **kwargs):
-    """
-    Compatibility view named 'blog_post_change'.
-    Delegates to PostAdmin.change_view(request, object_id).
-    """
     model_admin = _get_post_modeladmin()
     if not model_admin:
         raise Http404("Post admin not available")
     return model_admin.change_view(request, str(object_id), *args, **kwargs)
 
 def blog_post_changelist(request, *args, **kwargs):
-    """
-    Compatibility view named 'blog_post_changelist'.
-    Delegates to PostAdmin.changelist_view(request).
-    """
     model_admin = _get_post_modeladmin()
     if not model_admin:
         raise Http404("Post admin not available")
-    # prefer standard method name, fall back sensibly
-    view_fn = getattr(model_admin, "changelist_view", None) or getattr(model_admin, "changelist_view", None)
+    view_fn = getattr(model_admin, "changelist_view", None)
     if not callable(view_fn):
-        # last resort: use admin.site.index to show admin index
         return admin.site.index(request)
     return view_fn(request, *args, **kwargs)
 
 # -----------------------
-# Try to import admin helper views from blog.admin (if available).
-# core/urls.py will still work even if blog.admin import fails.
+# Попробуем импортировать удобные view'ы из blog.admin (если есть)
 # -----------------------
 admin_media_library_view = None
 admin_dashboard_view = None
@@ -93,10 +74,9 @@ try:
     admin_autosave_view = getattr(blog_admin_mod, "admin_autosave_view", getattr(blog_admin_mod, "admin_autosave", None))
     admin_preview_token_view = getattr(blog_admin_mod, "admin_preview_token_view", getattr(blog_admin_mod, "admin_preview_token", None))
 except Exception:
-    # ignore import errors — we have compatibility wrappers above
     logger.exception("Could not import blog.admin module (continuing without it)")
 
-# If admin_media_library_view is not provided, fallback to blog.views.MediaLibraryView if present
+# Fallback for media library view if not provided
 if admin_media_library_view is None:
     try:
         from blog.views import MediaLibraryView
@@ -105,30 +85,28 @@ if admin_media_library_view is None:
         admin_media_library_view = None
 
 # -----------------------
-# URL patterns
-# Note: compatibility post routes must be registered *before* admin.site.urls
-# so they are matched prior to admin catch-all.
+# Собираем urlpatterns — ВАЖНО: совместимые admin post пути регистрируем до admin.site.urls
 # -----------------------
 urlpatterns = []
 
-# media-library route registered first (as in your previous setup)
+# media library path (registered before admin)
 if admin_media_library_view:
     urlpatterns.append(path('admin/media-library/', admin_media_library_view, name='admin-media-library'))
 else:
     urlpatterns.append(path('admin/media-library/', TemplateView.as_view(template_name='admin/media_library_unavailable.html'), name='admin-media-library'))
 
-# Compatibility routes for older templates/links (guaranteed to exist)
+# compatibility post admin routes
 urlpatterns += [
     path('admin/blog/post/add/', blog_post_add, name='blog_post_add'),
     path('admin/blog/post/<int:object_id>/change/', blog_post_change, name='blog_post_change'),
     path('admin/blog/post/', blog_post_changelist, name='blog_post_changelist'),
 ]
 
-# Normal app routes and admin registration
+# --- Подключаем сторонние маршруты и сам admin ---
 urlpatterns += [
     path('grappelli/', include('grappelli.urls')),
-    # Custom admin site
-    path("admin/", custom_admin_site.urls),
+    # Подключаем custom_admin_site под namespace 'admin' через include(..., namespace='admin')
+    path("admin/", include((custom_admin_site.urls, "admin"), namespace="admin")),
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', LoginView.as_view(), name='login'),
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
@@ -136,11 +114,11 @@ urlpatterns += [
     path('summernote/', include('django_summernote.urls')),
     path('api/auth/profile/', ProfileView.as_view(), name='profile'),
     path('preview/<str:token>/', blog_views.preview_by_token, name='post-preview'),
-    # Root redirect (so GET / doesn't 404). Change target if you want a public homepage.
+    # Корень — редирект на админ (избегаем 404 на "/")
     path('', RedirectView.as_view(url=reverse_lazy('admin:index'))),
 ]
 
-# Optional admin helpers (if present)
+# Optional admin helpers
 if admin_dashboard_view:
     urlpatterns.append(path('admin/dashboard/', admin_dashboard_view, name='admin-dashboard'))
 if admin_stats_api:
