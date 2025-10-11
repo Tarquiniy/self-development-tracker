@@ -1,0 +1,222 @@
+{% extends "admin/change_form.html" %}
+{% load static i18n %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'admin/css/post_edit_enhanced.css' %}">
+  <script src="{% static 'admin/js/post_edit_enhanced.js' %}"></script>
+{% endblock %}
+
+{% block field_sets %}
+<div class="post-edit-container">
+  <!-- Header with quick actions -->
+  <div class="edit-header">
+    <div class="header-left">
+      <h1>
+        {% if original %}
+          ✏️ Редактирование: {{ original.title }}
+        {% else %}
+          📝 Создание нового поста
+        {% endif %}
+      </h1>
+      <div class="post-info">
+        {% if original %}
+          <span class="info-item">🆔 ID: {{ original.id }}</span>
+          <span class="info-item">📅 Создан: {{ original.created_at|date:"d.m.Y H:i" }}</span>
+          <span class="info-item">🔄 Обновлен: {{ original.updated_at|date:"d.m.Y H:i" }}</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="header-actions">
+      <button type="submit" name="_save" class="btn btn-primary">
+        💾 Сохранить
+      </button>
+      <button type="submit" name="_continue" class="btn btn-secondary">
+        🔄 Сохранить и продолжить
+      </button>
+      <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-outline">
+        ← Назад к списку
+      </a>
+    </div>
+  </div>
+
+  <!-- Main content grid -->
+  <div class="edit-grid">
+    <!-- Left column - Main content -->
+    <div class="main-column">
+      <!-- Title and Slug -->
+      <div class="card">
+        <div class="card-header">
+          <h3>📌 Основная информация</h3>
+        </div>
+        <div class="card-body">
+          {% for field in adminform %}
+            {% if field.name in 'title,slug' %}
+              <div class="form-row{% if field.errors %} errors{% endif %}">
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text %}
+                  <div class="help">{{ field.help_text|safe }}</div>
+                {% endif %}
+                {% if field.errors %}
+                  <div class="error">{{ field.errors }}</div>
+                {% endif %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Content Editor -->
+      <div class="card">
+        <div class="card-header">
+          <h3>📝 Содержание</h3>
+          <div class="editor-tools">
+            <button type="button" class="btn-tool" id="auto-save-toggle" title="Автосохранение">
+              💾 Auto
+            </button>
+            <button type="button" class="btn-tool" id="word-count-btn" title="Статистика">
+              📊 Статистика
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          {% for field in adminform %}
+            {% if field.name == 'content' %}
+              <div class="form-row editor-container">
+                {{ field }}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Excerpt -->
+      <div class="card">
+        <div class="card-header">
+          <h3>📋 Краткое описание</h3>
+          <small>Отображается в превью и SEO</small>
+        </div>
+        <div class="card-body">
+          {% for field in adminform %}
+            {% if field.name == 'excerpt' %}
+              <div class="form-row">
+                {{ field }}
+                <div class="char-counter">
+                  <span id="excerpt-counter">0</span>/320 символов
+                </div>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Right column - Sidebar -->
+    <div class="sidebar-column">
+      <!-- Publication Status -->
+      <div class="card">
+        <div class="card-header">
+          <h3>🚀 Публикация</h3>
+        </div>
+        <div class="card-body">
+          {% for field in adminform %}
+            {% if field.name in 'status,published_at,author' %}
+              <div class="form-row">
+                {{ field.label_tag }}
+                {{ field }}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Categories & Tags -->
+      <div class="card">
+        <div class="card-header">
+          <h3>🏷️ Классификация</h3>
+        </div>
+        <div class="card-body">
+          {% for field in adminform %}
+            {% if field.name in 'categories,tags' %}
+              <div class="form-row">
+                {{ field.label_tag }}
+                {{ field }}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Featured Images -->
+      <div class="card">
+        <div class="card-header">
+          <h3>🖼️ Изображения</h3>
+        </div>
+        <div class="card-body">
+          {% for field in adminform %}
+            {% if field.name in 'featured_image,og_image' %}
+              <div class="form-row">
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.value %}
+                  <div class="image-preview">
+                    <img src="{{ field.value }}" alt="Preview" onerror="this.style.display='none'">
+                  </div>
+                {% endif %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- SEO Settings -->
+      <div class="card">
+        <div class="card-header">
+          <h3>🔍 SEO Настройки</h3>
+        </div>
+        <div class="card-body">
+          {% for field in adminform %}
+            {% if field.name in 'meta_title,meta_description' %}
+              <div class="form-row">
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.name == 'meta_description' %}
+                  <div class="char-counter">
+                    <span id="meta-desc-counter">0</span>/160 символов
+                  </div>
+                {% endif %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="card">
+        <div class="card-header">
+          <h3>⚡ Быстрые действия</h3>
+        </div>
+        <div class="card-body quick-actions">
+          <button type="button" id="preview-btn" class="btn-action">
+            👁️ Предпросмотр
+          </button>
+          <button type="button" id="generate-slug" class="btn-action">
+            🔗 Генерировать slug
+          </button>
+          <button type="button" id="fill-meta" class="btn-action">
+            📝 Заполнить SEO
+          </button>
+          <a href="{% url 'admin:blog_medialibrary_changelist' %}" class="btn-action" target="_blank">
+            🗂️ Медиатека
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block submit_buttons_bottom %}
+<!-- Hidden - we moved submit buttons to header -->
+{% endblock %}

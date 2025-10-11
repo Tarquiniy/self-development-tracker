@@ -1,6 +1,0 @@
-cat > static/admin/css/sdr_tiptap_admin.css <<'CSS'
-.admin-tiptap-widget { border:1px solid #ddd; border-radius:8px; padding:8px; background:#fff; margin-top:8px; }
-.tiptap-toolbar { display:flex; gap:6px; margin-bottom:8px; }
-.tiptap-editor { min-height:220px; padding:10px; font-size:14px; }
-.admin-tiptap-textarea { display:none; }
-@media (prefers-color-scheme: dark) { .admin-tiptap-widget { background:#101214; color:#ddd } }

@@ -19,6 +19,7 @@ from django.db.models import Count
 from django.db import models
 from django.utils.safestring import mark_safe
 from django.utils.html import escape
+from django.template.loader import render_to_string
 
 logger = logging.getLogger(__name__)
 
@@ -45,72 +46,103 @@ CustomUser = get_user_model()
 PREVIEW_SALT = "post-preview-salt"
 
 # -----------------------
-# Helpers
+# Custom Admin Form with Enhanced UX
 # -----------------------
-def get_admin_change_url_for_obj(obj, site_name=None):
-    if obj is None:
-        return None
-    try:
-        viewname = f"{obj._meta.app_label}_{obj._meta.model_name}_change"
-    except Exception:
-        return None
-    candidates = []
-    if site_name:
-        candidates.append(site_name)
-    candidates.append("admin")
-    for ns in candidates:
-        try:
-            return reverse(f"{ns}:{viewname}", args=[obj.pk])
-        except Exception:
-            continue
-    try:
-        return reverse(viewname, args=[obj.pk])
-    except Exception:
-        return None
+class PostAdminForm(forms.ModelForm):
+    class Meta:
+        model = Post
+        fields = '__all__'
+        widgets = {
+            'excerpt': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Краткое описание поста...'}),
+            'meta_description': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Мета-описание для SEO...'}),
+        }
 
-def _pretty_change_message(raw):
-    if not raw:
-        return ""
-    try:
-        parsed = json.loads(raw)
-        return json.dumps(parsed, ensure_ascii=False)
-    except Exception:
-        try:
-            return raw.encode("utf-8", errors="ignore").decode("unicode_escape")
-        except Exception:
-            return str(raw)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Add CSS classes for styling
+        self.fields['title'].widget.attrs.update({
+            'class': 'post-title-field',
+            'placeholder': 'Введите заголовок поста...'
+        })
+        self.fields['slug'].widget.attrs.update({
+            'class': 'post-slug-field',
+            'placeholder': 'url-slug...'
+        })
 
 # -----------------------
-# Admin classes
+# Enhanced Admin Classes
 # -----------------------
 class BasePostAdmin(VersionAdmin):
-    change_form_template = None
-
-    list_display = ("title", "status", "author", "published_at")
-    list_filter = ("status", "published_at") if Post is not None else ()
-    search_fields = ("title", "content") if Post is not None else ()
+    form = PostAdminForm
+    change_form_template = 'admin/blog/post/change_form_enhanced.html'
+    
+    # Modern list display
+    list_display = ("title", "status_badge", "author", "published_at", "reading_time_display", "actions_column")
+    list_filter = ("status", "published_at", "categories", "tags") if Post is not None else ()
+    search_fields = ("title", "excerpt", "content", "meta_description")
     prepopulated_fields = {"slug": ("title",)} if Post is not None else {}
     date_hierarchy = "published_at"
     ordering = ("-published_at",)
     filter_horizontal = ("categories", "tags") if Post is not None else ()
-    actions = ["make_published", "make_draft", "duplicate_post"]
-
+    actions = ["make_published", "make_draft", "duplicate_post", "update_seo_meta"]
+    
+    # Enhanced fieldsets with better grouping
     fieldsets = (
-        ("Основная информация", {"fields": ("title", "slug", "author", "status", "published_at")}),
-        ("Содержание", {"fields": ("excerpt", "content", "featured_image")}),
-        ("Категории и теги", {"fields": ("categories", "tags")}),
-        ("SEO", {"fields": ("meta_title", "meta_description", "og_image"), "classes": ("collapse",)}),
+        ("Основное содержание", {
+            'fields': ('title', 'slug', 'content', 'excerpt'),
+            'classes': ('main-content',)
+        }),
+        ("Визуальные элементы", {
+            'fields': ('featured_image', 'og_image'),
+            'classes': ('visual-elements', 'collapse')
+        }),
+        ("Классификация", {
+            'fields': ('categories', 'tags'),
+            'classes': ('classification',)
+        }),
+        ("Настройки публикации", {
+            'fields': ('author', 'status', 'published_at'),
+            'classes': ('publication-settings',)
+        }),
+        ("SEO оптимизация", {
+            'fields': ('meta_title', 'meta_description'),
+            'classes': ('seo-settings', 'collapse')
+        }),
     )
 
+    def status_badge(self, obj):
+        status_colors = {
+            'draft': 'gray',
+            'published': 'green', 
+            'archived': 'orange'
+        }
+        color = status_colors.get(obj.status, 'gray')
+        return mark_safe(f'<span class="status-badge status-{color}">{obj.get_status_display()}</span>')
+    status_badge.short_description = "Статус"
+    status_badge.admin_order_field = 'status'
+
+    def reading_time_display(self, obj):
+        return f"{obj.reading_time} мин"
+    reading_time_display.short_description = "Время чтения"
+
+    def actions_column(self, obj):
+        return mark_safe(f'''
+            <div class="action-buttons">
+                <a href="{reverse('admin:blog_post_change', args=[obj.id])}" class="button edit-btn">✏️</a>
+                <a href="{obj.get_absolute_url()}" target="_blank" class="button view-btn">👁️</a>
+            </div>
+        ''')
+    actions_column.short_description = "Действия"
+
     def make_published(self, request, queryset):
-        updated = queryset.update(status="published")
+        updated = queryset.update(status="published", published_at=timezone.now())
         self.message_user(request, f"{updated} постов опубликовано.")
-    make_published.short_description = "Опубликовать выбранные"
+    make_published.short_description = "📢 Опубликовать выбранные"
 
     def make_draft(self, request, queryset):
         updated = queryset.update(status="draft")
         self.message_user(request, f"{updated} постов переведено в черновики.")
-    make_draft.short_description = "Перевести в черновики"
+    make_draft.short_description = "📝 Перевести в черновики"
 
     def duplicate_post(self, request, queryset):
         created = 0
@@ -123,422 +155,181 @@ class BasePostAdmin(VersionAdmin):
             p.save()
             created += 1
         self.message_user(request, f"Создано {created} копий.")
-    duplicate_post.short_description = "Создать копии"
+    duplicate_post.short_description = "🔁 Создать копии"
+
+    def update_seo_meta(self, request, queryset):
+        updated = 0
+        for post in queryset:
+            if not post.meta_title:
+                post.meta_title = post.title
+                post.save()
+                updated += 1
+        self.message_user(request, f"SEO мета-заголовки обновлены для {updated} постов.")
+    update_seo_meta.short_description = "🔍 Обновить SEO мета-данные"
+
+    class Media:
+        css = {
+            'all': ('admin/css/post_admin_enhanced.css',)
+        }
+        js = (
+            'admin/js/post_admin_enhanced.js',
+        )
 
 
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("title", "slug", "post_count")
+    list_display = ("title", "slug", "post_count", "created_at")
     prepopulated_fields = {"slug": ("title",)}
+    search_fields = ("title", "description")
+    
     def post_count(self, obj):
-        try:
-            return obj.posts.count()
-        except Exception:
-            return 0
+        count = obj.posts.count()
+        return mark_safe(f'<span class="badge">{count}</span>')
     post_count.short_description = "Постов"
 
 
 class TagAdmin(admin.ModelAdmin):
     list_display = ("title", "slug", "post_count")
     prepopulated_fields = {"slug": ("title",)}
+    search_fields = ("title",)
+    
     def post_count(self, obj):
-        try:
-            return obj.posts.count()
-        except Exception:
-            return 0
+        count = obj.posts.count()
+        return mark_safe(f'<span class="badge">{count}</span>')
     post_count.short_description = "Постов"
 
 
 class CommentAdmin(admin.ModelAdmin):
-    list_display = ("shorter_name", "post_link", "user", "short_content", "is_public", "is_moderated", "created_at")
-    list_editable = ("is_public", "is_moderated")
-    def shorter_name(self, obj): return getattr(obj, "name", "")[:30]
+    list_display = ("author_name", "post_link", "short_content", "status_badges", "created_at")
+    list_filter = ("is_public", "is_moderated", "created_at")
+    search_fields = ("name", "email", "content")
+    actions = ["approve_comments", "reject_comments"]
+    
+    def author_name(self, obj):
+        return obj.name or f"User #{obj.user_id}" if obj.user else "Anonymous"
+    author_name.short_description = "Автор"
+    
     def post_link(self, obj):
         try:
-            post = getattr(obj, "post", None)
-            site_name = getattr(custom_admin_site, "name", None) if custom_admin_site else None
-            url = get_admin_change_url_for_obj(post, site_name=site_name)
-            if post and url:
-                from django.utils.html import format_html
-                return format_html('<a href="{}">{}</a>', url, getattr(post, "title", ""))
-        except Exception:
-            pass
-        return "-"
+            url = reverse('admin:blog_post_change', args=[obj.post.id])
+            return mark_safe(f'<a href="{url}">{obj.post.title}</a>')
+        except:
+            return "-"
+    post_link.short_description = "Пост"
+    
     def short_content(self, obj):
-        txt = getattr(obj, "content", "") or ""
-        return txt[:100] + ("..." if len(txt) > 100 else "")
-
-
-class PostReactionAdmin(admin.ModelAdmin):
-    list_display = ("post", "likes_count", "updated_at")
-    def likes_count(self, obj):
-        try:
-            return obj.likes_count()
-        except Exception:
-            return 0
-
-
-class MediaLibraryAdmin(admin.ModelAdmin):
-    list_display = ("title", "uploaded_by", "uploaded_at", "post_link")
-    def post_link(self, obj):
-        try:
-            if getattr(obj, "post", None):
-                site_name = getattr(custom_admin_site, "name", None) if custom_admin_site else None
-                url = get_admin_change_url_for_obj(obj.post, site_name=site_name)
-                from django.utils.html import format_html
-                if url:
-                    return format_html('<a href="{}">{}</a>', url, obj.post.title)
-        except Exception:
-            pass
-        return "-"
-    def changelist_view(self, request, extra_context=None):
-        return redirect("admin-media-library")
-
-# -----------------------
-# Views (exported)
-# -----------------------
-@require_http_methods(["GET", "POST"])
-def admin_media_library_view(request):
-    if not request.user.is_staff:
-        raise Http404("permission denied")
-
-    if request.method == "POST":
-        upload = request.FILES.get("file") or request.FILES.get("image")
-        title = request.POST.get("title") or (upload.name if upload else "")
-        if not upload:
-            return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
-        if PostAttachment is None:
-            return JsonResponse({'success': False, 'error': 'PostAttachment model not configured'}, status=500)
-        try:
-            att = PostAttachment()
-            att.title = title
-            try:
-                att.uploaded_by = request.user
-            except Exception:
-                pass
-            att.uploaded_at = timezone.now()
-            saved_path = default_storage.save(f'post_attachments/{timezone.now().strftime("%Y/%m/%d")}/{upload.name}', ContentFile(upload.read()))
-            try:
-                if hasattr(att, 'file'):
-                    att.file.name = saved_path
-            except Exception:
-                pass
-            att.save()
-            url = default_storage.url(saved_path)
-            return JsonResponse({'success': True, 'id': getattr(att, 'id', None), 'url': url, 'title': att.title})
-        except Exception:
-            logger.exception("Upload failed")
-            return JsonResponse({'success': False, 'error': 'upload_failed'}, status=500)
-
-    attachments = PostAttachment.objects.all().order_by('-uploaded_at')[:500] if PostAttachment is not None else []
-    is_xhr = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json'
-    if is_xhr:
-        data = [{'id': a.id, 'title': a.title or os.path.basename(getattr(a.file, 'name', '')), 'url': getattr(a.file, 'url', '')} for a in attachments]
-        return JsonResponse({'attachments': data})
-    context = {'attachments': attachments}
-    return render(request, 'admin/media_library.html', context)
-
-
-@require_POST
-def admin_preview_token_view(request):
-    if not request.user.is_staff:
-        return JsonResponse({'detail': 'permission denied'}, status=403)
-    try:
-        payload = json.loads(request.body.decode('utf-8') or '{}')
-        package = {
-            'title': payload.get('title', ''),
-            'content': payload.get('content', ''),
-            'excerpt': payload.get('excerpt', ''),
-            'featured_image': payload.get('featured_image', ''),
-            'generated_by': request.user.pk,
-            'generated_at': timezone.now().isoformat(),
-        }
-        token = signing.dumps(package, salt=PREVIEW_SALT)
-        return JsonResponse({'token': token})
-    except Exception:
-        logger.exception("Preview token failed")
-        return JsonResponse({'detail': 'error'}, status=500)
-
-
-@require_POST
-def admin_autosave_view(request):
-    if not request.user.is_staff:
-        return JsonResponse({'success': False, 'message': 'permission denied'}, status=403)
-    try:
-        payload = json.loads(request.body.decode('utf-8') or '{}')
-    except Exception:
-        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
-
-    post_id = payload.get('id')
-    if post_id:
-        post = Post.objects.filter(pk=post_id).first() if Post is not None else None
-        if not post and Post is not None:
-            post = Post(author=request.user, status='draft')
-    else:
-        post = Post(author=request.user, status='draft') if Post is not None else None
-
-    if post is None:
-        return JsonResponse({'success': False, 'message': 'Post model not available'}, status=500)
-
-    for f in ('title', 'excerpt', 'content', 'featured_image'):
-        if f in payload:
-            setattr(post, f, payload[f])
-    if payload.get('published_at'):
-        from django.utils.dateparse import parse_datetime, parse_date
-        dt = parse_datetime(payload['published_at']) or parse_date(payload['published_at'])
-        if dt:
-            post.published_at = dt
-
-    try:
-        post.save()
-        try:
-            if reversion:
-                with reversion.create_revision():
-                    reversion.set_user(request.user)
-                    reversion.set_comment("Autosave")
-        except Exception:
-            logger.debug("reversion skipped", exc_info=True)
-        return JsonResponse({'success': True, 'id': post.id})
-    except Exception:
-        logger.exception("Autosave failed")
-        return JsonResponse({'success': False, 'message': 'save_failed'}, status=500)
-
-
-@require_POST
-def admin_post_update_view(request):
-    if not request.user.is_staff:
-        return JsonResponse({'success': False, 'message': 'permission denied'}, status=403)
-    try:
-        data = json.loads(request.body.decode('utf-8') or '{}')
-    except Exception:
-        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
-
-    post_id = data.get('post_id') or data.get('id')
-    field = data.get('field')
-    value = data.get('value')
-    if not post_id or not field:
-        return JsonResponse({'success': False, 'message': 'Missing data'}, status=400)
-    ALLOWED = {'title', 'status', 'published_at'}
-    if field not in ALLOWED:
-        return JsonResponse({'success': False, 'message': 'Field not allowed'}, status=400)
-    try:
-        post = Post.objects.get(pk=post_id)
-    except Exception:
-        return JsonResponse({'success': False, 'message': 'Post not found'}, status=404)
-    if field == 'published_at':
-        from django.utils.dateparse import parse_datetime, parse_date
-        dt = parse_datetime(value) or parse_date(value)
-        if not dt:
-            return JsonResponse({'success': False, 'message': 'Invalid datetime'}, status=400)
-        post.published_at = dt
-    else:
-        setattr(post, field, value)
-    try:
-        post.save()
-        return JsonResponse({'success': True, 'post_id': post.id, 'field': field, 'value': getattr(post, field)})
-    except Exception:
-        logger.exception("Inline update failed")
-        return JsonResponse({'success': False, 'message': 'save_failed'}, status=500)
-
-
-@require_GET
-def admin_stats_api(request):
-    if not request.user.is_staff:
-        return JsonResponse({'detail': 'permission denied'}, status=403)
-    try:
-        days = int(request.GET.get('days', 30))
-    except Exception:
-        days = 30
-    if days <= 0 or days > 365:
-        days = 30
-    now = timezone.now()
-    start = now - timezone.timedelta(days=days - 1)
-
-    posts_qs = []
-    comments_qs = []
-    views_qs = []
-    try:
-        if Post is not None:
-            posts_qs = (Post.objects.filter(created_at__date__gte=start.date())
-                        .annotate(day=TruncDate('created_at'))
-                        .values('day').annotate(count=Count('id')).order_by('day'))
-    except Exception:
-        posts_qs = []
-    try:
-        if Comment is not None:
-            comments_qs = (Comment.objects.filter(created_at__date__gte=start.date())
-                        .annotate(day=TruncDate('created_at'))
-                        .values('day').annotate(count=Count('id')).order_by('day'))
-    except Exception:
-        comments_qs = []
-    try:
-        if PostView is not None:
-            views_qs = (PostView.objects.filter(viewed_at__date__gte=start.date())
-                        .annotate(day=TruncDate('viewed_at'))
-                        .values('day').annotate(count=Count('id')).order_by('day'))
-    except Exception:
-        views_qs = []
-
-    labels = [(start + timezone.timedelta(days=i)).date().isoformat() for i in range(days)]
-
-    def build_series(qs):
-        mapping = {}
-        try:
-            mapping = {item['day'].isoformat(): item['count'] for item in qs}
-        except Exception:
-            mapping = {}
-        return [mapping.get(d, 0) for d in labels]
-
-    posts_series = build_series(posts_qs)
-    comments_series = build_series(comments_qs)
-    views_series = build_series(views_qs)
-    return JsonResponse({'labels': labels, 'posts': posts_series, 'comments': comments_series, 'views': views_series})
-
-@require_GET
-def admin_dashboard_view(request):
-    if not request.user.is_staff:
-        raise Http404("permission denied")
-    posts_count = Post.objects.count() if Post else 0
-    comments_count = Comment.objects.count() if Comment else 0
-    users_count = CustomUser.objects.count() if CustomUser else 0
-    app_list = []
-    try:
-        if custom_admin_site:
-            app_list = custom_admin_site.get_app_list(request)
+        content = obj.content[:100]
+        if len(obj.content) > 100:
+            content += "..."
+        return content
+    short_content.short_description = "Комментарий"
+    
+    def status_badges(self, obj):
+        badges = []
+        if obj.is_public:
+            badges.append('<span class="badge badge-green">Public</span>')
         else:
-            app_list = admin.site.get_app_list(request)
-    except Exception:
-        app_list = []
-    ctx_base = custom_admin_site.each_context(request) if custom_admin_site else admin.site.each_context(request)
-    context = dict(ctx_base, title="Admin dashboard", posts_count=posts_count, comments_count=comments_count, users_count=users_count, app_list=app_list)
-    return render(request, "admin/dashboard.html", context)
+            badges.append('<span class="badge badge-gray">Hidden</span>')
+        if obj.is_moderated:
+            badges.append('<span class="badge badge-blue">Moderated</span>')
+        return mark_safe(" ".join(badges))
+    status_badges.short_description = "Статус"
+    
+    def approve_comments(self, request, queryset):
+        updated = queryset.update(is_public=True, is_moderated=True)
+        self.message_user(request, f"{updated} комментариев одобрено.")
+    approve_comments.short_description = "✅ Одобрить выбранные"
+    
+    def reject_comments(self, request, queryset):
+        updated = queryset.update(is_public=False)
+        self.message_user(request, f"{updated} комментариев скрыто.")
+    reject_comments.short_description = "❌ Скрыть выбранные"
+
 
 # -----------------------
-# Registration helpers & main entrypoint
+# Media Library Enhancements
 # -----------------------
-def _ensure_registered(site_obj, model, admin_class=None):
-    if model is None:
-        return
-    try:
-        if model not in getattr(site_obj, "_registry", {}):
-            if admin_class:
-                site_obj.register(model, admin_class)
-            else:
-                site_obj.register(model)
-    except AlreadyRegistered:
-        pass
-    except Exception:
-        logger.exception("Could not register %s on %s", getattr(model, "__name__", model), getattr(site_obj, "name", site_obj))
+class MediaLibraryAdmin(admin.ModelAdmin):
+    list_display = ("thumbnail", "title", "file_type", "uploaded_by", "uploaded_at", "post_link", "file_size")
+    list_filter = ("uploaded_at", "uploaded_by")
+    search_fields = ("title", "file")
+    readonly_fields = ("uploaded_at", "file_size", "file_type")
+    
+    def thumbnail(self, obj):
+        if obj.file.name.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
+            try:
+                url = obj.file.url
+                return mark_safe(f'<img src="{url}" style="width: 50px; height: 50px; object-fit: cover;" />')
+            except:
+                return "🖼️"
+        return "📄"
+    thumbnail.short_description = ""
+    
+    def file_type(self, obj):
+        ext = os.path.splitext(obj.file.name)[1].lower()
+        type_icons = {
+            '.jpg': '🖼️', '.jpeg': '🖼️', '.png': '🖼️', '.gif': '🖼️', '.webp': '🖼️',
+            '.pdf': '📕', '.doc': '📘', '.docx': '📘',
+            '.mp4': '🎥', '.mov': '🎥', '.avi': '🎥',
+        }
+        return type_icons.get(ext, '📄')
+    file_type.short_description = "Тип"
+    
+    def file_size(self, obj):
+        try:
+            size = obj.file.size
+            for unit in ['B', 'KB', 'MB', 'GB']:
+                if size < 1024.0:
+                    return f"{size:.1f} {unit}"
+                size /= 1024.0
+            return f"{size:.1f} TB"
+        except:
+            return "N/A"
+    file_size.short_description = "Размер"
+    
+    def post_link(self, obj):
+        if obj.post:
+            url = reverse('admin:blog_post_change', args=[obj.post.id])
+            return mark_safe(f'<a href="{url}">{obj.post.title}</a>')
+        return mark_safe('<span class="text-muted">Не прикреплен</span>')
+    post_link.short_description = "Пост"
 
-# The global variable that will be set by register_admin_models
-custom_admin_site = None
 
+# -----------------------
+# Registration
+# -----------------------
 def register_admin_models(site_obj):
     """
     Register all admin models into provided admin site.
-    Call this AFTER custom_admin_site is created in core.admin to avoid import cycles.
     """
     global custom_admin_site
     custom_admin_site = site_obj or admin.site
 
-    # choose post admin class (allow emergency switch by env)
-    def _choose_post_admin():
-        try:
-            ev = os.environ.get("EMERGENCY_ADMIN", "").strip().lower()
-            if ev in ("1", "true", "yes", "on"):
-                # define emergency minimal admin
-                class EmergencyPostAdmin(admin.ModelAdmin):
-                    list_display = ("title", "status", "author", "published_at")
-                    fields = ("title", "slug", "author", "status", "published_at", "excerpt", "content", "featured_image")
-                    search_fields = ("title",)
-                    ordering = ("-published_at",)
-                    filter_horizontal = ()
-                return EmergencyPostAdmin
-        except Exception:
-            pass
-        return BasePostAdmin
-
-    post_admin_cls = _choose_post_admin()
-
     try:
-        _ensure_registered(admin.site, Post, post_admin_cls)
-        _ensure_registered(custom_admin_site, Post, post_admin_cls)
-
-        _ensure_registered(admin.site, Category, CategoryAdmin)
-        _ensure_registered(custom_admin_site, Category, CategoryAdmin)
-
-        _ensure_registered(admin.site, Tag, TagAdmin)
-        _ensure_registered(custom_admin_site, Tag, TagAdmin)
-
-        _ensure_registered(admin.site, Comment, CommentAdmin)
-        _ensure_registered(custom_admin_site, Comment, CommentAdmin)
-
-        _ensure_registered(admin.site, PostReaction, PostReactionAdmin)
-        _ensure_registered(custom_admin_site, PostReaction, PostReactionAdmin)
-
+        if Post is not None:
+            site_obj.register(Post, BasePostAdmin)
+            site_obj.register(Category, CategoryAdmin)
+            site_obj.register(Tag, TagAdmin)
+            site_obj.register(Comment, CommentAdmin)
+            site_obj.register(PostReaction)
+            site_obj.register(PostView)
+            
         if PostAttachment is not None:
-            _ensure_registered(admin.site, MediaLibrary, MediaLibraryAdmin)
-            _ensure_registered(custom_admin_site, MediaLibrary, MediaLibraryAdmin)
-            try:
-                _ensure_registered(admin.site, PostAttachment, MediaLibraryAdmin)
-                _ensure_registered(custom_admin_site, PostAttachment, MediaLibraryAdmin)
-            except Exception:
-                pass
-
-        try:
-            _ensure_registered(admin.site, CustomUser)
-            _ensure_registered(custom_admin_site, CustomUser)
-        except Exception:
-            pass
-    except Exception:
-        logger.exception("bulk registration failed")
-
-    # Attach custom urls by wrapping original get_urls (avoid recursion)
-    def get_admin_urls(urls):
-        custom_urls = [
-            path("dashboard/", admin_dashboard_view, name="admin-dashboard"),
-            path("dashboard/stats-data/", admin_stats_api, name="admin-dashboard-stats"),
-            path("media-library/", admin_media_library_view, name="admin-media-library"),
-            path("posts/update/", admin_post_update_view, name="admin-post-update"),
-            path("posts/autosave/", admin_autosave_view, name="admin-autosave"),
-            path("posts/preview-token/", admin_preview_token_view, name="admin-preview-token"),
-        ]
-        return custom_urls + urls
-
-    try:
-        current_get_urls = getattr(custom_admin_site, "get_urls", None)
-        already_wrapped = getattr(current_get_urls, "_is_wrapped_by_blog_admin", False)
-        if not already_wrapped:
-            orig_get_urls = current_get_urls
-            def wrapped_get_urls():
-                try:
-                    base = orig_get_urls()
-                except Exception:
-                    base = super(type(custom_admin_site), custom_admin_site).get_urls()
-                return get_admin_urls(base)
-            setattr(wrapped_get_urls, "_is_wrapped_by_blog_admin", True)
-            custom_admin_site.get_urls = wrapped_get_urls
-    except Exception:
-        logger.exception("Failed to attach custom urls to custom_admin_site", exc_info=True)
+            site_obj.register(MediaLibrary, MediaLibraryAdmin)
+            
+    except Exception as e:
+        logger.exception("Admin registration failed: %s", e)
 
     return True
 
-# Register admin classes safely
+# Auto-register with default admin site
 try:
     if Post is not None:
         admin.site.register(Post, BasePostAdmin)
+        admin.site.register(Category, CategoryAdmin)
+        admin.site.register(Tag, TagAdmin)
+        admin.site.register(Comment, CommentAdmin)
+        admin.site.register(MediaLibrary, MediaLibraryAdmin)
 except AlreadyRegistered:
     pass
-except Exception:
-    logger.exception("Could not register Post admin")
-
-# register other models with safe helper
-try:
-    _ensure_registered(admin.site, Category, CategoryAdmin)
-    _ensure_registered(admin.site, Tag, TagAdmin)
-    _ensure_registered(admin.site, Comment, CommentAdmin)
-    _ensure_registered(admin.site, PostReaction, PostReactionAdmin)
-    if PostAttachment is not None:
-        _ensure_registered(admin.site, MediaLibrary, MediaLibraryAdmin)
-        _ensure_registered(admin.site, PostAttachment, MediaLibraryAdmin)
-except Exception:
-    logger.exception("Post-registration failed")
+except Exception as e:
+    logger.exception("Default admin registration failed: %s", e)
