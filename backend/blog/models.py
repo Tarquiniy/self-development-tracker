@@ -5,7 +5,15 @@ from django.utils.text import slugify
 from django.urls import reverse
 from django.utils import timezone
 from .storages import SupabaseStorage
-from django_ckeditor_5.fields import CKEditor5Field
+
+# Используем CKEditor5Field после установки пакета
+try:
+    from django_ckeditor_5.fields import CKEditor5Field
+    HAS_CKEDITOR = True
+except ImportError:
+    # Fallback если пакет не установлен
+    HAS_CKEDITOR = False
+    CKEditor5Field = models.TextField
 
 class Category(models.Model):
     title = models.CharField(max_length=120, unique=True)
@@ -95,10 +103,13 @@ class Post(models.Model):
     title = models.CharField(max_length=255, verbose_name="Заголовок")
     slug = models.SlugField(max_length=300, unique=True, blank=True, db_index=True, verbose_name="URL")
     excerpt = models.TextField(blank=True, verbose_name="Краткое описание")
-    # Временное решение - используем TextField
-    # После установки django-ckeditor-5 замените на:
-    # content = CKEditor5Field('Content', config_name='extends', verbose_name="Содержание")
-    content = CKEditor5Field('Content', config_name='extends', verbose_name="Содержание")
+    
+    # CKEditor5 поле с правильным использованием verbose_name
+    if HAS_CKEDITOR:
+        content = CKEditor5Field(config_name='extends', verbose_name="Содержание")
+    else:
+        content = models.TextField(verbose_name="Содержание")
+    
     featured_image = models.URLField(blank=True, null=True, verbose_name="Главное изображение")
     categories = models.ManyToManyField(Category, related_name='posts', blank=True, verbose_name="Категории")
     tags = models.ManyToManyField(Tag, related_name='posts', blank=True, verbose_name="Теги")
