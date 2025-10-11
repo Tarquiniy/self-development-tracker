@@ -29,6 +29,10 @@ from django.utils.safestring import mark_safe
 from django.utils.html import escape
 from django.conf import settings
 
+# Template loader imports for robust dashboard rendering
+from django.template.loader import select_template
+from django.template import TemplateDoesNotExist
+
 logger = logging.getLogger(__name__)
 
 # Optional reversion support
@@ -386,13 +390,26 @@ admin_media_library_view = admin_media_library
 # admin_dashboard_view: page view for admin dashboard (renders template; template may fetch stats via AJAX)
 def admin_dashboard_view(request):
     """
-    Render the admin dashboard page. The page can query admin_dashboard_stats via AJAX.
+    Render the admin dashboard page. The function will attempt multiple common template paths
+    and render the first one found. If rendering fails or no template is found, fall back to
+    the default admin index page or a small placeholder.
     """
+    template_candidates = [
+        "admin/dashboard.html",
+        "blog/admin/dashboard.html",
+        "admin/dashboard/index.html",
+        "dashboard.html",
+    ]
     try:
-        return render(request, "admin/dashboard.html", {})
-    except Exception:
-        # If template missing, return a simple placeholder page
-        return HttpResponse("<h1>Admin dashboard</h1><p>Dashboard template not found. Create admin/dashboard.html to enable.</p>")
+        tpl = select_template(template_candidates)
+        # render with request so template tags that depend on request/context processors work
+        return HttpResponse(tpl.render({}, request))
+    except TemplateDoesNotExist:
+        # If admin.site.index is available, use it as a graceful fallback (shows admin index)
+        try:
+            return admin.site.index(request)
+        except Exception:
+            return HttpResponse("<h1>Admin dashboard</h1><p>Dashboard template not found. Create admin/dashboard.html to enable.</p>")
 
 # admin_stats_api: JSON API endpoint returning dashboard stats
 admin_stats_api = admin_dashboard_stats
