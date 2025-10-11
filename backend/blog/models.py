@@ -4,8 +4,8 @@ from django.conf import settings
 from django.utils.text import slugify
 from django.urls import reverse
 from django.utils import timezone
-from django_summernote.models import AbstractAttachment
 from .storages import SupabaseStorage
+from django_ckeditor_5.fields import CKEditor5Field
 
 class Category(models.Model):
     title = models.CharField(max_length=120, unique=True)
@@ -57,7 +57,7 @@ class Tag(models.Model):
         return self.title
 
 
-class PostAttachment(AbstractAttachment):
+class PostAttachment(models.Model):
     """
     File attachments for posts — can be unattached (post nullable) to support media library.
     """
@@ -95,7 +95,10 @@ class Post(models.Model):
     title = models.CharField(max_length=255, verbose_name="Заголовок")
     slug = models.SlugField(max_length=300, unique=True, blank=True, db_index=True, verbose_name="URL")
     excerpt = models.TextField(blank=True, verbose_name="Краткое описание")
-    content = models.TextField(verbose_name="Содержание")  # HTML content for rendering
+    # Временное решение - используем TextField
+    # После установки django-ckeditor-5 замените на:
+    # content = CKEditor5Field('Content', config_name='extends', verbose_name="Содержание")
+    content = CKEditor5Field('Content', config_name='extends', verbose_name="Содержание")
     featured_image = models.URLField(blank=True, null=True, verbose_name="Главное изображение")
     categories = models.ManyToManyField(Category, related_name='posts', blank=True, verbose_name="Категории")
     tags = models.ManyToManyField(Tag, related_name='posts', blank=True, verbose_name="Теги")
@@ -217,7 +220,6 @@ class PostView(models.Model):
 
 # ---------------------------
 # Proxy model to show "Media Library" in the Blog app list of Django admin.
-# This model is a proxy of PostAttachment and does not require DB schema changes.
 class MediaLibrary(PostAttachment):
     class Meta:
         proxy = True
@@ -233,7 +235,7 @@ class PostRevision(models.Model):
     excerpt = models.TextField(blank=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     autosave = models.BooleanField(default=False)
-    meta = models.JSONField(default=dict, blank=True)  # optional metadata: attachments, diff summary, etc.
+    meta = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ['-created_at']

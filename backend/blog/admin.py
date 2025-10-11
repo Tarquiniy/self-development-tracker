@@ -41,50 +41,50 @@ except Exception:
     Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = None
     logger.exception("Could not import blog.models")
 
-# Import forms
-try:
-    from .forms import PostAdminForm as ProjectPostAdminForm
-except Exception:
-    ProjectPostAdminForm = None
-
 CustomUser = get_user_model()
 PREVIEW_SALT = "post-preview-salt"
 
 # -----------------------
-# CKEditor 5 Widget
+# Helpers
 # -----------------------
-try:
-    from .widgets import CKEditor5Widget as ProjectCKEditor5Widget
-    CKEditor5Widget = ProjectCKEditor5Widget
-except Exception:
-    CKEditor5Widget = None
+def get_admin_change_url_for_obj(obj, site_name=None):
+    if obj is None:
+        return None
+    try:
+        viewname = f"{obj._meta.app_label}_{obj._meta.model_name}_change"
+    except Exception:
+        return None
+    candidates = []
+    if site_name:
+        candidates.append(site_name)
+    candidates.append("admin")
+    for ns in candidates:
+        try:
+            return reverse(f"{ns}:{viewname}", args=[obj.pk])
+        except Exception:
+            continue
+    try:
+        return reverse(viewname, args=[obj.pk])
+    except Exception:
+        return None
+
+def _pretty_change_message(raw):
+    if not raw:
+        return ""
+    try:
+        parsed = json.loads(raw)
+        return json.dumps(parsed, ensure_ascii=False)
+    except Exception:
+        try:
+            return raw.encode("utf-8", errors="ignore").decode("unicode_escape")
+        except Exception:
+            return str(raw)
 
 # -----------------------
 # Admin classes
 # -----------------------
 class BasePostAdmin(VersionAdmin):
     change_form_template = None
-    try:
-        from django.conf import settings as _settings
-        dirs = []
-        try:
-            dirs = _settings.TEMPLATES[0].get('DIRS', []) if getattr(_settings, 'TEMPLATES', None) else []
-        except Exception:
-            dirs = []
-        found = False
-        template_name = os.path.join('admin', 'blog', 'post', 'change_form.html')
-        for d in dirs:
-            if os.path.exists(os.path.join(d, template_name)):
-                found = True
-                break
-        if not found:
-            alt = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates', 'admin', 'blog', 'post', 'change_form.html'))
-            if os.path.exists(alt):
-                found = True
-        if found:
-            change_form_template = 'admin/blog/post/change_form.html'
-    except Exception:
-        change_form_template = None
 
     list_display = ("title", "status", "author", "published_at")
     list_filter = ("status", "published_at") if Post is not None else ()
@@ -101,19 +101,6 @@ class BasePostAdmin(VersionAdmin):
         ("Категории и теги", {"fields": ("categories", "tags")}),
         ("SEO", {"fields": ("meta_title", "meta_description", "og_image"), "classes": ("collapse",)}),
     )
-
-    def get_form(self, request, obj=None, **kwargs):
-        if ProjectPostAdminForm:
-            try:
-                return super().get_form(request, obj, form=ProjectPostAdminForm, **kwargs)
-            except Exception:
-                logger.exception("Project PostAdminForm raised during get_form — falling back to default admin form.")
-        try:
-            return super().get_form(request, obj, **kwargs)
-        except Exception:
-            logger.exception("admin.get_form failed; falling back to modelform_factory")
-            from django.forms import modelform_factory
-            return modelform_factory(self.model, fields="__all__")
 
     def make_published(self, request, queryset):
         updated = queryset.update(status="published")
@@ -205,7 +192,6 @@ class MediaLibraryAdmin(admin.ModelAdmin):
         return "-"
     def changelist_view(self, request, extra_context=None):
         return redirect("admin-media-library")
-
 
 # -----------------------
 # Views (exported)
@@ -443,7 +429,6 @@ def _ensure_registered(site_obj, model, admin_class=None):
     except Exception:
         logger.exception("Could not register %s on %s", getattr(model, "__name__", model), getattr(site_obj, "name", site_obj))
 
-
 # The global variable that will be set by register_admin_models
 custom_admin_site = None
 
@@ -455,11 +440,12 @@ def register_admin_models(site_obj):
     global custom_admin_site
     custom_admin_site = site_obj or admin.site
 
-    # choose post admin class
+    # choose post admin class (allow emergency switch by env)
     def _choose_post_admin():
         try:
             ev = os.environ.get("EMERGENCY_ADMIN", "").strip().lower()
             if ev in ("1", "true", "yes", "on"):
+                # define emergency minimal admin
                 class EmergencyPostAdmin(admin.ModelAdmin):
                     list_display = ("title", "status", "author", "published_at")
                     fields = ("title", "slug", "author", "status", "published_at", "excerpt", "content", "featured_image")
@@ -536,51 +522,10 @@ def register_admin_models(site_obj):
 
     return True
 
-
-# -----------------------
-# PostAdminForm + PostAdmin
-# -----------------------
-if ProjectPostAdminForm:
-    PostAdminForm = ProjectPostAdminForm
-else:
-    class PostAdminForm(forms.ModelForm):
-        class Meta:
-            model = Post
-            fields = '__all__'
-
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            try:
-                if CKEditor5Widget:
-                    self.fields['content'].widget = CKEditor5Widget(attrs={'class': 'ckeditor5-widget'})
-                else:
-                    self.fields['content'].widget = forms.Textarea(attrs={'class': 'ckeditor5-widget simple-admin-editor', 'rows': 20})
-            except Exception:
-                logger.exception("Failed to attach widget to content field; using plain textarea")
-                self.fields['content'].widget = forms.Textarea(attrs={'rows': 20})
-
-class PostAdmin(BasePostAdmin):
-    form = PostAdminForm
-    change_form_template = BasePostAdmin.change_form_template or 'admin/blog/post/change_form.html'
-
-    def media(self):
-        media = super().media
-        try:
-            # Add CKEditor 5 CSS
-            extra = forms.Media(
-                css={'all': ("admin/css/ckeditor5-admin.css",)}
-            )
-            return media + extra
-        except Exception:
-            logger.exception("Error building PostAdmin.media; returning default media")
-            return media
-
-    media = property(media)
-
 # Register admin classes safely
 try:
     if Post is not None:
-        admin.site.register(Post, PostAdmin)
+        admin.site.register(Post, BasePostAdmin)
 except AlreadyRegistered:
     pass
 except Exception:
