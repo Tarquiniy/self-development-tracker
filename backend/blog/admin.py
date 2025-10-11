@@ -74,7 +74,7 @@ class PostAdminForm(forms.ModelForm):
 # -----------------------
 class BasePostAdmin(VersionAdmin):
     form = PostAdminForm
-    change_form_template = 'admin/blog/post/change_form_enhanced.html'
+    change_form_template = 'admin/blog/post/change_form_modern.html'с
     
     # Modern list display
     list_display = ("title", "status_badge", "author", "published_at", "reading_time_display", "actions_column")
