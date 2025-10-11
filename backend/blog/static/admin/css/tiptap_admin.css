@@ -1,0 +1,30 @@
+/* backend/blog/static/admin/css/tiptap_admin.css
+   Minimal styles to keep admin layout tidy. You can extend to match admin theme.
+*/
+
+.admin-ckeditor-widget {
+  margin-top: 8px;
+  border: 1px solid #e3e3e3;
+  border-radius: 6px;
+  background: #fff;
+  padding: 6px;
+}
+
+/* When CKEditor toolbar is present, reduce wrapper padding */
+.admin-ckeditor-widget .ck {
+  box-shadow: none;
+}
+
+/* Responsive: ensure editor fits form column */
+.admin-ckeditor-widget .ckeditor-editor-placeholder,
+.admin-ckeditor-widget .ck-editor__editable_inline {
+  min-height: 240px;
+  max-height: 1200px;
+  overflow: auto;
+}
+
+/* Small tweak for default admin spacing */
+textarea.admin-advanced-editor,
+textarea.admin-tiptap-textarea {
+  display: none; /* we still render textarea for form handling, but hide it visually */
+}

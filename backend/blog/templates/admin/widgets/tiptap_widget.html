@@ -1,0 +1,25 @@
+{# backend/blog/templates/admin/widgets/tiptap_widget.html #}
+{% load static %}
+{# Template renders a textarea (so Django's form handling works) and a wrapper
+   that the JS will replace with CKEditor. #}
+
+<textarea
+  name="{{ widget.name }}"
+  id="{{ widget.attrs.id|default:'id_'|add:widget.name }}"
+  {% for k,v in widget.attrs.items %}
+    {% if k != 'id' %}
+      {{ k }}="{{ v|escape }}"
+    {% endif %}
+  {% endfor %}
+>{{ widget.value|default_if_none:''|escape }}</textarea>
+
+<div class="admin-ckeditor-widget"
+     id="{{ widget.attrs.id|default:'id_'|add:widget.name }}_cke_wrapper"
+     data-upload-url="{{ widget.attrs.data-upload-url|default:"/api/blog/media/upload/" }}"
+     aria-hidden="false">
+  <div class="ckeditor-toolbar-placeholder"></div>
+  <div class="ckeditor-editor-placeholder"></div>
+</div>
+
+<link rel="stylesheet" href="{% static 'admin/css/tiptap_admin.css' %}">
+<script src="{% static 'admin/js/tiptap_admin_extra.js' %}"></script>
