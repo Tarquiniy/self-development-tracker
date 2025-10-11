@@ -13,7 +13,7 @@ import logging
 from django import forms
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
-from django.urls import reverse, path
+from django.urls import reverse, path, NoReverseMatch
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, Http404, HttpResponse
 from django.utils import timezone
@@ -390,9 +390,11 @@ admin_media_library_view = admin_media_library
 # admin_dashboard_view: page view for admin dashboard (renders template; template may fetch stats via AJAX)
 def admin_dashboard_view(request):
     """
-    Render the admin dashboard page. The function will attempt multiple common template paths
-    and render the first one found. If rendering fails or no template is found, fall back to
-    the default admin index page or a small placeholder.
+    Render the admin dashboard page robustly:
+    - try multiple candidate template names with django.render(request, template, context)
+    - if rendering a template raises NoReverseMatch or other errors, skip to next candidate
+    - if none succeed, fall back to admin.site.index(request)
+    - if even that fails, return a small placeholder HTML
     """
     template_candidates = [
         "admin/dashboard.html",
@@ -400,16 +402,29 @@ def admin_dashboard_view(request):
         "admin/dashboard/index.html",
         "dashboard.html",
     ]
-    try:
-        tpl = select_template(template_candidates)
-        # render with request so template tags that depend on request/context processors work
-        return HttpResponse(tpl.render({}, request))
-    except TemplateDoesNotExist:
-        # If admin.site.index is available, use it as a graceful fallback (shows admin index)
+    context = {}
+    for tpl_name in template_candidates:
         try:
-            return admin.site.index(request)
-        except Exception:
-            return HttpResponse("<h1>Admin dashboard</h1><p>Dashboard template not found. Create admin/dashboard.html to enable.</p>")
+            # Use render(request, ...) to ensure RequestContext (context processors) are applied.
+            return render(request, tpl_name, context)
+        except TemplateDoesNotExist:
+            # try next candidate
+            continue
+        except NoReverseMatch as nr:
+            # A template tried to reverse a URL name that isn't registered — log and try next template
+            logger.warning("Dashboard template '%s' raised NoReverseMatch: %s", tpl_name, nr)
+            continue
+        except Exception as exc:
+            # Log unexpected exception during template rendering and try next template
+            logger.exception("Error rendering dashboard template '%s': %s", tpl_name, exc)
+            continue
+
+    # Fallback: try admin.site.index (admin index view); if that errors, return placeholder
+    try:
+        return admin.site.index(request)
+    except Exception:
+        logger.exception("admin.site.index failed as fallback for dashboard view")
+        return HttpResponse("<h1>Admin dashboard</h1><p>Dashboard template not available. Please check templates and url names.</p>")
 
 # admin_stats_api: JSON API endpoint returning dashboard stats
 admin_stats_api = admin_dashboard_stats
