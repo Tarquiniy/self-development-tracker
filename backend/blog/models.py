@@ -96,7 +96,6 @@ class Post(models.Model):
     slug = models.SlugField(max_length=300, unique=True, blank=True, db_index=True, verbose_name="URL")
     excerpt = models.TextField(blank=True, verbose_name="Краткое описание")
     content = models.TextField(verbose_name="Содержание")  # HTML content for rendering
-    content_json = models.JSONField(blank=True, null=True, verbose_name="Content JSON")  # TipTap document model JSON
     featured_image = models.URLField(blank=True, null=True, verbose_name="Главное изображение")
     categories = models.ManyToManyField(Category, related_name='posts', blank=True, verbose_name="Категории")
     tags = models.ManyToManyField(Tag, related_name='posts', blank=True, verbose_name="Теги")

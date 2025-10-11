@@ -1,21 +1,13 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-backend/blog/admin.py
-Полный admin.py с интеграцией CKEditor5 (замена TipTap).
-Основная логика оригинального admin.py сохранена; произведены целенаправленные
-замены виджетов/атрибутов/Media (tiptap -> ckeditor).
-Источник оригинала: файл, присланный пользователем.
-"""
+# backend/blog/admin.py
 import os
 import json
 import logging
 from django import forms
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
-from django.urls import reverse, path, NoReverseMatch
+from django.urls import reverse, path
 from django.shortcuts import render, redirect
-from django.http import JsonResponse, Http404, HttpResponse
+from django.http import JsonResponse, Http404
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_GET
 from django.core.files.storage import default_storage
@@ -27,11 +19,6 @@ from django.db.models import Count
 from django.db import models
 from django.utils.safestring import mark_safe
 from django.utils.html import escape
-from django.conf import settings
-
-# Template loader imports for robust dashboard rendering
-from django.template.loader import select_template
-from django.template import TemplateDoesNotExist
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +31,7 @@ except Exception:
     class VersionAdmin(admin.ModelAdmin):
         pass
 
-# Defensive import of models (log exceptions but don't crash import)
+# Import models
 try:
     from .models import (
         Post, Category, Tag, Comment,
@@ -54,7 +41,7 @@ except Exception:
     Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = None
     logger.exception("Could not import blog.models")
 
-# Optional admin form (project-provided)
+# Import forms
 try:
     from .forms import PostAdminForm as ProjectPostAdminForm
 except Exception:
@@ -63,403 +50,550 @@ except Exception:
 CustomUser = get_user_model()
 PREVIEW_SALT = "post-preview-salt"
 
+# -----------------------
+# CKEditor 5 Widget
+# -----------------------
+try:
+    from .widgets import CKEditor5Widget as ProjectCKEditor5Widget
+    CKEditor5Widget = ProjectCKEditor5Widget
+except Exception:
+    CKEditor5Widget = None
 
-# --------------------------------------------------------------------
-# REPLACEMENT: CKEditor widget(s)
-# --------------------------------------------------------------------
-CKEDITOR_CDN = "https://cdn.jsdelivr.net/npm/@ckeditor/ckeditor5-build-classic@44.3.0/build/ckeditor.js"
+# -----------------------
+# Admin classes
+# -----------------------
+class BasePostAdmin(VersionAdmin):
+    change_form_template = None
+    try:
+        from django.conf import settings as _settings
+        dirs = []
+        try:
+            dirs = _settings.TEMPLATES[0].get('DIRS', []) if getattr(_settings, 'TEMPLATES', None) else []
+        except Exception:
+            dirs = []
+        found = False
+        template_name = os.path.join('admin', 'blog', 'post', 'change_form.html')
+        for d in dirs:
+            if os.path.exists(os.path.join(d, template_name)):
+                found = True
+                break
+        if not found:
+            alt = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates', 'admin', 'blog', 'post', 'change_form.html'))
+            if os.path.exists(alt):
+                found = True
+        if found:
+            change_form_template = 'admin/blog/post/change_form.html'
+    except Exception:
+        change_form_template = None
 
+    list_display = ("title", "status", "author", "published_at")
+    list_filter = ("status", "published_at") if Post is not None else ()
+    search_fields = ("title", "content") if Post is not None else ()
+    prepopulated_fields = {"slug": ("title",)} if Post is not None else {}
+    date_hierarchy = "published_at"
+    ordering = ("-published_at",)
+    filter_horizontal = ("categories", "tags") if Post is not None else ()
+    actions = ["make_published", "make_draft", "duplicate_post"]
 
-class CKEditorWidget(forms.Textarea):
-    """
-    Универсальный виджет, который рендерит <textarea> (fallback для форм без JS)
-    плюс специальный wrapper, содержащий data-ckeditor-config JSON
-    прочитатель JS инициализирует CKEditor на wrapper.
-    """
-    template_name = None
+    fieldsets = (
+        ("Основная информация", {"fields": ("title", "slug", "author", "status", "published_at")}),
+        ("Содержание", {"fields": ("excerpt", "content", "featured_image")}),
+        ("Категории и теги", {"fields": ("categories", "tags")}),
+        ("SEO", {"fields": ("meta_title", "meta_description", "og_image"), "classes": ("collapse",)}),
+    )
 
-    class Media:
-        js = (
-            CKEDITOR_CDN,
-            "admin/js/ckeditor_upload_adapter.js",
-            "admin/js/ckeditor_init.js",
-        )
-        css = {
-            "all": (
-                "admin/css/ckeditor_admin.css",
-            )
-        }
-
-    def __init__(self, attrs=None):
-        base_attrs = {
-            "class": "admin-ckeditor-textarea",
-            "rows": 20,
-            "data-editor": "auto",  # 'auto'|'ckeditor'|'fallback'
-            "data-upload-url": "/api/blog/media/upload/",
-        }
-        if attrs:
-            base_attrs.update(attrs)
-        super().__init__(attrs=base_attrs)
-
-    def get_config(self, name, value, attrs):
-        final = attrs or {}
-        cfg = {
-            "editor": final.get("data-editor", "auto"),
-            "uploadUrl": final.get("data-upload-url", "/api/blog/media/upload/"),
-            "previewTokenUrl": final.get("data-ckeditor-preview-token-url", "/admin/posts/preview-token/"),
-            "name": name,
-            "id": final.get("id") or f"id_{name}",
-            "initialData": value or "",
-        }
-        extra = final.get("data-ckeditor-extra")
-        if extra:
+    def get_form(self, request, obj=None, **kwargs):
+        if ProjectPostAdminForm:
             try:
-                if isinstance(extra, str):
-                    extra_parsed = json.loads(extra)
-                else:
-                    extra_parsed = extra
-                if isinstance(extra_parsed, dict):
-                    cfg.update(extra_parsed)
+                return super().get_form(request, obj, form=ProjectPostAdminForm, **kwargs)
+            except Exception:
+                logger.exception("Project PostAdminForm raised during get_form — falling back to default admin form.")
+        try:
+            return super().get_form(request, obj, **kwargs)
+        except Exception:
+            logger.exception("admin.get_form failed; falling back to modelform_factory")
+            from django.forms import modelform_factory
+            return modelform_factory(self.model, fields="__all__")
+
+    def make_published(self, request, queryset):
+        updated = queryset.update(status="published")
+        self.message_user(request, f"{updated} постов опубликовано.")
+    make_published.short_description = "Опубликовать выбранные"
+
+    def make_draft(self, request, queryset):
+        updated = queryset.update(status="draft")
+        self.message_user(request, f"{updated} постов переведено в черновики.")
+    make_draft.short_description = "Перевести в черновики"
+
+    def duplicate_post(self, request, queryset):
+        created = 0
+        for p in queryset:
+            old_slug = getattr(p, "slug", "") or ""
+            p.pk = None
+            p.slug = f"{old_slug}-copy"
+            p.title = f"{getattr(p, 'title', '')} (копия)"
+            p.status = "draft"
+            p.save()
+            created += 1
+        self.message_user(request, f"Создано {created} копий.")
+    duplicate_post.short_description = "Создать копии"
+
+
+class CategoryAdmin(admin.ModelAdmin):
+    list_display = ("title", "slug", "post_count")
+    prepopulated_fields = {"slug": ("title",)}
+    def post_count(self, obj):
+        try:
+            return obj.posts.count()
+        except Exception:
+            return 0
+    post_count.short_description = "Постов"
+
+
+class TagAdmin(admin.ModelAdmin):
+    list_display = ("title", "slug", "post_count")
+    prepopulated_fields = {"slug": ("title",)}
+    def post_count(self, obj):
+        try:
+            return obj.posts.count()
+        except Exception:
+            return 0
+    post_count.short_description = "Постов"
+
+
+class CommentAdmin(admin.ModelAdmin):
+    list_display = ("shorter_name", "post_link", "user", "short_content", "is_public", "is_moderated", "created_at")
+    list_editable = ("is_public", "is_moderated")
+    def shorter_name(self, obj): return getattr(obj, "name", "")[:30]
+    def post_link(self, obj):
+        try:
+            post = getattr(obj, "post", None)
+            site_name = getattr(custom_admin_site, "name", None) if custom_admin_site else None
+            url = get_admin_change_url_for_obj(post, site_name=site_name)
+            if post and url:
+                from django.utils.html import format_html
+                return format_html('<a href="{}">{}</a>', url, getattr(post, "title", ""))
+        except Exception:
+            pass
+        return "-"
+    def short_content(self, obj):
+        txt = getattr(obj, "content", "") or ""
+        return txt[:100] + ("..." if len(txt) > 100 else "")
+
+
+class PostReactionAdmin(admin.ModelAdmin):
+    list_display = ("post", "likes_count", "updated_at")
+    def likes_count(self, obj):
+        try:
+            return obj.likes_count()
+        except Exception:
+            return 0
+
+
+class MediaLibraryAdmin(admin.ModelAdmin):
+    list_display = ("title", "uploaded_by", "uploaded_at", "post_link")
+    def post_link(self, obj):
+        try:
+            if getattr(obj, "post", None):
+                site_name = getattr(custom_admin_site, "name", None) if custom_admin_site else None
+                url = get_admin_change_url_for_obj(obj.post, site_name=site_name)
+                from django.utils.html import format_html
+                if url:
+                    return format_html('<a href="{}">{}</a>', url, obj.post.title)
+        except Exception:
+            pass
+        return "-"
+    def changelist_view(self, request, extra_context=None):
+        return redirect("admin-media-library")
+
+
+# -----------------------
+# Views (exported)
+# -----------------------
+@require_http_methods(["GET", "POST"])
+def admin_media_library_view(request):
+    if not request.user.is_staff:
+        raise Http404("permission denied")
+
+    if request.method == "POST":
+        upload = request.FILES.get("file") or request.FILES.get("image")
+        title = request.POST.get("title") or (upload.name if upload else "")
+        if not upload:
+            return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
+        if PostAttachment is None:
+            return JsonResponse({'success': False, 'error': 'PostAttachment model not configured'}, status=500)
+        try:
+            att = PostAttachment()
+            att.title = title
+            try:
+                att.uploaded_by = request.user
             except Exception:
                 pass
-        return cfg
-
-    def render(self, name, value, attrs=None, renderer=None):
-        final_attrs = self.build_attrs(self.attrs, attrs or {})
-        textarea_value = escape(self.format_value(value) or "")
-        final_id = final_attrs.get("id") or f"id_{name}"
-        final_attrs["id"] = final_id
-
-        parts = []
-        for k, v in final_attrs.items():
-            if v is None or v == "":
-                continue
-            parts.append(f'{k}="{escape(str(v))}"')
-        attr_str = " ".join(parts)
-
-        config = self.get_config(name, value, final_attrs)
-        try:
-            cfg_json = json.dumps(config, ensure_ascii=False)
+            att.uploaded_at = timezone.now()
+            saved_path = default_storage.save(f'post_attachments/{timezone.now().strftime("%Y/%m/%d")}/{upload.name}', ContentFile(upload.read()))
+            try:
+                if hasattr(att, 'file'):
+                    att.file.name = saved_path
+            except Exception:
+                pass
+            att.save()
+            url = default_storage.url(saved_path)
+            return JsonResponse({'success': True, 'id': getattr(att, 'id', None), 'url': url, 'title': att.title})
         except Exception:
-            cfg_json = "{}"
+            logger.exception("Upload failed")
+            return JsonResponse({'success': False, 'error': 'upload_failed'}, status=500)
 
-        wrapper_html = (
-            f'<div class="admin-ckeditor-widget" data-ckeditor-config="{escape(cfg_json)}" '
-            f'id="{escape(final_id)}_ckeditor_wrapper">'
-            f'<div class="ckeditor-toolbar"></div><div class="ckeditor-editor" contenteditable="true"></div>'
-            f'</div>'
-        )
-
-        textarea_html = f'<textarea {attr_str}>{textarea_value}</textarea>'
-        noscript_html = '<noscript><p>Включите JavaScript для использования визуального редактора; доступен простой textarea.</p></noscript>'
-
-        html = textarea_html + wrapper_html + noscript_html
-        return mark_safe(html)
+    attachments = PostAttachment.objects.all().order_by('-uploaded_at')[:500] if PostAttachment is not None else []
+    is_xhr = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json'
+    if is_xhr:
+        data = [{'id': a.id, 'title': a.title or os.path.basename(getattr(a.file, 'name', '')), 'url': getattr(a.file, 'url', '')} for a in attachments]
+        return JsonResponse({'attachments': data})
+    context = {'attachments': attachments}
+    return render(request, 'admin/media_library.html', context)
 
 
-class AdminRichTextWidget(CKEditorWidget):
+@require_POST
+def admin_preview_token_view(request):
+    if not request.user.is_staff:
+        return JsonResponse({'detail': 'permission denied'}, status=403)
+    try:
+        payload = json.loads(request.body.decode('utf-8') or '{}')
+        package = {
+            'title': payload.get('title', ''),
+            'content': payload.get('content', ''),
+            'excerpt': payload.get('excerpt', ''),
+            'featured_image': payload.get('featured_image', ''),
+            'generated_by': request.user.pk,
+            'generated_at': timezone.now().isoformat(),
+        }
+        token = signing.dumps(package, salt=PREVIEW_SALT)
+        return JsonResponse({'token': token})
+    except Exception:
+        logger.exception("Preview token failed")
+        return JsonResponse({'detail': 'error'}, status=500)
+
+
+@require_POST
+def admin_autosave_view(request):
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'message': 'permission denied'}, status=403)
+    try:
+        payload = json.loads(request.body.decode('utf-8') or '{}')
+    except Exception:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
+
+    post_id = payload.get('id')
+    if post_id:
+        post = Post.objects.filter(pk=post_id).first() if Post is not None else None
+        if not post and Post is not None:
+            post = Post(author=request.user, status='draft')
+    else:
+        post = Post(author=request.user, status='draft') if Post is not None else None
+
+    if post is None:
+        return JsonResponse({'success': False, 'message': 'Post model not available'}, status=500)
+
+    for f in ('title', 'excerpt', 'content', 'featured_image'):
+        if f in payload:
+            setattr(post, f, payload[f])
+    if payload.get('published_at'):
+        from django.utils.dateparse import parse_datetime, parse_date
+        dt = parse_datetime(payload['published_at']) or parse_date(payload['published_at'])
+        if dt:
+            post.published_at = dt
+
+    try:
+        post.save()
+        try:
+            if reversion:
+                with reversion.create_revision():
+                    reversion.set_user(request.user)
+                    reversion.set_comment("Autosave")
+        except Exception:
+            logger.debug("reversion skipped", exc_info=True)
+        return JsonResponse({'success': True, 'id': post.id})
+    except Exception:
+        logger.exception("Autosave failed")
+        return JsonResponse({'success': False, 'message': 'save_failed'}, status=500)
+
+
+@require_POST
+def admin_post_update_view(request):
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'message': 'permission denied'}, status=403)
+    try:
+        data = json.loads(request.body.decode('utf-8') or '{}')
+    except Exception:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
+
+    post_id = data.get('post_id') or data.get('id')
+    field = data.get('field')
+    value = data.get('value')
+    if not post_id or not field:
+        return JsonResponse({'success': False, 'message': 'Missing data'}, status=400)
+    ALLOWED = {'title', 'status', 'published_at'}
+    if field not in ALLOWED:
+        return JsonResponse({'success': False, 'message': 'Field not allowed'}, status=400)
+    try:
+        post = Post.objects.get(pk=post_id)
+    except Exception:
+        return JsonResponse({'success': False, 'message': 'Post not found'}, status=404)
+    if field == 'published_at':
+        from django.utils.dateparse import parse_datetime, parse_date
+        dt = parse_datetime(value) or parse_date(value)
+        if not dt:
+            return JsonResponse({'success': False, 'message': 'Invalid datetime'}, status=400)
+        post.published_at = dt
+    else:
+        setattr(post, field, value)
+    try:
+        post.save()
+        return JsonResponse({'success': True, 'post_id': post.id, 'field': field, 'value': getattr(post, field)})
+    except Exception:
+        logger.exception("Inline update failed")
+        return JsonResponse({'success': False, 'message': 'save_failed'}, status=500)
+
+
+@require_GET
+def admin_stats_api(request):
+    if not request.user.is_staff:
+        return JsonResponse({'detail': 'permission denied'}, status=403)
+    try:
+        days = int(request.GET.get('days', 30))
+    except Exception:
+        days = 30
+    if days <= 0 or days > 365:
+        days = 30
+    now = timezone.now()
+    start = now - timezone.timedelta(days=days - 1)
+
+    posts_qs = []
+    comments_qs = []
+    views_qs = []
+    try:
+        if Post is not None:
+            posts_qs = (Post.objects.filter(created_at__date__gte=start.date())
+                        .annotate(day=TruncDate('created_at'))
+                        .values('day').annotate(count=Count('id')).order_by('day'))
+    except Exception:
+        posts_qs = []
+    try:
+        if Comment is not None:
+            comments_qs = (Comment.objects.filter(created_at__date__gte=start.date())
+                        .annotate(day=TruncDate('created_at'))
+                        .values('day').annotate(count=Count('id')).order_by('day'))
+    except Exception:
+        comments_qs = []
+    try:
+        if PostView is not None:
+            views_qs = (PostView.objects.filter(viewed_at__date__gte=start.date())
+                        .annotate(day=TruncDate('viewed_at'))
+                        .values('day').annotate(count=Count('id')).order_by('day'))
+    except Exception:
+        views_qs = []
+
+    labels = [(start + timezone.timedelta(days=i)).date().isoformat() for i in range(days)]
+
+    def build_series(qs):
+        mapping = {}
+        try:
+            mapping = {item['day'].isoformat(): item['count'] for item in qs}
+        except Exception:
+            mapping = {}
+        return [mapping.get(d, 0) for d in labels]
+
+    posts_series = build_series(posts_qs)
+    comments_series = build_series(comments_qs)
+    views_series = build_series(views_qs)
+    return JsonResponse({'labels': labels, 'posts': posts_series, 'comments': comments_series, 'views': views_series})
+
+@require_GET
+def admin_dashboard_view(request):
+    if not request.user.is_staff:
+        raise Http404("permission denied")
+    posts_count = Post.objects.count() if Post else 0
+    comments_count = Comment.objects.count() if Comment else 0
+    users_count = CustomUser.objects.count() if CustomUser else 0
+    app_list = []
+    try:
+        if custom_admin_site:
+            app_list = custom_admin_site.get_app_list(request)
+        else:
+            app_list = admin.site.get_app_list(request)
+    except Exception:
+        app_list = []
+    ctx_base = custom_admin_site.each_context(request) if custom_admin_site else admin.site.each_context(request)
+    context = dict(ctx_base, title="Admin dashboard", posts_count=posts_count, comments_count=comments_count, users_count=users_count, app_list=app_list)
+    return render(request, "admin/dashboard.html", context)
+
+# -----------------------
+# Registration helpers & main entrypoint
+# -----------------------
+def _ensure_registered(site_obj, model, admin_class=None):
+    if model is None:
+        return
+    try:
+        if model not in getattr(site_obj, "_registry", {}):
+            if admin_class:
+                site_obj.register(model, admin_class)
+            else:
+                site_obj.register(model)
+    except AlreadyRegistered:
+        pass
+    except Exception:
+        logger.exception("Could not register %s on %s", getattr(model, "__name__", model), getattr(site_obj, "name", site_obj))
+
+
+# The global variable that will be set by register_admin_models
+custom_admin_site = None
+
+def register_admin_models(site_obj):
     """
-    Alias for CKEditorWidget; used where ранее использовался TipTap-specific widget.
+    Register all admin models into provided admin site.
+    Call this AFTER custom_admin_site is created in core.admin to avoid import cycles.
     """
-    pass
+    global custom_admin_site
+    custom_admin_site = site_obj or admin.site
+
+    # choose post admin class
+    def _choose_post_admin():
+        try:
+            ev = os.environ.get("EMERGENCY_ADMIN", "").strip().lower()
+            if ev in ("1", "true", "yes", "on"):
+                class EmergencyPostAdmin(admin.ModelAdmin):
+                    list_display = ("title", "status", "author", "published_at")
+                    fields = ("title", "slug", "author", "status", "published_at", "excerpt", "content", "featured_image")
+                    search_fields = ("title",)
+                    ordering = ("-published_at",)
+                    filter_horizontal = ()
+                return EmergencyPostAdmin
+        except Exception:
+            pass
+        return BasePostAdmin
+
+    post_admin_cls = _choose_post_admin()
+
+    try:
+        _ensure_registered(admin.site, Post, post_admin_cls)
+        _ensure_registered(custom_admin_site, Post, post_admin_cls)
+
+        _ensure_registered(admin.site, Category, CategoryAdmin)
+        _ensure_registered(custom_admin_site, Category, CategoryAdmin)
+
+        _ensure_registered(admin.site, Tag, TagAdmin)
+        _ensure_registered(custom_admin_site, Tag, TagAdmin)
+
+        _ensure_registered(admin.site, Comment, CommentAdmin)
+        _ensure_registered(custom_admin_site, Comment, CommentAdmin)
+
+        _ensure_registered(admin.site, PostReaction, PostReactionAdmin)
+        _ensure_registered(custom_admin_site, PostReaction, PostReactionAdmin)
+
+        if PostAttachment is not None:
+            _ensure_registered(admin.site, MediaLibrary, MediaLibraryAdmin)
+            _ensure_registered(custom_admin_site, MediaLibrary, MediaLibraryAdmin)
+            try:
+                _ensure_registered(admin.site, PostAttachment, MediaLibraryAdmin)
+                _ensure_registered(custom_admin_site, PostAttachment, MediaLibraryAdmin)
+            except Exception:
+                pass
+
+        try:
+            _ensure_registered(admin.site, CustomUser)
+            _ensure_registered(custom_admin_site, CustomUser)
+        except Exception:
+            pass
+    except Exception:
+        logger.exception("bulk registration failed")
+
+    # Attach custom urls by wrapping original get_urls (avoid recursion)
+    def get_admin_urls(urls):
+        custom_urls = [
+            path("dashboard/", admin_dashboard_view, name="admin-dashboard"),
+            path("dashboard/stats-data/", admin_stats_api, name="admin-dashboard-stats"),
+            path("media-library/", admin_media_library_view, name="admin-media-library"),
+            path("posts/update/", admin_post_update_view, name="admin-post-update"),
+            path("posts/autosave/", admin_autosave_view, name="admin-autosave"),
+            path("posts/preview-token/", admin_preview_token_view, name="admin-preview-token"),
+        ]
+        return custom_urls + urls
+
+    try:
+        current_get_urls = getattr(custom_admin_site, "get_urls", None)
+        already_wrapped = getattr(current_get_urls, "_is_wrapped_by_blog_admin", False)
+        if not already_wrapped:
+            orig_get_urls = current_get_urls
+            def wrapped_get_urls():
+                try:
+                    base = orig_get_urls()
+                except Exception:
+                    base = super(type(custom_admin_site), custom_admin_site).get_urls()
+                return get_admin_urls(base)
+            setattr(wrapped_get_urls, "_is_wrapped_by_blog_admin", True)
+            custom_admin_site.get_urls = wrapped_get_urls
+    except Exception:
+        logger.exception("Failed to attach custom urls to custom_admin_site", exc_info=True)
+
+    return True
 
 
-# --------------------------------------------------------------------
-# Post admin integration (форма и регистрация)
-# --------------------------------------------------------------------
-if ProjectPostAdminForm is None:
+# -----------------------
+# PostAdminForm + PostAdmin
+# -----------------------
+if ProjectPostAdminForm:
+    PostAdminForm = ProjectPostAdminForm
+else:
     class PostAdminForm(forms.ModelForm):
         class Meta:
             model = Post
-            fields = "__all__"
-            widgets = {
-                "content": AdminRichTextWidget(),
-            }
-else:
-    class PostAdminForm(ProjectPostAdminForm):
-        class Meta(ProjectPostAdminForm.Meta):
-            widgets = getattr(ProjectPostAdminForm.Meta, "widgets", {})
-            widgets.update({
-                "content": AdminRichTextWidget(),
-            })
+            fields = '__all__'
 
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            try:
+                if CKEditor5Widget:
+                    self.fields['content'].widget = CKEditor5Widget(attrs={'class': 'ckeditor5-widget'})
+                else:
+                    self.fields['content'].widget = forms.Textarea(attrs={'class': 'ckeditor5-widget simple-admin-editor', 'rows': 20})
+            except Exception:
+                logger.exception("Failed to attach widget to content field; using plain textarea")
+                self.fields['content'].widget = forms.Textarea(attrs={'rows': 20})
 
-class PostAdmin(VersionAdmin):
+class PostAdmin(BasePostAdmin):
     form = PostAdminForm
+    change_form_template = BasePostAdmin.change_form_template or 'admin/blog/post/change_form.html'
 
-    list_display = ("title", "status", "author", "published_at")
-    list_filter = ("status", "published_at")
-    search_fields = ("title", "content")
-    ordering = ("-published_at",)
+    def media(self):
+        media = super().media
+        try:
+            # Add CKEditor 5 CSS
+            extra = forms.Media(
+                css={'all': ("admin/css/ckeditor5-admin.css",)}
+            )
+            return media + extra
+        except Exception:
+            logger.exception("Error building PostAdmin.media; returning default media")
+            return media
 
+    media = property(media)
+
+# Register admin classes safely
 try:
     if Post is not None:
-        try:
-            admin.site.unregister(Post)
-        except Exception:
-            pass
         admin.site.register(Post, PostAdmin)
 except AlreadyRegistered:
     pass
+except Exception:
+    logger.exception("Could not register Post admin")
 
-
-# --------------------------------------------------------------------
-# Helper views preserved/ported from original admin.py
-# --------------------------------------------------------------------
-@require_GET
-def admin_media_library(request):
-    if request.method != "GET":
-        return HttpResponse(status=405)
-    attachments = []
-    try:
-        if MediaLibrary is not None:
-            qs = MediaLibrary.objects.order_by("-created_at")[:200]
-            attachments = [{
-                "id": a.id,
-                "title": getattr(a, "title", "") or "",
-                "file": getattr(a.file, "url", "") if getattr(a, "file", None) else ""
-            } for a in qs]
-    except Exception:
-        logger.exception("Failed to load media attachments")
-
-    if request.GET.get("format") == "json":
-        return JsonResponse({"attachments": attachments})
-    return render(request, "admin/media_library.html", {"attachments": attachments})
-
-
-@require_POST
-def admin_media_upload(request):
-    """
-    Upload endpoint used by ckeditor_upload_adapter.js
-    Returns JSON: { "url": "<public url>" }
-    """
-    if request.method != "POST":
-        return HttpResponse(status=405)
-    if not request.FILES:
-        return JsonResponse({"error": "no file"}, status=400)
-    f = request.FILES.get("file")
-    if not f:
-        return JsonResponse({"error": "file key missing"}, status=400)
-    try:
-        base_path = getattr(settings, "BLOG_MEDIA_UPLOAD_PATH", "uploads/blog/")
-        filename = f.name
-        save_path = os.path.join(base_path, filename)
-        save_path = default_storage.save(save_path, ContentFile(f.read()))
-        try:
-            url = default_storage.url(save_path)
-        except Exception:
-            url = save_path
-        if MediaLibrary is not None:
-            try:
-                ml = MediaLibrary.objects.create(title=filename, file=save_path)
-            except Exception:
-                ml = None
-        return JsonResponse({"url": url})
-    except Exception as e:
-        logger.exception("admin_media_upload failed")
-        return JsonResponse({"error": str(e)}, status=500)
-
-
-@require_POST
-def admin_preview_token(request):
-    try:
-        payload = json.loads(request.body.decode("utf-8") or "{}")
-    except Exception:
-        payload = {}
-    token = signing.dumps({
-        "payload": payload,
-        "created": timezone.now().isoformat()
-    }, salt=PREVIEW_SALT)
-    return JsonResponse({"token": token})
-
-
-@require_POST
-def admin_autosave(request):
-    try:
-        data = json.loads(request.body.decode("utf-8") or "{}")
-    except Exception:
-        data = {}
-    try:
-        if Post is None:
-            return JsonResponse({"error": "Post model not available"}, status=500)
-        title = data.get("title") or "Untitled"
-        content = data.get("content") or ""
-        post_id = data.get("id")
-        if post_id:
-            p = Post.objects.filter(pk=post_id).first()
-            if not p:
-                return JsonResponse({"error": "not found"}, status=404)
-            p.title = title
-            p.content = content
-            p.status = "draft"
-            p.save()
-            return JsonResponse({"success": True, "id": p.id})
-        else:
-            p = Post.objects.create(title=title, content=content, status="draft", author=request.user if request.user.is_authenticated else None)
-            return JsonResponse({"success": True, "id": p.id})
-    except Exception as e:
-        logger.exception("admin_autosave failed")
-        return JsonResponse({"error": str(e)}, status=500)
-
-
-@require_GET
-def admin_dashboard_stats(request):
-    try:
-        days = int(request.GET.get("days", "30"))
-    except Exception:
-        days = 30
-    data = {}
-    try:
-        if Post is not None:
-            qs = Post.objects.filter(published_at__isnull=False)
-            counts = qs.annotate(d=TruncDate("published_at")).values("d").annotate(n=Count("id")).order_by("d")
-            labels = []
-            posts = []
-            for c in counts:
-                labels.append(c["d"].isoformat())
-                posts.append(c["n"])
-            data = {"labels": labels, "posts": posts}
-    except Exception:
-        logger.exception("admin_dashboard_stats failed")
-    return JsonResponse(data)
-
-
-# --------------------------------------------------------------------
-# Compatibility wrappers / view aliases expected by core.urls
-# --------------------------------------------------------------------
-def _get_post_modeladmin():
-    """
-    Возвращает зарегистрированный ModelAdmin для Post или None.
-    """
-    try:
-        return admin.site._registry.get(Post)
-    except Exception:
-        return None
-
-
-def blog_post_add(request, *args, **kwargs):
-    """
-    Compatibility view named 'blog_post_add'.
-    Delegates to PostAdmin.add_view(request).
-    """
-    model_admin = _get_post_modeladmin()
-    if not model_admin:
-        raise Http404("Post admin not registered")
-    return model_admin.add_view(request, *args, **kwargs)
-
-
-def blog_post_change(request, object_id, *args, **kwargs):
-    """
-    Compatibility view named 'blog_post_change'.
-    Delegates to PostAdmin.change_view(request, object_id).
-    """
-    model_admin = _get_post_modeladmin()
-    if not model_admin:
-        raise Http404("Post admin not registered")
-    # ensure object_id is string as admin expects
-    return model_admin.change_view(request, str(object_id), *args, **kwargs)
-
-
-def blog_post_changelist(request, *args, **kwargs):
-    """
-    Compatibility view named 'blog_post_changelist'.
-    Delegates to PostAdmin.changelist_view(request).
-    """
-    model_admin = _get_post_modeladmin()
-    if not model_admin:
-        raise Http404("Post admin not registered")
-    # prefer the canonical method name 'changelist_view' but accept older variants
-    view_fn = getattr(model_admin, "changelist_view", None) or getattr(model_admin, "changelist_view", None) or getattr(model_admin, "changelist_view", None)
-    # Fallback to admin's changelist view implementation if available via admin.site
-    if view_fn is None:
-        # Try to use the admin site's default change list view via admin.site
-        try:
-            return admin.site.index(request)
-        except Exception:
-            return HttpResponse(status=501)
-    return view_fn(request, *args, **kwargs)
-
-
-# Compatibility: views expected by backend/core/urls.py
-# These variables are imported in core/urls.py; expose them here.
-# They are simple aliases/delegates to the implementations above or to small page views.
-
-# admin_media_library_view: page (HTML) or JSON view for media library
-admin_media_library_view = admin_media_library
-
-# admin_dashboard_view: page view for admin dashboard (renders template; template may fetch stats via AJAX)
-def admin_dashboard_view(request):
-    """
-    Render the admin dashboard page robustly:
-    - try multiple candidate template names with django.render(request, template, context)
-    - if rendering a template raises NoReverseMatch or other errors, skip to next candidate
-    - if none succeed, fall back to admin.site.index(request)
-    - if even that fails, return a small placeholder HTML
-    """
-    template_candidates = [
-        "admin/dashboard.html",
-        "blog/admin/dashboard.html",
-        "admin/dashboard/index.html",
-        "dashboard.html",
-    ]
-    context = {}
-    for tpl_name in template_candidates:
-        try:
-            # Use render(request, ...) to ensure RequestContext (context processors) are applied.
-            return render(request, tpl_name, context)
-        except TemplateDoesNotExist:
-            # try next candidate
-            continue
-        except NoReverseMatch as nr:
-            # A template tried to reverse a URL name that isn't registered — log and try next template
-            logger.warning("Dashboard template '%s' raised NoReverseMatch: %s", tpl_name, nr)
-            continue
-        except Exception as exc:
-            # Log unexpected exception during template rendering and try next template
-            logger.exception("Error rendering dashboard template '%s': %s", tpl_name, exc)
-            continue
-
-    # Fallback: try admin.site.index (admin index view); if that errors, return placeholder
-    try:
-        return admin.site.index(request)
-    except Exception:
-        logger.exception("admin.site.index failed as fallback for dashboard view")
-        return HttpResponse("<h1>Admin dashboard</h1><p>Dashboard template not available. Please check templates and url names.</p>")
-
-# admin_stats_api: JSON API endpoint returning dashboard stats
-admin_stats_api = admin_dashboard_stats
-
-# admin_post_update_view: endpoint for admin post updates (reuse autosave/update handler)
-def admin_post_update_view(request, *args, **kwargs):
-    """
-    Endpoint used by admin UI to update post content or perform quick saves.
-    Delegates to admin_autosave for now (keeps compatibility).
-    """
-    # If it's a POST, forward to autosave handler
-    if request.method == "POST":
-        return admin_autosave(request)
-    # For GET or other methods, return 405
-    return HttpResponse(status=405)
-
-# admin_autosave_view: alias for autosave endpoint
-admin_autosave_view = admin_autosave
-
-# admin_preview_token_view: alias for preview token endpoint
-admin_preview_token_view = admin_preview_token
-
-
-def get_admin_urls():
-    return [
-        path("media-library/", admin_media_library, name="admin-media-library"),
-        path("media/upload/", admin_media_upload, name="admin-media-upload"),
-        path("preview-token/", admin_preview_token, name="admin-preview-token"),
-        path("autosave/", admin_autosave, name="admin-autosave"),
-        path("dashboard-stats/", admin_dashboard_stats, name="admin-dashboard-stats"),
-        # Compatibility routes expected by older templates:
-        path("admin/blog/post/add/", blog_post_add, name="blog_post_add"),
-        path("admin/blog/post/<int:object_id>/change/", blog_post_change, name="blog_post_change"),
-        path("admin/blog/post/", blog_post_changelist, name="blog_post_changelist"),
-    ]
-
-
-admin_urls = get_admin_urls()
+# register other models with safe helper
+try:
+    _ensure_registered(admin.site, Category, CategoryAdmin)
+    _ensure_registered(admin.site, Tag, TagAdmin)
+    _ensure_registered(admin.site, Comment, CommentAdmin)
+    _ensure_registered(admin.site, PostReaction, PostReactionAdmin)
+    if PostAttachment is not None:
+        _ensure_registered(admin.site, MediaLibrary, MediaLibraryAdmin)
+        _ensure_registered(admin.site, PostAttachment, MediaLibraryAdmin)
+except Exception:
+    logger.exception("Post-registration failed")
