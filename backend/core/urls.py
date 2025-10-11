@@ -102,11 +102,11 @@ urlpatterns += [
     path('admin/blog/post/', blog_post_changelist, name='blog_post_changelist'),
 ]
 
-# --- Подключаем сторонние маршруты и сам admin ---
+# Normal app routes and admin registration
 urlpatterns += [
     path('grappelli/', include('grappelli.urls')),
-    # Подключаем custom_admin_site под namespace 'admin' через include(..., namespace='admin')
-    path("admin/", include((custom_admin_site.urls, "admin"), namespace="admin")),
+    # *** CORRECTED: use custom_admin_site.urls directly (do NOT wrap it in include incorrectly) ***
+    path("admin/", custom_admin_site.urls),
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', LoginView.as_view(), name='login'),
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
@@ -114,11 +114,11 @@ urlpatterns += [
     path('summernote/', include('django_summernote.urls')),
     path('api/auth/profile/', ProfileView.as_view(), name='profile'),
     path('preview/<str:token>/', blog_views.preview_by_token, name='post-preview'),
-    # Корень — редирект на админ (избегаем 404 на "/")
+    # Root redirect (so GET / doesn't 404). Change target if you want a public homepage.
     path('', RedirectView.as_view(url=reverse_lazy('admin:index'))),
 ]
 
-# Optional admin helpers
+# Optional admin helpers (if present)
 if admin_dashboard_view:
     urlpatterns.append(path('admin/dashboard/', admin_dashboard_view, name='admin-dashboard'))
 if admin_stats_api:
