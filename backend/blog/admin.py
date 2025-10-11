@@ -167,13 +167,13 @@ class BasePostAdmin(VersionAdmin):
         self.message_user(request, f"SEO мета-заголовки обновлены для {updated} постов.")
     update_seo_meta.short_description = "🔍 Обновить SEO мета-данные"
 
-    class Media:
-        css = {
-            'all': ('admin/css/post_admin_enhanced.css',)
-        }
-        js = (
-            'admin/js/post_admin_enhanced.js',
-        )
+    #class Media:
+    #    css = {
+    #        'all': ('admin/css/post_admin_enhanced.css',)
+    #    }
+    #    js = (
+    #        'admin/js/post_admin_enhanced.js',
+    #    )
 
 
 class CategoryAdmin(admin.ModelAdmin):
