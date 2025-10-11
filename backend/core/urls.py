@@ -2,9 +2,8 @@
 from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include, reverse_lazy
-from django.shortcuts import redirect
-from django.views.generic import TemplateView
 from django.views.generic.base import RedirectView
+from django.views.generic import TemplateView
 from users.views import RegisterView, LoginView, ProfileView
 from django.conf.urls.static import static
 from .admin import custom_admin_site
@@ -85,7 +84,7 @@ if admin_media_library_view is None:
         admin_media_library_view = None
 
 # -----------------------
-# Собираем urlpatterns — ВАЖНО: совместимые admin post пути регистрируем до admin.site.urls
+# Собираем urlpatterns — ВАЖНО: совместимые admin post пути регистрируем до admin.urls
 # -----------------------
 urlpatterns = []
 
@@ -95,7 +94,7 @@ if admin_media_library_view:
 else:
     urlpatterns.append(path('admin/media-library/', TemplateView.as_view(template_name='admin/media_library_unavailable.html'), name='admin-media-library'))
 
-# compatibility post admin routes
+# compatibility post admin routes (registered BEFORE admin.site.urls)
 urlpatterns += [
     path('admin/blog/post/add/', blog_post_add, name='blog_post_add'),
     path('admin/blog/post/<int:object_id>/change/', blog_post_change, name='blog_post_change'),
@@ -105,8 +104,8 @@ urlpatterns += [
 # Normal app routes and admin registration
 urlpatterns += [
     path('grappelli/', include('grappelli.urls')),
-    # *** CORRECTED: use custom_admin_site.urls directly (do NOT wrap it in include incorrectly) ***
-    path("admin/", custom_admin_site.urls),
+    # CORRECT: include custom_admin_site.urls so Django registers admin namespace correctly
+    path("admin/", include(custom_admin_site.urls)),
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', LoginView.as_view(), name='login'),
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
@@ -114,7 +113,7 @@ urlpatterns += [
     path('summernote/', include('django_summernote.urls')),
     path('api/auth/profile/', ProfileView.as_view(), name='profile'),
     path('preview/<str:token>/', blog_views.preview_by_token, name='post-preview'),
-    # Root redirect (so GET / doesn't 404). Change target if you want a public homepage.
+    # Root redirect — избегаем 404 на "/"
     path('', RedirectView.as_view(url=reverse_lazy('admin:index'))),
 ]
 
