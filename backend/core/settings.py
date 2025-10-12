@@ -218,13 +218,11 @@ INSTALLED_APPS = [
     'adminsortable2',
     'filebrowser',
 
-    # Local apps
+    # Local apps - УБРАН ДУБЛИКАТ 'users'
     'users.apps.UsersConfig',
-    #"users",
     "tables",
     "payments",
     "analytics",
-    #"blog",
     'blog.apps.BlogConfig',
 ]
 
