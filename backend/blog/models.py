@@ -15,6 +15,16 @@ except ImportError:
     HAS_CKEDITOR = False
     CKEditor5Field = models.TextField
 
+# Импортируем AbstractAttachment для summernote
+try:
+    from django_summernote.models import AbstractAttachment
+    HAS_SUMMERNOTE = True
+except ImportError:
+    HAS_SUMMERNOTE = False
+    class AbstractAttachment(models.Model):
+        class Meta:
+            abstract = True
+
 class Category(models.Model):
     title = models.CharField(max_length=120, unique=True)
     slug = models.SlugField(max_length=140, unique=True, blank=True)
@@ -65,18 +75,16 @@ class Tag(models.Model):
         return self.title
 
 
-class PostAttachment(models.Model):
+class PostAttachment(AbstractAttachment):
     """
     File attachments for posts — can be unattached (post nullable) to support media library.
+    Inherits from AbstractAttachment for django-summernote compatibility.
     """
     post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
-    file = models.FileField(
-        storage=SupabaseStorage(),
-        upload_to="post_attachments"
-    )
+    # file field is inherited from AbstractAttachment
     title = models.CharField(max_length=255, blank=True)
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
-    uploaded_at = models.DateTimeField(auto_now_add=True)
+    # uploaded_at field is inherited from AbstractAttachment as 'uploaded'
 
     def __str__(self):
         return self.title or self.file.name
@@ -84,6 +92,11 @@ class PostAttachment(models.Model):
     class Meta:
         verbose_name = "Вложение"
         verbose_name_plural = "Вложения"
+
+    @property
+    def uploaded_at(self):
+        """Backward compatibility property"""
+        return self.uploaded
 
 
 class Post(models.Model):
@@ -103,13 +116,13 @@ class Post(models.Model):
     title = models.CharField(max_length=255, verbose_name="Заголовок")
     slug = models.SlugField(max_length=300, unique=True, blank=True, db_index=True, verbose_name="URL")
     excerpt = models.TextField(blank=True, verbose_name="Краткое описание")
-    
+
     # CKEditor5 поле с правильным использованием verbose_name
     if HAS_CKEDITOR:
         content = CKEditor5Field(config_name='extends', verbose_name="Содержание")
     else:
         content = models.TextField(verbose_name="Содержание")
-    
+
     featured_image = models.URLField(blank=True, null=True, verbose_name="Главное изображение")
     categories = models.ManyToManyField(Category, related_name='posts', blank=True, verbose_name="Категории")
     tags = models.ManyToManyField(Tag, related_name='posts', blank=True, verbose_name="Теги")

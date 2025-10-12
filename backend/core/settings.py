@@ -63,6 +63,8 @@ SUMMERNOTE_CONFIG = {
         ],
     },
     'attachment_require_authentication': True,
+    # Убедитесь, что модель наследует от AbstractAttachment
+    'attachment_model': 'blog.PostAttachment',
 }
 
 # 🎨 Jazzmin кастомизация
@@ -193,6 +195,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    'django.contrib.sites',
     'django_extensions',
 
     # Third-party
@@ -214,6 +217,8 @@ INSTALLED_APPS = [
     "analytics",
     "blog",
 ]
+
+SITE_ID = 1
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
 CKEDITOR_ALLOW_NONIMAGE_FILES = False
@@ -400,3 +405,39 @@ CKEDITOR_5_CONFIGS = {
 
 CKEDITOR_5_FILE_UPLOAD_PERMISSION = "staff"
 CKEDITOR_5_UPLOAD_FILE_TYPES = ['jpeg', 'jpg', 'png', 'gif', 'bmp', 'webp', 'svg']
+
+ADMIN_MEDIA_PREFIX = '/static/admin/'
+
+# Summernote настройки
+SUMMERNOTE_THEME = 'bs4'
+SUMMERNOTE_CONFIG = {
+    'summernote': {
+        'width': '100%',
+        'height': '480',
+        'toolbar': [
+            ['style', ['style']],
+            ['font', ['bold', 'italic', 'underline', 'clear']],
+            ['fontname', ['fontname']],
+            ['color', ['color']],
+            ['para', ['ul', 'ol', 'paragraph']],
+            ['height', ['height']],
+            ['table', ['table']],
+            ['insert', ['link', 'picture', 'video']],
+            ['view', ['fullscreen', 'codeview', 'help']],
+        ],
+    },
+    'attachment_require_authentication': True,
+    'attachment_model': 'blog.PostAttachment',
+}
+
+# Filebrowser настройки (если используется)
+FILEBROWSER_DIRECTORY = ''
+FILEBROWSER_EXTENSIONS = {
+    'Image': ['.jpg','.jpeg','.gif','.png','.tif','.tiff'],
+    'Document': ['.pdf','.doc','.docx','.txt'],
+    'Video': ['.mov','.mp4','.m4v','.avi'],
+    'Audio': ['.mp3','.wav','.aiff','.midi','.m4p']
+}
+
+# Настройки для корректной работы с Supabase
+AWS_QUERYSTRING_AUTH = False  # Важно для публичных файлов в Supabase

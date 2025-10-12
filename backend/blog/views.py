@@ -401,13 +401,24 @@ def media_upload(request):
         for f in files:
             att = PostAttachment()
             try:
-                att.file.save(f.name, f, save=False)
+                # Используем save с правильными параметрами
+                att.file.save(f.name, ContentFile(f.read()), save=False)
             except Exception as e:
                 logger.exception("media_upload: file.save failed for %s: %s", f.name, e)
-                return Response({'success': False, 'message': 'file.save failed'}, status=500)
+                return Response({'success': False, 'message': f'file.save failed: {str(e)}'}, status=500)
 
             att.title = request.data.get('title') or f.name
             att.uploaded_by = request.user if request.user.is_authenticated else None
+            
+            # Обрабатываем post_id если он передан
+            post_id = request.data.get('post_id')
+            if post_id:
+                try:
+                    post = Post.objects.get(pk=int(post_id))
+                    att.post = post
+                except (Post.DoesNotExist, ValueError):
+                    pass  # Оставляем post как None если не найден
+
             try:
                 att.save()
             except Exception as e:
@@ -417,35 +428,26 @@ def media_upload(request):
                 except Exception:
                     logger.exception("media_upload: cleanup failed for %s", f.name)
                 logger.exception("media_upload: saving PostAttachment failed: %s", e)
-                return Response({'success': False, 'message': 'attachment save failed'}, status=500)
+                return Response({'success': False, 'message': f'attachment save failed: {str(e)}'}, status=500)
 
             try:
-                name = getattr(att.file, 'name', '') or ''
-                normalized = name.replace('post_attachments/post_attachments/', 'post_attachments/')
-                if normalized != name:
-                    try:
-                        if att.file.storage.exists(normalized):
-                            att.file.name = normalized
-                            att.save(update_fields=['file'])
-                            logger.debug("Normalized attachment name from %s -> %s", name, normalized)
-                    except Exception:
-                        logger.debug("Could not check storage.exists for normalized path %s", normalized)
-            except Exception:
-                logger.exception("media_upload: normalization check failed")
+                file_url = att.file.url
+            except Exception as e:
+                file_url = ''
+                logger.warning("Could not get file URL for attachment %s: %s", att.id, e)
 
             uploaded.append({
                 'id': att.id,
-                'url': getattr(att.file, 'url', ''),
+                'url': file_url,
                 'filename': getattr(att.file, 'name', f.name),
                 'title': att.title,
             })
 
         return Response({'success': True, 'uploaded': uploaded})
-    except Exception:
+    except Exception as e:
         tb = traceback.format_exc()
         logger.exception("media_upload error: %s", tb)
-        return Response({'success': False, 'message': 'Internal server error'}, status=500)
-
+        return Response({'success': False, 'message': f'Internal server error: {str(e)}'}, status=500)
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
