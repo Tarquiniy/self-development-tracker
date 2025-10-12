@@ -153,6 +153,7 @@ CSRF_COOKIE_SECURE = True
 # ========== STATIC ==========
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+#STATICFILES_DIRS = [os.path.join(BASE_DIR, "backend", "static"),]
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "static"),
 ]
@@ -188,42 +189,37 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    # "backend.core.cors_middleware.CorsMiddleware",  # Раскомментируйте если нужно
+    "backend.core.cors_middleware.CorsMiddleware",  # Раскомментируйте если нужно
 ]
 
 # ========== APPS ==========
 INSTALLED_APPS = [
-    # 1) Наш users первым — гарантируем, что CustomUser регистрируется раньше, чем кто-либо попросит его.
-    "users.apps.UsersConfig",
-
-    # 2) Встроенные Django-приложения (admin/auth должны идти до admin-UI пакетов)
+    "jazzmin",
+    "django_ckeditor_5",
+    'grappelli',
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "django.contrib.sites",
-    "django_extensions",
+    'django.contrib.sites',
+    'django_extensions',
 
-    # 3) Админ-темы / UI (после django.contrib.admin)
-    "jazzmin",
-    "django_ckeditor_5",
-    "grappelli",
-
-    # 4) Third-party
+    # Third-party
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
     "whitenoise.runserver_nostatic",
-    "django_filters",
-    "django_summernote",
-    "storages",
-    "reversion",
-    "adminsortable2",
-    "filebrowser",
+    'django_filters',
+    'django_summernote',
+    'storages',
+    'reversion',
+    'adminsortable2',
+    'filebrowser',
 
-    # 5) Local apps
+    # Local apps
+    "users",
     "tables",
     "payments",
     "analytics",
@@ -326,9 +322,7 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
-# Убираем префикс 'backend.' чтобы избежать ModuleNotFoundError в окружениях,
-# где рабочая директория уже backend/
-DEFAULT_FILE_STORAGE = "blog.storages.SupabaseStorage"
+DEFAULT_FILE_STORAGE = "backend.blog.storages.SupabaseStorage"
 
 if not DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -355,7 +349,7 @@ LOGGING = {
 CKEDITOR_5_CONFIGS = {
     'default': {
         'toolbar': [
-            'heading', '|', 
+            'heading', '|',
             'bold', 'italic', 'underline', 'strikethrough', '|',
             'link', 'blockQuote', 'imageUpload', 'mediaEmbed', '|',
             'alignment', 'bulletedList', 'numberedList', '|',
