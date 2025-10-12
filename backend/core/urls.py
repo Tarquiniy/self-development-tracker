@@ -1,17 +1,18 @@
 # backend/core/urls.py
 from django.conf import settings
-from django.contrib import admin
 from django.urls import path, include
-# Используем полный путь к модулю users, чтобы не путаться с возможным
-# другим пакетом 'users' в корне репозитория.
-from backend.users.views import RegisterView, LoginView, ProfileView
+from django.contrib import admin as django_admin
+from django.views.generic import TemplateView, RedirectView
 from django.conf.urls.static import static
 from .admin import custom_admin_site
+from backend.users.views import RegisterView, LoginView, ProfileView
 from blog import views as blog_views
-from django.views.generic import TemplateView, RedirectView
 from .views import cors_test
-from django.urls import path, include, re_path
-from django.contrib import admin as django_admin
+
+import importlib.util
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Попытка импортировать админ-views из blog.admin (dashboard, stats, post update, media library)
 admin_dashboard_view = None
@@ -46,24 +47,62 @@ if admin_media_library_view is None:
     except Exception:
         admin_media_library_view = None
 
+
 urlpatterns = [
     path('grappelli/', include('grappelli.urls')),
-    # Регистрируем кастомную админку (только один раз)
+
+    # Стандартная админка (нужна, чтобы корневые имена роутов admin присутствовали)
     path("admin/", django_admin.site.urls),
+
+    # Дополнительная кастомная админка (если нужна) — отдельно
+    path("custom-admin/", custom_admin_site.urls),
+
     # Auth endpoints (явные view-классы)
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', LoginView.as_view(), name='login'),
+
     # Остальные API
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
-    path('api/tables/', include(('tables.urls', 'tables'), namespace='tables')),
-    path('summernote/', include('django_summernote.urls')),
+
+    # Подключаем tables гибко — сначала backend.tables, потом tables, иначе пропустить
+]
+
+# Попытка безопасно подключить tables.urls (варианты: backend.tables или tables)
+try:
+    if importlib.util.find_spec("backend.tables.urls"):
+        urlpatterns += [path('api/tables/', include(('backend.tables.urls', 'tables'), namespace='tables'))]
+    elif importlib.util.find_spec("tables.urls"):
+        urlpatterns += [path('api/tables/', include(('tables.urls', 'tables'), namespace='tables'))]
+    else:
+        logger.debug("tables.urls not found — skipping tables API include")
+except Exception:
+    logger.exception("Error while attempting to include tables.urls; skipping")
+
+# Summernote (подключаем без дублирования)
+try:
+    if importlib.util.find_spec("django_summernote"):
+        urlpatterns += [path('summernote/', include('django_summernote.urls'))]
+    else:
+        logger.debug("django_summernote not installed — skipping include")
+except Exception:
+    logger.exception("Error while attempting to include django_summernote.urls")
+
+# Profile endpoint
+urlpatterns += [
     path('api/auth/profile/', ProfileView.as_view(), name='profile'),
     path('preview/<str:token>/', blog_views.preview_by_token, name='post-preview'),
     path('api/cors-test/', cors_test, name='cors-test'),
     path('', RedirectView.as_view(url='/admin/')),
-    path('summernote/', include('django_summernote.urls')),
-    path('ckeditor5/', include('django_ckeditor_5.urls')),
 ]
+
+# CKEditor5 include (если установлен)
+try:
+    if importlib.util.find_spec("django_ckeditor_5"):
+        urlpatterns += [path('ckeditor5/', include('django_ckeditor_5.urls'))]
+    else:
+        logger.debug("django_ckeditor_5 not installed — skipping include")
+except Exception:
+    logger.exception("Error while attempting to include django_ckeditor_5.urls")
 
 # Регистрируем /admin/media-library/ ДО admin.urls, чтобы не перехватывался
 if admin_media_library_view:
