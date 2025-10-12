@@ -1,0 +1,14 @@
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block extrahead %}
+  {{ block.super }}
+  {# Подключаем только наши локальные стили/скрипты для продвинутого редактора #}
+  <link rel="stylesheet" href="{% static 'admin/css/advanced_admin_editor.css' %}">
+  <script src="{% static 'admin/js/media_picker.js' %}"></script>
+  <script src="{% static 'admin/js/advanced_admin_editor.js' %}"></script>
+  <style>
+    /* небольшая локальная защита чтобы админ-ресурсы не перекрывали наши панели */
+    .admin-advanced-toolbar { margin-bottom: 8px; }
+  </style>
+{% endblock %}

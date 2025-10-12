@@ -1,0 +1,141 @@
+/* backend/blog/static/admin/css/ckeditor5-admin.css */
+/* CKEditor 5 Admin Styles */
+
+.ckeditor5-widget {
+    min-height: 400px;
+}
+
+.ck.ck-editor {
+    margin: 10px 0;
+    border: 1px solid #e1e1e1;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.ck.ck-toolbar {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e1e1e1;
+    padding: 8px;
+}
+
+.ck.ck-toolbar .ck-toolbar__items {
+    flex-wrap: wrap;
+    gap: 2px;
+}
+
+.ck.ck-button {
+    border-radius: 4px;
+    padding: 6px 8px;
+    min-width: auto;
+    height: auto;
+}
+
+.ck.ck-button:hover {
+    background: #e9ecef;
+}
+
+.ck.ck-content {
+    min-height: 300px;
+    padding: 20px;
+    line-height: 1.6;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+}
+
+.ck.ck-content h1,
+.ck.ck-content h2,
+.ck.ck-content h3,
+.ck.ck-content h4,
+.ck.ck-content h5,
+.ck.ck-content h6 {
+    margin: 1.2em 0 0.6em;
+    font-weight: 600;
+}
+
+.ck.ck-content p {
+    margin: 0 0 1em;
+}
+
+.ck.ck-content blockquote {
+    border-left: 4px solid #007cba;
+    padding-left: 1em;
+    margin: 1em 0;
+    font-style: italic;
+    color: #666;
+}
+
+.ck.ck-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+}
+
+.ck.ck-content table td,
+.ck.ck-content table th {
+    border: 1px solid #ddd;
+    padding: 8px 12px;
+}
+
+.ck.ck-content table th {
+    background: #f8f9fa;
+    font-weight: 600;
+}
+
+.ck.ck-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+}
+
+.ck.ck-content .image {
+    text-align: center;
+    margin: 1em 0;
+}
+
+.ck.ck-content .image-style-side {
+    float: right;
+    margin-left: 1em;
+    max-width: 50%;
+}
+
+.ck.ck-content .image-style-block {
+    margin: 1em auto;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .ck.ck-toolbar .ck-toolbar__items {
+        justify-content: flex-start;
+    }
+    
+    .ck.ck-content {
+        padding: 15px;
+        font-size: 16px; /* Better for mobile */
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .ck.ck-editor {
+        border-color: #555;
+    }
+    
+    .ck.ck-toolbar {
+        background: #2d3748;
+        border-color: #555;
+    }
+    
+    .ck.ck-content {
+        background: #1a202c;
+        color: #e2e8f0;
+    }
+    
+    .ck.ck-content table td,
+    .ck.ck-content table th {
+        border-color: #555;
+    }
+    
+    .ck.ck-content table th {
+        background: #2d3748;
+    }
+}

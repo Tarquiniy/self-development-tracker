@@ -1,0 +1,69 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block content %}
+  <h1>Медиа библиотека</h1>
+
+  <form id="uploadForm" enctype="multipart/form-data" method="post">
+    {% csrf_token %}
+    <input type="file" name="file" id="fileInput" />
+    <input type="text" name="title" placeholder="Название (опционально)" />
+    <button type="submit">Загрузить</button>
+  </form>
+
+  <hr/>
+  <div id="attachments">
+    {% for a in attachments %}
+      <div class="attachment" data-url="{{ a.file.url }}">
+        <img src="{{ a.file.url }}" style="max-width:200px;max-height:120px" alt="{{ a.title }}" />
+        <div>{{ a.title }}</div>
+        <button onclick="insertToEditor('{{ a.file.url }}')">Вставить в редактор</button>
+      </div>
+    {% empty %}
+      <div>Нет файлов</div>
+    {% endfor %}
+  </div>
+
+  <script>
+    const uploadForm = document.getElementById('uploadForm');
+    uploadForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = document.getElementById('fileInput').files[0];
+      if (!f) return alert('Выберите файл');
+      const fd = new FormData(uploadForm);
+      const resp = await fetch("", { method: "POST", body: fd, headers: {'X-Requested-With': 'XMLHttpRequest'}});
+      const data = await resp.json();
+      if (data.success) {
+        alert('Загружено');
+        location.reload();
+      } else {
+        alert('Ошибка: ' + (data.error || 'unknown'));
+      }
+    });
+
+    function insertToEditor(url) {
+      // Try to find common fields to insert (featured_image input or content textarea)
+      // This function expects you to have opened media library in a popup from post change form.
+      if (window.opener) {
+        try {
+          // вставить в поле featured_image, если есть
+          const fg = window.opener.document.querySelector('input[name="featured_image"]');
+          if (fg) {
+            fg.value = url;
+            window.close();
+            return;
+          }
+          // вставить в поле content (textarea) — добавляем простой <img>
+          const cnt = window.opener.document.querySelector('textarea[name="content"]');
+          if (cnt) {
+            cnt.value = (cnt.value || '') + "\\n<img src='" + url + "' />\\n";
+            window.close();
+            return;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      alert('Нельзя вставить: откройте медиа-библиотеку из формы поста');
+    }
+  </script>
+{% endblock %}

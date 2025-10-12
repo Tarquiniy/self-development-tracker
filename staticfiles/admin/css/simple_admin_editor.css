@@ -1,0 +1,23 @@
+/* simple_admin_editor.css */
+.simple-editor-toolbar{
+  margin: 6px 0;
+  display:flex;
+  gap:6px;
+}
+.simple-editor-btn{
+  padding:4px 8px;
+  border:1px solid #ccc;
+  background:#f7f7f7;
+  cursor:pointer;
+  border-radius:3px;
+}
+.simple-editor-btn:hover{ background:#eee; }
+.simple-editor-preview{
+  border:1px solid #e1e1e1;
+  background:#fff;
+  padding:10px;
+  margin-bottom:8px;
+  border-radius:4px;
+  max-height:320px;
+  overflow:auto;
+}

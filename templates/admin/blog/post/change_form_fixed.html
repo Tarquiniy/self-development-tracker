@@ -1,0 +1,522 @@
+<!-- backend/templates/admin/blog/post/change_form_fixed.html -->
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+/* Базовые стили для улучшения внешнего вида */
+.post-editor-modern {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.editor-header {
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 1rem 2rem;
+  margin: -1rem -2rem 2rem;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+
+.editor-main {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+.content-area, .sidebar-area {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.editor-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+}
+
+.card-header {
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.form-input, .form-textarea, .form-select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.title-field {
+  font-size: 1.25rem !important;
+  font-weight: 600;
+}
+
+.quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.btn-action {
+  width: 100%;
+  justify-content: center;
+  padding: 0.875rem 1rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="post-editor-modern">
+  <!-- Header -->
+  <header class="editor-header">
+    <div class="header-content">
+      <div class="header-title">
+        <h1>
+          {% if original %}
+            Редактирование: {{ original.title|default:"Без названия"|truncatechars:50 }}
+          {% else %}
+            📝 Создание нового поста
+          {% endif %}
+        </h1>
+      </div>
+      <div class="header-actions">
+        <!-- Эти кнопки теперь работают через стандартную форму Django -->
+        <button type="submit" name="_save" class="btn btn-primary" form="post_form">
+          💾 Сохранить
+        </button>
+        <button type="submit" name="_continue" class="btn btn-secondary" form="post_form">
+          🔄 Сохранить и продолжить
+        </button>
+        <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-outline">
+          ← Назад
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Используем стандартную форму Django, но с нашей разметкой -->
+  <form method="post" id="post_form" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    
+    <div class="editor-main">
+      <!-- Left Column - Content -->
+      <div class="content-area">
+        <!-- Title & Slug -->
+        <div class="editor-card">
+          <div class="card-header">
+            <h3>📌 Основная информация</h3>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label" for="id_title">Заголовок поста *</label>
+              <input type="text" name="title" value="{{ adminform.form.title.value|default:'' }}" id="id_title" class="form-input title-field" placeholder="Введите captivating заголовок..." maxlength="255" required>
+              {% if adminform.form.title.errors %}
+              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.title.errors }}</div>
+              {% endif %}
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="id_slug">URL Slug</label>
+              <input type="text" name="slug" value="{{ adminform.form.slug.value|default:'' }}" id="id_slug" class="form-input" placeholder="avtomaticeskiy-slug">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; font-size: 0.75rem; color: #6b7280;">
+                <span>Используется в URL</span>
+                <button type="button" id="generate-slug" class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">🔄 Сгенерировать</button>
+              </div>
+              {% if adminform.form.slug.errors %}
+              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.slug.errors }}</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Content Editor -->
+        <div class="editor-card">
+          <div class="card-header">
+            <h3>📝 Содержание</h3>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              {{ adminform.form.content }}
+              {% if adminform.form.content.errors %}
+              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.content.errors }}</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Excerpt -->
+        <div class="editor-card">
+          <div class="card-header">
+            <h3>📋 Краткое описание</h3>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <textarea name="excerpt" id="id_excerpt" class="form-textarea" placeholder="Краткое описание поста, отображается в превью..." rows="3">{{ adminform.form.excerpt.value|default:'' }}</textarea>
+              <div class="char-counter" style="text-align: right; font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+                <span id="excerpt-counter">0</span>/320 символов
+              </div>
+              {% if adminform.form.excerpt.errors %}
+              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.excerpt.errors }}</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column - Sidebar -->
+      <div class="sidebar-area">
+        <!-- Publication -->
+        <div class="editor-card">
+          <div class="card-header">
+            <h3>🚀 Публикация</h3>
+          </div>
+          <div class="card-body">
+            <!-- Status -->
+            <div class="form-group">
+              <label class="form-label" for="id_status">Статус</label>
+              <select name="status" id="id_status" class="form-select">
+                {% for value, label in adminform.form.status.field.choices %}
+                  <option value="{{ value }}" {% if adminform.form.status.value == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              {% if adminform.form.status.errors %}
+              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.status.errors }}</div>
+              {% endif %}
+            </div>
+
+            <!-- Published At -->
+<div class="form-group">
+    <label class="form-label" for="id_published_at">Дата публикации</label>
+    <input type="datetime-local" name="published_at" value="{{ adminform.form.published_at.value|default:'' }}" id="id_published_at" class="form-input">
+    <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+        Оставьте пустым для автоматической установки при публикации
+    </div>
+    {% if adminform.form.published_at.errors %}
+    <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">
+        {% for error in adminform.form.published_at.errors %}
+            {{ error }}
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+            <!-- Author -->
+            <div class="form-group">
+              <label class="form-label" for="id_author">Автор</label>
+              <select name="author" id="id_author" class="form-select">
+                <option value="">---------</option>
+                {% for value, label in adminform.form.author.field.choices %}
+                  <option value="{{ value }}" {% if adminform.form.author.value == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              {% if adminform.form.author.errors %}
+              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.author.errors }}</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Categories & Tags -->
+        <div class="editor-card">
+          <div class="card-header">
+            <h3>🏷️ Классификация</h3>
+          </div>
+          <div class="card-body">
+            <!-- Categories -->
+            <div class="form-group">
+              <label class="form-label" for="id_categories">Категории</label>
+              <select name="categories" id="id_categories" class="form-select" multiple style="height: 120px;">
+                {% for value, label in adminform.form.categories.field.choices %}
+                  <option value="{{ value }}" {% if value in adminform.form.categories.value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              {% if adminform.form.categories.errors %}
+              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.categories.errors }}</div>
+              {% endif %}
+            </div>
+
+            <!-- Tags -->
+            <div class="form-group">
+              <label class="form-label" for="id_tags">Теги</label>
+              <select name="tags" id="id_tags" class="form-select" multiple style="height: 120px;">
+                {% for value, label in adminform.form.tags.field.choices %}
+                  <option value="{{ value }}" {% if value in adminform.form.tags.value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              {% if adminform.form.tags.errors %}
+              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.tags.errors }}</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="editor-card">
+          <div class="card-header">
+            <h3>⚡ Быстрые действия</h3>
+          </div>
+          <div class="card-body">
+            <div class="quick-actions">
+              <button type="button" id="preview-btn" class="btn btn-action">
+                👁️ Предпросмотр
+              </button>
+              <button type="button" id="fill-meta" class="btn btn-action">
+                📝 Заполнить SEO
+              </button>
+              <a href="{% url 'admin:blog_medialibrary_changelist' %}" class="btn btn-action" target="_blank">
+                🗂️ Медиатека
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Скрытые поля Django -->
+    {% for field in adminform.form.hidden_fields %}
+      {{ field }}
+    {% endfor %}
+  </form>
+</div>
+{% endblock %}
+
+{% block footer %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('🚀 Fixed Post Editor initialized');
+
+  // Базовая функциональность
+  initDateTimeFields();  // <-- ДОБАВЬТЕ ЭТУ СТРОЧКУ
+  initSlugGeneration();
+  initCharacterCounters();
+  initQuickActions();
+
+  function initDateTimeFields() {
+    const publishedAtField = document.getElementById('id_published_at');
+    
+    if (publishedAtField && !publishedAtField.value) {
+        // Устанавливаем текущую дату и время по умолчанию для новых постов
+        const now = new Date();
+        const timezoneOffset = now.getTimezoneOffset() * 60000; // Смещение в миллисекундах
+        const localISOTime = new Date(now - timezoneOffset).toISOString().slice(0, 16);
+        publishedAtField.value = localISOTime;
+        console.log('✅ Установлена текущая дата публикации:', localISOTime);
+    } else if (publishedAtField && publishedAtField.value) {
+        console.log('✅ Дата публикации уже установлена:', publishedAtField.value);
+    }
+  }
+
+  function initSlugGeneration() {
+    const generateBtn = document.getElementById('generate-slug');
+    const titleField = document.getElementById('id_title');
+    const slugField = document.getElementById('id_slug');
+
+    if (generateBtn && titleField && slugField) {
+      generateBtn.addEventListener('click', function() {
+        const title = titleField.value.trim();
+        if (title) {
+          const slug = generateSlug(title);
+          slugField.value = slug;
+          showNotification('Slug сгенерирован', 'success');
+        } else {
+          showNotification('Введите заголовок сначала', 'warning');
+        }
+      });
+
+      // Auto-generate slug when title changes (if slug is empty)
+      titleField.addEventListener('blur', function() {
+        if (!slugField.value.trim()) {
+          const title = titleField.value.trim();
+          if (title) {
+            slugField.value = generateSlug(title);
+          }
+        }
+      });
+    }
+  }
+
+  function initCharacterCounters() {
+    const excerptField = document.getElementById('id_excerpt');
+    const metaDescField = document.getElementById('id_meta_description');
+
+    function updateCounter(field, counterId, maxLength) {
+      const counter = document.getElementById(counterId);
+      if (!counter || !field) return;
+
+      const length = field.value.length;
+      counter.textContent = length;
+
+      // Update counter color based on length
+      if (length > maxLength) {
+        counter.style.color = '#ef4444';
+      } else if (length > maxLength * 0.9) {
+        counter.style.color = '#f59e0b';
+      } else {
+        counter.style.color = '';
+      }
+    }
+
+    if (excerptField) {
+      updateCounter(excerptField, 'excerpt-counter', 320);
+      excerptField.addEventListener('input', () => updateCounter(excerptField, 'excerpt-counter', 320));
+    }
+  }
+
+  function initQuickActions() {
+    // Preview button
+    const previewBtn = document.getElementById('preview-btn');
+    if (previewBtn) {
+      previewBtn.addEventListener('click', function() {
+        const postId = getPostId();
+        if (postId) {
+          window.open(`/preview/${postId}`, '_blank');
+        } else {
+          showNotification('Сохраните пост для предпросмотра', 'warning');
+        }
+      });
+    }
+
+    // Fill meta button
+    const fillMetaBtn = document.getElementById('fill-meta');
+    const titleField = document.getElementById('id_title');
+    const excerptField = document.getElementById('id_excerpt');
+
+    if (fillMetaBtn && titleField) {
+      fillMetaBtn.addEventListener('click', function() {
+        const title = titleField.value.trim();
+        const excerpt = excerptField ? excerptField.value.trim() : '';
+
+        if (title) {
+          // Здесь можно добавить логику заполнения SEO полей
+          showNotification('SEO данные заполнены', 'success');
+        } else {
+          showNotification('Введите заголовок сначала', 'warning');
+        }
+      });
+    }
+  }
+
+  function generateSlug(text) {
+    return text
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .substring(0, 50);
+  }
+
+  function getPostId() {
+    const urlMatch = window.location.pathname.match(/\/admin\/blog\/post\/(\d+)\/change/);
+    return urlMatch ? urlMatch[1] : null;
+  }
+
+  function showNotification(message, type = 'info', duration = 3000) {
+    // Remove existing notifications
+    const existing = document.querySelector('.custom-notification');
+    if (existing) existing.remove();
+
+    // Create notification
+    const notification = document.createElement('div');
+    notification.className = `custom-notification`;
+    notification.innerHTML = message;
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 16px;
+      background: white;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 10000;
+      border-left: 4px solid ${type === 'success' ? '#10b981' : type === 'warning' ? '#f59e0b' : '#3b82f6'};
+      max-width: 300px;
+    `;
+
+    document.body.appendChild(notification);
+
+    // Auto remove
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, duration);
+  }
+
+  // Базовая валидация формы
+  const form = document.getElementById('post_form');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      const title = document.getElementById('id_title').value.trim();
+      if (!title) {
+        e.preventDefault();
+        showNotification('Заголовок обязателен для заполнения', 'error');
+        document.getElementById('id_title').focus();
+        return;
+      }
+
+      // Показываем индикатор сохранения
+      const submitBtn = document.querySelector('button[name="_save"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '⏳ Сохранение...';
+      }
+    });
+  }
+});
+</script>
+{% endblock %}

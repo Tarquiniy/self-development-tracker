@@ -1,0 +1,89 @@
+<!-- backend/templates/admin/blog/post/change_form_simple.html -->
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block content %}
+<div id="content-main">
+    <form method="post" id="post_form" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        
+        <!-- Показываем ошибки формы -->
+        {% if adminform.form.errors %}
+        <div class="alert alert-error">
+            <strong>Ошибки формы:</strong>
+            {{ adminform.form.errors }}
+        </div>
+        {% endif %}
+        
+        <!-- Основные поля -->
+        <div class="module">
+            <h2>Основная информация</h2>
+            <fieldset class="module aligned">
+                <div class="form-row">
+                    {{ adminform.form.title.label_tag }}
+                    {{ adminform.form.title }}
+                    {% if adminform.form.title.errors %}
+                    <div class="error">{{ adminform.form.title.errors }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    {{ adminform.form.slug.label_tag }}
+                    {{ adminform.form.slug }}
+                    {% if adminform.form.slug.errors %}
+                    <div class="error">{{ adminform.form.slug.errors }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    {{ adminform.form.content.label_tag }}
+                    {{ adminform.form.content }}
+                    {% if adminform.form.content.errors %}
+                    <div class="error">{{ adminform.form.content.errors }}</div>
+                    {% endif %}
+                </div>
+            </fieldset>
+        </div>
+        
+        <!-- Скрытые поля -->
+        {% for field in adminform.form.hidden_fields %}
+            {{ field }}
+        {% endfor %}
+        
+        <!-- Кнопки отправки -->
+        <div class="submit-row">
+            <input type="submit" value="Сохранить" class="default" name="_save">
+            <input type="submit" value="Сохранить и продолжить редактирование" name="_continue">
+            <input type="submit" value="Сохранить и добавить другой объект" name="_addanother">
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Simple admin form loaded');
+    
+    const form = document.getElementById('post_form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            console.log('Form submitted');
+            
+            // Базовая валидация
+            const title = document.querySelector('[name="title"]').value.trim();
+            if (!title) {
+                e.preventDefault();
+                alert('Заголовок обязателен для заполнения');
+                return false;
+            }
+            
+            // Показываем индикатор загрузки
+            const submitBtn = document.querySelector('input[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.value = 'Сохранение...';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

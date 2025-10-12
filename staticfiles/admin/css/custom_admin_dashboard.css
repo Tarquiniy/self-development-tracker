@@ -1,0 +1,60 @@
+/* static/admin/css/custom_admin_dashboard.css */
+:root{
+  --accent:#0b5ed7;
+  --muted:#6c757d;
+  --card-bg:#ffffff;
+  --page-bg:#f6f9fc;
+  --max-width:1200px;
+}
+
+body.dashboard-body{
+  background: var(--page-bg);
+  color: #222;
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  margin:0;
+  padding:0;
+}
+
+.container{
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 18px;
+}
+
+.dashboard-header{
+  background: linear-gradient(90deg, #ffffff 0%, #f7fbff 100%);
+  border-bottom: 1px solid #e6eef8;
+  padding: 20px 0;
+}
+
+.site-title{
+  margin: 0 0 4px;
+  font-size: 28px;
+  color: #0b3b75;
+}
+.site-sub{ margin: 0; color: var(--muted); font-size: 13px; }
+
+.user-block{ color: var(--muted); font-size: 14px; }
+
+.quick-actions{ display:flex; gap:10px; margin: 18px 0; flex-wrap:wrap; }
+.btn{ display:inline-block; padding:8px 14px; border-radius:6px; text-decoration:none; border:1px solid rgba(0,0,0,0.06); font-weight:600; }
+.btn-primary{ background:var(--accent); color:#fff; border-color: rgba(11,94,215,0.9); }
+.btn-outline{ background:transparent; color:var(--accent); border:1px solid rgba(11,94,215,.12); }
+
+.stats-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap:12px; margin-bottom:20px; }
+.stat-card{ background:var(--card-bg); padding:14px; border-radius:8px; box-shadow: 0 1px 4px rgba(20,30,60,0.04); }
+.stat-title{ font-size:13px; color:var(--muted); margin-bottom:8px; }
+.stat-value{ font-size:22px; font-weight:700; color:#0b3b75; }
+
+.apps-and-recent{ display:flex; gap:16px; align-items:flex-start; }
+.apps{ flex:2; }
+.recent{ flex:1; min-width:260px; }
+.apps-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap:10px; }
+.app{ background:var(--card-bg); padding:10px; border-radius:8px; }
+.app-title{ font-weight:600; color:#0b3b75; margin-bottom:6px; }
+.models{ list-style:none; padding:0; margin:0; }
+.models li{ margin:4px 0; }
+
+.panel{ background:var(--card-bg); padding:12px; border-radius:8px; }
+
+.dashboard-footer{ padding:12px 0; color:var(--muted); border-top:1px solid #eee; margin-top:20px; }
