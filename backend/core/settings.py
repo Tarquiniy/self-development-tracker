@@ -63,6 +63,7 @@ SUMMERNOTE_CONFIG = {
         ],
     },
     'attachment_require_authentication': True,
+    # Убедитесь, что модель наследует от AbstractAttachment
     'attachment_model': 'blog.PostAttachment',
 }
 
@@ -187,15 +188,15 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "core.cors_middleware.CorsMiddleware",
+    # "backend.core.cors_middleware.CorsMiddleware",  # Раскомментируйте если нужно
 ]
 
 # ========== APPS ==========
 INSTALLED_APPS = [
-    # 1) Наш users первым (через полный путь AppConfig) — гарантируем раннюю регистрацию CustomUser
-    "backend.users.apps.UsersConfig",
+    # 1) Наш users первым — гарантируем, что CustomUser регистрируется раньше, чем кто-либо попросит его.
+    "users.apps.UsersConfig",
 
-    # 2) Встроенные Django-приложения (админ/аутентификация должны идти прежде, чем UI пакеты)
+    # 2) Встроенные Django-приложения (admin/auth должны идти до admin-UI пакетов)
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -205,7 +206,7 @@ INSTALLED_APPS = [
     "django.contrib.sites",
     "django_extensions",
 
-    # 3) UI / админ темы (после django.contrib.admin)
+    # 3) Админ-темы / UI (после django.contrib.admin)
     "jazzmin",
     "django_ckeditor_5",
     "grappelli",
@@ -294,7 +295,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
-    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],  # Для API разрешаем любой доступ
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
 }
@@ -325,6 +326,8 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
+# Убираем префикс 'backend.' чтобы избежать ModuleNotFoundError в окружениях,
+# где рабочая директория уже backend/
 DEFAULT_FILE_STORAGE = "blog.storages.SupabaseStorage"
 
 if not DEBUG:
