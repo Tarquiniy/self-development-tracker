@@ -1,7 +1,3 @@
-# backend/users/__init__.py
+from .models import CustomUser, UserProfile
 
-"""
-Пакет users: не импортируем модели здесь (иначе модели будут загружаться
-до инициализации Django settings и это вызовет ошибку).
-"""
-__all__ = []
+__all__ = ['CustomUser', 'UserProfile']
