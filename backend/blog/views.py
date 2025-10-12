@@ -66,7 +66,7 @@ def preview_by_token(request, token):
 # ---------------------------
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'categories__slug', 'tags__slug']
     search_fields = ['title', 'excerpt', 'content', 'meta_description']
@@ -645,3 +645,12 @@ def revisions_delete(request):
     except Exception:
         logger.exception("revisions_delete error")
         return Response({'success': False, 'message': 'internal'}, status=500)
+
+@csrf_exempt
+def cors_test(request):
+    """Endpoint для тестирования CORS"""
+    return JsonResponse({
+        "status": "CORS test successful",
+        "message": "CORS headers are working correctly",
+        "origin": request.META.get('HTTP_ORIGIN', 'Not provided')
+    })
