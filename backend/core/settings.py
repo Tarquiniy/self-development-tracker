@@ -63,6 +63,7 @@ SUMMERNOTE_CONFIG = {
         ],
     },
     'attachment_require_authentication': True,
+    # Убедитесь, что модель наследует от AbstractAttachment
     'attachment_model': 'blog.PostAttachment',
 }
 
@@ -152,7 +153,10 @@ CSRF_COOKIE_SECURE = True
 # ========== STATIC ==========
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
+#STATICFILES_DIRS = [os.path.join(BASE_DIR, "backend", "static"),]
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "static"),
+]
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
@@ -176,7 +180,7 @@ if os.environ.get('DATABASE_URL'):
 
 # ========== MIDDLEWARE ==========
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",  # Должен быть первым
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -185,7 +189,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "backend.core.cors_middleware.CorsMiddleware",
+    "backend.core.cors_middleware.CorsMiddleware",  # Раскомментируйте если нужно
 ]
 
 # ========== APPS ==========
@@ -215,7 +219,7 @@ INSTALLED_APPS = [
     'filebrowser',
 
     # Local apps
-    "backend.users",   # 👈 изменено с "users"
+    "users.apps.UsersConfig",   # 👈 явная регистрация AppConfig для users
     "tables",
     "payments",
     "analytics",
@@ -237,7 +241,7 @@ JWT_SECRET = os.environ.get('DJANGO_JWT_SECRET', os.environ.get('SECRET_KEY'))
 JWT_ALGORITHM = 'HS256'
 JWT_EXP_DELTA_SECONDS = 60 * 60 * 24 * 7
 
-ROOT_URLCONF = "backend.core.urls"  # 👈 изменено
+ROOT_URLCONF = "core.urls"  # 👈 используем core.urls (путь без префикса backend)
 
 TEMPLATES = [
     {
@@ -256,7 +260,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "backend.core.wsgi.application"  # 👈 изменено
+WSGI_APPLICATION = "core.wsgi.application"  # 👈 используем core.wsgi.application
 
 # ========== CACHE ==========
 CACHES = {
@@ -287,7 +291,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
-    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],  # Для API разрешаем любой доступ
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
 }
@@ -345,7 +349,7 @@ LOGGING = {
 CKEDITOR_5_CONFIGS = {
     'default': {
         'toolbar': [
-            'heading', '|',
+            'heading', '|', 
             'bold', 'italic', 'underline', 'strikethrough', '|',
             'link', 'blockQuote', 'imageUpload', 'mediaEmbed', '|',
             'alignment', 'bulletedList', 'numberedList', '|',
@@ -434,7 +438,7 @@ SUMMERNOTE_CONFIG = {
     'attachment_model': 'blog.PostAttachment',
 }
 
-# Filebrowser настройки
+# Filebrowser настройки (если используется)
 FILEBROWSER_DIRECTORY = ''
 FILEBROWSER_EXTENSIONS = {
     'Image': ['.jpg','.jpeg','.gif','.png','.tif','.tiff'],
