@@ -183,6 +183,14 @@ INSTALLED_APPS = [
     "jazzmin",
     #"ckeditor",
     #"ckeditor_uploader",
+    
+    # Local apps
+    "users",
+    "tables",
+    "payments",
+    "analytics",
+    "blog",
+
     'grappelli',
     "django.contrib.admin",
     "django.contrib.auth",
@@ -202,13 +210,6 @@ INSTALLED_APPS = [
     'reversion',
     'adminsortable2',
     'filebrowser',
-
-    # Local apps
-    "users",
-    "tables",
-    "payments",
-    "analytics",
-    "blog",
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
