@@ -219,12 +219,12 @@ INSTALLED_APPS = [
     'filebrowser',
 
     # Local apps
+    'users.apps.UsersConfig',
     "users",
     "tables",
     "payments",
     "analytics",
     "blog",
-    'users.apps.UsersConfig',
     'blog.apps.BlogConfig',
 ]
 
