@@ -14,20 +14,13 @@ class PostAdminForm(forms.ModelForm):
         }),
         input_formats=['%Y-%m-%dT%H:%M']
     )
-
+    
     class Meta:
         model = Post
         fields = '__all__'
         widgets = {
             'content': TipTapWidget(),
-            'excerpt': TipTapWidget(attrs={
-                'class': 'admin-advanced-editor admin-tiptap-textarea excerpt-editor',
-                'data-editor': 'auto',
-                'data-upload-url': '/admin/media-library/',
-                'data-preview-token-url': '/admin/posts/preview-token/',
-                'rows': 4,
-                'placeholder': 'Краткое описание поста...'
-            }),
+            'excerpt': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Краткое описание поста...'}),
             'meta_description': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Мета-описание для SEO...'}),
         }
 
@@ -42,13 +35,13 @@ class PostAdminForm(forms.ModelForm):
             'class': 'post-slug-field',
             'placeholder': 'url-slug...'
         })
-
+        
         # Устанавливаем начальное значение для published_at
         if self.instance and self.instance.published_at:
             self.fields['published_at'].initial = self.instance.published_at.strftime('%Y-%m-%dT%H:%M')
         elif not self.instance.pk:  # Новый пост
             self.fields['published_at'].initial = timezone.now().strftime('%Y-%m-%dT%H:%M')
-
+        
     def clean(self):
         cleaned_data = super().clean()
         # Добавляем базовую валидацию

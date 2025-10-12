@@ -218,12 +218,12 @@ INSTALLED_APPS = [
     'adminsortable2',
     'filebrowser',
 
-    # Local apps - УБРАН ДУБЛИКАТ 'users'
-    "backend.users.apps.UsersConfig",
+    # Local apps
+    "users",
     "tables",
     "payments",
     "analytics",
-    'blog.apps.BlogConfig',
+    "blog",
 ]
 
 SITE_ID = 1
@@ -310,7 +310,6 @@ SIMPLE_JWT = {
 }
 
 AUTH_USER_MODEL = "users.CustomUser"
-#AUTH_USER_MODEL = 'auth.User'
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = True

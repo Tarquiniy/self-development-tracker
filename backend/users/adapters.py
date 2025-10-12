@@ -1,11 +1,8 @@
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
+from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 
-# НЕ вызывать get_user_model() на уровне модуля — делаем лениво внутри функций/методов
-def _get_user_model():
-    from django.contrib.auth import get_user_model as _g
-    return _g()
-
+User = get_user_model()
 
 class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
     def pre_social_login(self, request, sociallogin):
@@ -17,43 +14,34 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
             first_name = telegram_data.get('first_name', '')
             last_name = telegram_data.get('last_name', '')
 
-            User = _get_user_model()
-
             # Поиск пользователя по telegram_id
             try:
                 user = User.objects.get(telegram_id=telegram_id)
                 sociallogin.connect(request, user)
-                return
             except User.DoesNotExist:
-                pass
-
-            # Поиск по email (если есть)
-            email = telegram_data.get('email')
-            if email:
-                try:
-                    user = User.objects.get(email=email)
-                    user.telegram_id = telegram_id
-                    user.telegram_username = username
-                    user.telegram_data = telegram_data
-                    user.save()
-                    sociallogin.connect(request, user)
-                    return
-                except User.DoesNotExist:
-                    pass
-
-            # Создание нового пользователя
-            username = f"tg_{telegram_id}"
-            User = _get_user_model()
-            user = User.objects.create(
-                username=username,
-                telegram_id=telegram_id,
-                telegram_username=username,
-                telegram_data=telegram_data,
-                first_name=first_name,
-                last_name=last_name,
-                registration_method='telegram'
-            )
-            sociallogin.connect(request, user)
+                # Поиск по email (если есть)
+                email = telegram_data.get('email')
+                if email:
+                    try:
+                        user = User.objects.get(email=email)
+                        user.telegram_id = telegram_id
+                        user.telegram_username = username
+                        user.telegram_data = telegram_data
+                        user.save()
+                        sociallogin.connect(request, user)
+                    except User.DoesNotExist:
+                        # Создание нового пользователя
+                        username = f"tg_{telegram_id}"
+                        user = User.objects.create(
+                            username=username,
+                            telegram_id=telegram_id,
+                            telegram_username=username,
+                            telegram_data=telegram_data,
+                            first_name=first_name,
+                            last_name=last_name,
+                            registration_method='telegram'
+                        )
+                        sociallogin.connect(request, user)
 
     def authentication_error(self, request, provider, error=None, exception=None, extra_context=None):
         return JsonResponse({
