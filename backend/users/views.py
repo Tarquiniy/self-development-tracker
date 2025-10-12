@@ -1,18 +1,21 @@
 # backend/users/views.py
-from django.contrib.auth import get_user_model, authenticate, login
+from django.contrib.auth import authenticate, login
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
-from rest_framework.permissions import AllowAny
+from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.permissions import IsAuthenticated
 
-User = get_user_model()
+# НЕ вызываем get_user_model() на уровне модуля (оно может вызывать ImproperlyConfigured при раннем импорте).
+def _get_user_model():
+    from django.contrib.auth import get_user_model as _g
+    return _g()
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        User = _get_user_model()
         data = request.data
         email = data.get('email')
         password = data.get('password')
@@ -29,6 +32,7 @@ class RegisterView(APIView):
         user.save()
 
         # логиним пользователя (создаёт сессию)
+        # request._request — используем, чтобы прокинуть реальный django request в DRF контексте
         login(request._request, user)
 
         # даём JWT на будущее (опционально)
@@ -43,6 +47,7 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        User = _get_user_model()
         data = request.data
         identifier = data.get('username') or data.get('email') or data.get('identifier')
         password = data.get('password')
@@ -53,7 +58,7 @@ class LoginView(APIView):
         user = None
 
         # Попробуем найти по email
-        if '@' in identifier:
+        if identifier and '@' in identifier:
             try:
                 user_candidate = User.objects.get(email__iexact=identifier)
                 if user_candidate.check_password(password):
@@ -77,6 +82,7 @@ class LoginView(APIView):
             'tokens': {'refresh': str(refresh), 'access': str(refresh.access_token)}
         }, status=status.HTTP_200_OK)
 
+
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -84,8 +90,8 @@ class ProfileView(APIView):
         user = request.user
         return Response({
             "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "is_staff": user.is_staff,
-            "date_joined": user.date_joined,
+            "username": getattr(user, "username", None),
+            "email": getattr(user, "email", None),
+            "is_staff": getattr(user, "is_staff", False),
+            "date_joined": getattr(user, "date_joined", None),
         })

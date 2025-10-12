@@ -2,13 +2,14 @@
 from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include
-from users.views import RegisterView, LoginView, ProfileView
+# Используем полный путь к модулю users, чтобы не путаться с возможным
+# другим пакетом 'users' в корне репозитория.
+from backend.users.views import RegisterView, LoginView, ProfileView
 from django.conf.urls.static import static
 from .admin import custom_admin_site
 from blog import views as blog_views
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, RedirectView
 from .views import cors_test
-from django.views.generic import RedirectView
 
 # Попытка импортировать админ-views из blog.admin (dashboard, stats, post update, media library)
 admin_dashboard_view = None
@@ -47,8 +48,10 @@ urlpatterns = [
     path('grappelli/', include('grappelli.urls')),
     # Регистрируем кастомную админку (только один раз)
     path("admin/", custom_admin_site.urls),
+    # Auth endpoints (явные view-классы)
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', LoginView.as_view(), name='login'),
+    # Остальные API
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
     path('api/tables/', include(('tables.urls', 'tables'), namespace='tables')),
     path('summernote/', include('django_summernote.urls')),
@@ -57,14 +60,6 @@ urlpatterns = [
     path('api/cors-test/', cors_test, name='cors-test'),
     path('', RedirectView.as_view(url='/admin/')),
 ]
-
-# Добавляем CKEditor 5 URLs
-try:
-    urlpatterns += [
-        path('ckeditor5/', include('django_ckeditor_5.urls')),
-    ]
-except Exception:
-    pass
 
 # Регистрируем /admin/media-library/ ДО admin.urls, чтобы не перехватывался
 if admin_media_library_view:

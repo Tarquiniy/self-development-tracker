@@ -1,32 +1,64 @@
 # backend/users/models.py
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
+
 
 class CustomUser(AbstractUser):
-    """Кастомная модель пользователя"""
-    
-    # Добавляем дополнительные поля если нужно
-    bio = models.TextField(blank=True, verbose_name="Биография")
-    avatar = models.URLField(blank=True, verbose_name="Аватар")
-    phone = models.CharField(max_length=20, blank=True, verbose_name="Телефон")
-    
-    # Social media fields
-    website = models.URLField(blank=True, verbose_name="Веб-сайт")
-    github = models.URLField(blank=True, verbose_name="GitHub")
-    twitter = models.URLField(blank=True, verbose_name="Twitter")
-    linkedin = models.URLField(blank=True, verbose_name="LinkedIn")
-    
-    # Metadata
-    email_verified = models.BooleanField(default=False, verbose_name="Email подтвержден")
-    is_verified = models.BooleanField(default=False, verbose_name="Верифицирован")
-    
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлен")
+    """
+    Расширенная модель пользователя, совместимая с админкой и кастомными полями.
+    """
+    display_name = models.CharField(
+        max_length=150,
+        blank=True,
+        null=True,
+        verbose_name="Отображаемое имя"
+    )
+
+    # Новые поля, чтобы убрать ошибки админки
+    is_verified = models.BooleanField(
+        default=False,
+        verbose_name="Проверен",
+        help_text="Пользователь прошёл общую верификацию (например, по номеру или документам)"
+    )
+
+    email_verified = models.BooleanField(
+        default=False,
+        verbose_name="Email подтверждён",
+        help_text="Флаг, указывающий, что пользователь подтвердил свой адрес электронной почты"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата создания"
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Дата обновления"
+    )
+
+    # Уникальные related_name для избежания конфликтов с auth.User
+    groups = models.ManyToManyField(
+        "auth.Group",
+        related_name="customuser_set",
+        blank=True,
+        help_text="Группы, в которых состоит пользователь",
+        verbose_name="Группы",
+    )
+
+    user_permissions = models.ManyToManyField(
+        "auth.Permission",
+        related_name="customuser_user_permissions",
+        blank=True,
+        help_text="Права, назначенные этому пользователю",
+        verbose_name="Права пользователя",
+    )
+
+    def __str__(self):
+        return self.username or self.email or f"User {self.pk}"
 
     class Meta:
         verbose_name = "Пользователь"
         verbose_name_plural = "Пользователи"
-        db_table = 'users_customuser'
-
-    def __str__(self):
-        return self.username
+        ordering = ["-created_at"]
