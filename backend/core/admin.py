@@ -51,7 +51,7 @@ class CustomAdminSite(admin.AdminSite):
 
 
 # create site
-custom_admin_site = CustomAdminSite(name="custom_admin")
+custom_admin_site = CustomAdminSite(name="admin")
 
 
 # ------------------------------------------------------------------------
