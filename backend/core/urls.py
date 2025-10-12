@@ -11,6 +11,7 @@ from blog import views as blog_views
 from django.views.generic import TemplateView, RedirectView
 from .views import cors_test
 from django.urls import path, include, re_path
+from django.contrib import admin as django_admin
 
 # Попытка импортировать админ-views из blog.admin (dashboard, stats, post update, media library)
 admin_dashboard_view = None
@@ -48,7 +49,7 @@ if admin_media_library_view is None:
 urlpatterns = [
     path('grappelli/', include('grappelli.urls')),
     # Регистрируем кастомную админку (только один раз)
-    path("admin/", custom_admin_site.urls),
+    path("admin/", django_admin.site.urls),
     # Auth endpoints (явные view-классы)
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', LoginView.as_view(), name='login'),
