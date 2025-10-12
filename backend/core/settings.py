@@ -180,26 +180,24 @@ MIDDLEWARE = [
 
 # ========== APPS ==========
 INSTALLED_APPS = [
-    "jazzmin",
-    #"ckeditor",
-    #"ckeditor_uploader",
-    
-    # Local apps
-    "users",
-    "tables",
-    "payments",
-    "analytics",
-    "blog",
+    # Local apps - ДОЛЖНЫ БЫТЬ ПЕРВЫМИ
+    "users.apps.UsersConfig",
+    "tables.apps.TablesConfig", 
+    "payments.apps.PaymentsConfig",
+    "analytics.apps.AnalyticsConfig",
+    "blog.apps.BlogConfig",
 
-    'grappelli',
+    # Django core apps
     "django.contrib.admin",
     "django.contrib.auth",
-    "django.contrib.contenttypes",
+    "django.contrib.contenttypes", 
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # Third-party
+    # Third-party apps
+    "jazzmin",
+    "grappelli",
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
@@ -293,7 +291,7 @@ SIMPLE_JWT = {
     "AUTH_COOKIE_SAMESITE": "None",
 }
 
-AUTH_USER_MODEL = "users.CustomUser"
+AUTH_USER_MODEL = 'users.CustomUser'
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
