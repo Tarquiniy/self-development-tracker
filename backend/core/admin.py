@@ -1,7 +1,8 @@
 # backend/core/admin.py
+import logging
 from django.contrib import admin
 from django.urls import path
-import logging
+from django.contrib.admin.sites import AlreadyRegistered
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ class CustomAdminSite(admin.AdminSite):
                 custom_urls.append(path("preview/token/", self.admin_view(admin_preview_token_view), name="admin-preview-token"))
 
         except Exception as e:
+            # Не ломаем admin при ошибках импорта blog.admin — логируем
             logger.exception("Failed to import blog.admin views into custom admin urls: %s", e)
 
         return custom_urls + urls
@@ -50,6 +52,57 @@ class CustomAdminSite(admin.AdminSite):
 
 # create site
 custom_admin_site = CustomAdminSite(name="custom_admin")
+
+
+# ------------------------------------------------------------------------
+# Ensure auth models (User / Group / Permission) are registered in the
+# custom admin site. This is required so admin templates that reverse
+# built-in auth urls (e.g. 'auth_user_changelist') can find them.
+#
+# We register them with default ModelAdmin (or UserAdmin for User),
+# but do so safely (AlreadyRegistered handling) — registration here does
+# not modify database schema, only admin UI routing.
+# ------------------------------------------------------------------------
+try:
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group, Permission
+    from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
+
+    UserModel = get_user_model()
+
+    # Register Group
+    try:
+        custom_admin_site.register(Group)
+    except AlreadyRegistered:
+        logger.debug("Group already registered in custom_admin_site")
+
+    # Register Permission
+    try:
+        custom_admin_site.register(Permission)
+    except AlreadyRegistered:
+        logger.debug("Permission already registered in custom_admin_site")
+
+    # Register User model using default UserAdmin if available
+    try:
+        custom_admin_site.register(UserModel, DefaultUserAdmin)
+    except AlreadyRegistered:
+        logger.debug("User model already registered in custom_admin_site")
+    except Exception as e:
+        # Если регистрация UserAdmin по каким-то причинам падает,
+        # регистрируем модель без ModelAdmin (минимальная регистрация)
+        logger.exception("Failed to register User with DefaultUserAdmin, attempting plain register: %s", e)
+        try:
+            custom_admin_site.register(UserModel)
+        except AlreadyRegistered:
+            pass
+        except Exception as inner_e:
+            logger.exception("Fallback register UserModel failed: %s", inner_e)
+
+except Exception as e:
+    # В редком случае, если импорт auth моделей падает (например, при раннем импорте
+    # до готовности apps), логируем, но не мешаем загрузке.
+    logger.exception("Auth models registration into custom_admin_site skipped due to error: %s", e)
+
 
 # TRY to register blog models into custom_admin_site using blog.admin.register_admin_models
 try:
