@@ -220,11 +220,11 @@ INSTALLED_APPS = [
 
     # Local apps
     'users.apps.UsersConfig',
-    "users",
+    #"users",
     "tables",
     "payments",
     "analytics",
-    "blog",
+    #"blog",
     'blog.apps.BlogConfig',
 ]
 
