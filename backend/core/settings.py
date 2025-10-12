@@ -224,6 +224,8 @@ INSTALLED_APPS = [
     "payments",
     "analytics",
     "blog",
+    'users.apps.UsersConfig',
+    'blog.apps.BlogConfig',
 ]
 
 SITE_ID = 1
