@@ -144,12 +144,8 @@ CSRF_COOKIE_SECURE = True
 # ========== STATIC ==========
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-#STATICFILES_DIRS = [os.path.join(BASE_DIR, "backend", "static"),]
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, "blog", "static"),
-]
-
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_DIRS = [BASE_DIR / 'blog' / 'static']
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # ========== DATABASE ==========
 DATABASES = {
@@ -185,7 +181,8 @@ MIDDLEWARE = [
 # ========== APPS ==========
 INSTALLED_APPS = [
     "jazzmin",
-    "django_ckeditor_5",
+    #"ckeditor",
+    #"ckeditor_uploader",
     'grappelli',
     "django.contrib.admin",
     "django.contrib.auth",
@@ -193,7 +190,6 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    'django_extensions',
 
     # Third-party
     "rest_framework",
