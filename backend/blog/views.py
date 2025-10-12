@@ -14,6 +14,7 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.utils import timezone
 from django.views.generic import TemplateView
 from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.csrf import csrf_exempt  # Добавлен импорт csrf_exempt
 from django.middleware.csrf import get_token
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db import transaction
