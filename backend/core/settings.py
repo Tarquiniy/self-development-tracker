@@ -63,7 +63,6 @@ SUMMERNOTE_CONFIG = {
         ],
     },
     'attachment_require_authentication': True,
-    # Убедитесь, что модель наследует от AbstractAttachment
     'attachment_model': 'blog.PostAttachment',
 }
 
@@ -188,11 +187,14 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "core.cors_middleware.CorsMiddleware",  # 👈 убран префикс backend.
+    "core.cors_middleware.CorsMiddleware",
 ]
 
 # ========== APPS ==========
 INSTALLED_APPS = [
+    # 👇 ВАЖНО: users должен идти ПЕРЕД django.contrib.admin и django.contrib.auth
+    "backend.users.apps.UsersConfig",  # 👈 ВАЖНО: ставим первым, чтобы CustomUser зарегистрировался до auth/forms
+
     "jazzmin",
     "django_ckeditor_5",
     'grappelli',
@@ -217,8 +219,7 @@ INSTALLED_APPS = [
     'adminsortable2',
     'filebrowser',
 
-    # Local apps
-    "users.apps.UsersConfig",   # 👈 убран префикс backend — при запуске из backend/ это корректно
+    # Local apps (остальные)
     "tables",
     "payments",
     "analytics",
@@ -240,7 +241,7 @@ JWT_SECRET = os.environ.get('DJANGO_JWT_SECRET', os.environ.get('SECRET_KEY'))
 JWT_ALGORITHM = 'HS256'
 JWT_EXP_DELTA_SECONDS = 60 * 60 * 24 * 7
 
-ROOT_URLCONF = "core.urls"  # 👈 корректный при запуске из backend/
+ROOT_URLCONF = "core.urls"
 
 TEMPLATES = [
     {
@@ -259,7 +260,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "core.wsgi.application"  # 👈 корректный при запуске из backend/
+WSGI_APPLICATION = "core.wsgi.application"
 
 # ========== CACHE ==========
 CACHES = {
@@ -290,7 +291,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
-    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],  # Для API разрешаем любой доступ
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
 }
@@ -321,7 +322,7 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
-DEFAULT_FILE_STORAGE = "blog.storages.SupabaseStorage"  # 👈 убран префикс backend
+DEFAULT_FILE_STORAGE = "blog.storages.SupabaseStorage"
 
 if not DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -348,7 +349,7 @@ LOGGING = {
 CKEDITOR_5_CONFIGS = {
     'default': {
         'toolbar': [
-            'heading', '|',
+            'heading', '|', 
             'bold', 'italic', 'underline', 'strikethrough', '|',
             'link', 'blockQuote', 'imageUpload', 'mediaEmbed', '|',
             'alignment', 'bulletedList', 'numberedList', '|',
