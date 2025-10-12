@@ -153,7 +153,6 @@ CSRF_COOKIE_SECURE = True
 # ========== STATIC ==========
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-#STATICFILES_DIRS = [os.path.join(BASE_DIR, "backend", "static"),]
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "static"),
 ]
@@ -189,7 +188,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "backend.core.cors_middleware.CorsMiddleware",  # Раскомментируйте если нужно
+    "core.cors_middleware.CorsMiddleware",  # 👈 убран префикс backend.
 ]
 
 # ========== APPS ==========
@@ -219,7 +218,7 @@ INSTALLED_APPS = [
     'filebrowser',
 
     # Local apps
-    "users.apps.UsersConfig",   # 👈 явная регистрация AppConfig для users
+    "users.apps.UsersConfig",   # 👈 убран префикс backend — при запуске из backend/ это корректно
     "tables",
     "payments",
     "analytics",
@@ -241,7 +240,7 @@ JWT_SECRET = os.environ.get('DJANGO_JWT_SECRET', os.environ.get('SECRET_KEY'))
 JWT_ALGORITHM = 'HS256'
 JWT_EXP_DELTA_SECONDS = 60 * 60 * 24 * 7
 
-ROOT_URLCONF = "core.urls"  # 👈 используем core.urls (путь без префикса backend)
+ROOT_URLCONF = "core.urls"  # 👈 корректный при запуске из backend/
 
 TEMPLATES = [
     {
@@ -260,7 +259,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "core.wsgi.application"  # 👈 используем core.wsgi.application
+WSGI_APPLICATION = "core.wsgi.application"  # 👈 корректный при запуске из backend/
 
 # ========== CACHE ==========
 CACHES = {
@@ -322,7 +321,7 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
-DEFAULT_FILE_STORAGE = "backend.blog.storages.SupabaseStorage"
+DEFAULT_FILE_STORAGE = "blog.storages.SupabaseStorage"  # 👈 убран префикс backend
 
 if not DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -349,7 +348,7 @@ LOGGING = {
 CKEDITOR_5_CONFIGS = {
     'default': {
         'toolbar': [
-            'heading', '|', 
+            'heading', '|',
             'bold', 'italic', 'underline', 'strikethrough', '|',
             'link', 'blockQuote', 'imageUpload', 'mediaEmbed', '|',
             'alignment', 'bulletedList', 'numberedList', '|',
