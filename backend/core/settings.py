@@ -192,34 +192,37 @@ MIDDLEWARE = [
 
 # ========== APPS ==========
 INSTALLED_APPS = [
-    # 👇 ВАЖНО: users должен идти ПЕРЕД django.contrib.admin и django.contrib.auth
-    "backend.users.apps.UsersConfig",  # 👈 ВАЖНО: ставим первым, чтобы CustomUser зарегистрировался до auth/forms
+    # 1) Наш users первым (через полный путь AppConfig) — гарантируем раннюю регистрацию CustomUser
+    "backend.users.apps.UsersConfig",
 
-    "jazzmin",
-    "django_ckeditor_5",
-    'grappelli',
+    # 2) Встроенные Django-приложения (админ/аутентификация должны идти прежде, чем UI пакеты)
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    'django.contrib.sites',
-    'django_extensions',
+    "django.contrib.sites",
+    "django_extensions",
 
-    # Third-party
+    # 3) UI / админ темы (после django.contrib.admin)
+    "jazzmin",
+    "django_ckeditor_5",
+    "grappelli",
+
+    # 4) Third-party
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
     "whitenoise.runserver_nostatic",
-    'django_filters',
-    'django_summernote',
-    'storages',
-    'reversion',
-    'adminsortable2',
-    'filebrowser',
+    "django_filters",
+    "django_summernote",
+    "storages",
+    "reversion",
+    "adminsortable2",
+    "filebrowser",
 
-    # Local apps (остальные)
+    # 5) Local apps
     "tables",
     "payments",
     "analytics",
