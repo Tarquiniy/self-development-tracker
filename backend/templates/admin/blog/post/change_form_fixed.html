@@ -239,13 +239,20 @@
             </div>
 
             <!-- Published At -->
-            <div class="form-group">
-              <label class="form-label" for="id_published_at">Дата публикации</label>
-              <input type="datetime-local" name="published_at" value="{{ adminform.form.published_at.value|date:'Y-m-d\TH:i'|default:'' }}" id="id_published_at" class="form-input">
-              {% if adminform.form.published_at.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.published_at.errors }}</div>
-              {% endif %}
-            </div>
+<div class="form-group">
+    <label class="form-label" for="id_published_at">Дата публикации</label>
+    <input type="datetime-local" name="published_at" value="{{ adminform.form.published_at.value|default:'' }}" id="id_published_at" class="form-input">
+    <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+        Оставьте пустым для автоматической установки при публикации
+    </div>
+    {% if adminform.form.published_at.errors %}
+    <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">
+        {% for error in adminform.form.published_at.errors %}
+            {{ error }}
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
 
             <!-- Author -->
             <div class="form-group">
@@ -334,9 +341,25 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log('🚀 Fixed Post Editor initialized');
 
   // Базовая функциональность
+  initDateTimeFields();  // <-- ДОБАВЬТЕ ЭТУ СТРОЧКУ
   initSlugGeneration();
   initCharacterCounters();
   initQuickActions();
+
+  function initDateTimeFields() {
+    const publishedAtField = document.getElementById('id_published_at');
+    
+    if (publishedAtField && !publishedAtField.value) {
+        // Устанавливаем текущую дату и время по умолчанию для новых постов
+        const now = new Date();
+        const timezoneOffset = now.getTimezoneOffset() * 60000; // Смещение в миллисекундах
+        const localISOTime = new Date(now - timezoneOffset).toISOString().slice(0, 16);
+        publishedAtField.value = localISOTime;
+        console.log('✅ Установлена текущая дата публикации:', localISOTime);
+    } else if (publishedAtField && publishedAtField.value) {
+        console.log('✅ Дата публикации уже установлена:', publishedAtField.value);
+    }
+  }
 
   function initSlugGeneration() {
     const generateBtn = document.getElementById('generate-slug');

@@ -133,13 +133,15 @@ class Post(models.Model):
     og_image = models.URLField(blank=True, verbose_name="Open Graph изображение")
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', db_index=True, verbose_name="Статус")
-    published_at = models.DateTimeField(default=timezone.now, db_index=True, verbose_name="Дата публикации")
+    
+    # Изменяем поле published_at - убираем default и делаем nullable
+    published_at = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name="Дата публикации")
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлен")
 
     class Meta:
-        ordering = ['-published_at']
+        ordering = ['-published_at', '-created_at']  # Добавляем резервную сортировку
         indexes = [
             models.Index(fields=['slug']),
             models.Index(fields=['status', 'published_at']),
@@ -162,6 +164,10 @@ class Post(models.Model):
         if not self.meta_title:
             self.meta_title = self.title
 
+        # Если published_at не установлено и пост публикуется, устанавливаем текущее время
+        if not self.published_at and self.status == 'published':
+            self.published_at = timezone.now()
+
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -172,13 +178,12 @@ class Post(models.Model):
 
     @property
     def is_published(self):
-        return self.status == 'published' and self.published_at <= timezone.now()
+        return self.status == 'published' and self.published_at and self.published_at <= timezone.now()
 
     @property
     def reading_time(self):
         word_count = len(self.content.split())
         return max(1, round(word_count / 200))
-
 
 class Comment(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
