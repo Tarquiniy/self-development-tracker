@@ -14,6 +14,7 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.core import signing
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models.functions import TruncDate
 from django.db.models import Count
 from django.db import models
@@ -42,7 +43,16 @@ except Exception as e:
     logger.exception("Could not import blog.models: %s", e)
     Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = PostRevision = None
 
-CustomUser = get_user_model()
+# Получаем модель пользователя безопасно — если модель ещё не зарегистрирована,
+# возвращаем None и не падаем (это важно во время этапа build/deploy).
+def _get_custom_user_safely():
+    try:
+        return get_user_model()
+    except ImproperlyConfigured:
+        logger.warning("CustomUser model is not ready during blog.admin import; deferring get_user_model()")
+        return None
+
+CustomUser = _get_custom_user_safely()
 PREVIEW_SALT = "post-preview-salt"
 
 # -----------------------
