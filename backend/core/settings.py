@@ -291,8 +291,8 @@ SIMPLE_JWT = {
     "AUTH_COOKIE_SAMESITE": "None",
 }
 
-#AUTH_USER_MODEL = 'users.CustomUser'
-AUTH_USER_MODEL = 'auth.User'
+AUTH_USER_MODEL = 'users.CustomUser'
+#AUTH_USER_MODEL = 'auth.User'
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
