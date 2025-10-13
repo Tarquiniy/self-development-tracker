@@ -20,6 +20,7 @@ try:
     from django_summernote.models import AbstractAttachment
     HAS_SUMMERNOTE = True
 except Exception:
+    AbstractAttachment = None
     HAS_SUMMERNOTE = False
     class AbstractAttachment(models.Model):
         class Meta:
