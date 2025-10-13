@@ -1,48 +1,30 @@
 # backend/blog/admin.py
 import os
 import logging
+from importlib import import_module
+
 from django import forms
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
 from django.urls import reverse
+from django.shortcuts import render, redirect
+from django.http import JsonResponse, Http404
 from django.utils import timezone
+from django.views.decorators.http import require_http_methods, require_POST, require_GET
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.core import signing
 from django.core.exceptions import ImproperlyConfigured
+from django.db.models.functions import TruncDate
+from django.db.models import Count
+from django.db import models
 from django.utils.safestring import mark_safe
+from django.utils.html import escape
+from django.template.loader import render_to_string
 from django.forms.models import modelform_factory
 
 logger = logging.getLogger(__name__)
 
-# Optional reversion support
-try:
-    import reversion
-    from reversion.admin import VersionAdmin
-except Exception:
-    reversion = None
-    class VersionAdmin(admin.ModelAdmin):
-        pass
-
-# Import models lazily — если импорт не прошёл, присвоим None и продолжим,
-# чтобы импорт модуля admin не падал во время этапа миграций/деплоя.
-try:
-    from .models import (
-        Post, Category, Tag, Comment,
-        PostReaction, PostView, PostAttachment, MediaLibrary, PostRevision
-    )
-except Exception as e:
-    logger.exception("Could not import blog.models: %s", e)
-    Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = PostRevision = None
-
-# Получаем модель пользователя безопасно — если модель ещё не зарегистрирована,
-# возвращаем None и не падаем (это важно во время этапа build/deploy).
-from django.contrib.auth import get_user_model
-def _get_custom_user_safely():
-    try:
-        return get_user_model()
-    except ImproperlyConfigured:
-        logger.warning("CustomUser model is not ready during blog.admin import; deferring get_user_model()")
-        return None
-
-CustomUser = _get_custom_user_safely()
 PREVIEW_SALT = "post-preview-salt"
 
 # -----------------------
@@ -50,7 +32,7 @@ PREVIEW_SALT = "post-preview-salt"
 # -----------------------
 class PostAdminFormBase(forms.ModelForm):
     class Meta:
-        # Не указываем model здесь — он будет задан динамически через modelform_factory
+        # Model будет задан динамически через modelform_factory при регистрации
         fields = '__all__'
         widgets = {
             'excerpt': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Краткое описание поста...'}),
@@ -59,7 +41,7 @@ class PostAdminFormBase(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Безопасно обновляем атрибуты, только если поля существуют (они появятся после создания конкретной ModelForm)
+        # Безопасно обновляем атрибуты, только если поля существуют
         if 'title' in self.fields:
             self.fields['title'].widget.attrs.update({
                 'class': 'post-title-field',
@@ -72,23 +54,23 @@ class PostAdminFormBase(forms.ModelForm):
             })
 
 # -----------------------
-# Enhanced Admin Classes (используют динамически присваиваемую form)
+# Enhanced Admin Classes (не зависят от конкретных моделей на этапе импорта)
 # -----------------------
-class BasePostAdmin(VersionAdmin):
-    form = None  # будет присвоено динамически при регистрации в register_admin_models()
+class BasePostAdmin(admin.ModelAdmin):
+    # form будет присвоен динамически при регистрации
+    form = None
     change_form_template = 'admin/blog/post/change_form_fixed.html'
 
-    # Modern list display
     list_display = ("title", "status_badge", "author", "published_at", "reading_time_display", "actions_column")
-    list_filter = ("status", "published_at", "categories", "tags") if Post is not None else ()
+    # list_filter / prepopulated_fields / filter_horizontal будут присвоены динамически, если модель есть
+    list_filter = ()
     search_fields = ("title", "excerpt", "content", "meta_description")
-    prepopulated_fields = {"slug": ("title",)} if Post is not None else {}
+    prepopulated_fields = {}
     date_hierarchy = "published_at"
     ordering = ("-published_at",)
-    filter_horizontal = ("categories", "tags") if Post is not None else ()
+    filter_horizontal = ()
     actions = ["make_published", "make_draft", "duplicate_post", "update_seo_meta"]
 
-    # Enhanced fieldsets with better grouping
     fieldsets = (
         ("Основное содержание", {
             'fields': ('title', 'slug', 'content', 'excerpt'),
@@ -120,15 +102,16 @@ class BasePostAdmin(VersionAdmin):
             'published': 'green',
             'archived': 'orange'
         }
-        color = status_colors.get(obj.status, 'gray')
-        return mark_safe(f'<span class="status-badge status-{color}">{obj.get_status_display()}</span>')
+        color = status_colors.get(getattr(obj, 'status', ''), 'gray')
+        display = getattr(obj, "get_status_display", lambda: getattr(obj, "status", ""))()
+        return mark_safe(f'<span class="status-badge status-{color}">{display}</span>')
     status_badge.short_description = "Статус"
     status_badge.admin_order_field = 'status'
 
     def reading_time_display(self, obj):
         if not obj:
             return "0 мин"
-        return f"{obj.reading_time} мин"
+        return f"{getattr(obj, 'reading_time', 0)} мин"
     reading_time_display.short_description = "Время чтения"
 
     def actions_column(self, obj):
@@ -137,7 +120,7 @@ class BasePostAdmin(VersionAdmin):
         return mark_safe(f'''
             <div class="action-buttons">
                 <a href="{reverse('admin:blog_post_change', args=[obj.id])}" class="button edit-btn">✏️</a>
-                <a href="{obj.get_absolute_url() if hasattr(obj, 'get_absolute_url') else '#'}" target="_blank" class="button view-btn">👁️</a>
+                <a href="{getattr(obj, 'get_absolute_url', lambda: '#')()}" target="_blank" class="button view-btn">👁️</a>
             </div>
         ''')
     actions_column.short_description = "Действия"
@@ -171,8 +154,8 @@ class BasePostAdmin(VersionAdmin):
     def update_seo_meta(self, request, queryset):
         updated = 0
         for post in queryset:
-            if not post.meta_title:
-                post.meta_title = post.title
+            if not getattr(post, 'meta_title', None):
+                post.meta_title = getattr(post, 'title', '')
                 try:
                     post.save()
                     updated += 1
@@ -190,8 +173,11 @@ class CategoryAdmin(admin.ModelAdmin):
     def post_count(self, obj):
         if not obj:
             return 0
-        count = obj.posts.count() if hasattr(obj, 'posts') else 0
-        return mark_safe(f'<span class="badge">{count}</span>')
+        count = getattr(obj, 'posts', None)
+        try:
+            return mark_safe(f'<span class="badge">{count.count() if count is not None else 0}</span>')
+        except Exception:
+            return mark_safe(f'<span class="badge">0</span>')
     post_count.short_description = "Постов"
 
 
@@ -203,8 +189,11 @@ class TagAdmin(admin.ModelAdmin):
     def post_count(self, obj):
         if not obj:
             return 0
-        count = obj.posts.count() if hasattr(obj, 'posts') else 0
-        return mark_safe(f'<span class="badge">{count}</span>')
+        count = getattr(obj, 'posts', None)
+        try:
+            return mark_safe(f'<span class="badge">{count.count() if count is not None else 0}</span>')
+        except Exception:
+            return mark_safe(f'<span class="badge">0</span>')
     post_count.short_description = "Постов"
 
 
@@ -217,12 +206,15 @@ class CommentAdmin(admin.ModelAdmin):
     def author_name(self, obj):
         if not obj:
             return "-"
-        return obj.name or f"User #{obj.user_id}" if obj.user else "Anonymous"
+        try:
+            return obj.name or (f"User #{obj.user_id}" if getattr(obj, 'user', None) else "Anonymous")
+        except Exception:
+            return "-"
     author_name.short_description = "Автор"
 
     def post_link(self, obj):
         try:
-            if not obj or not obj.post:
+            if not obj or not getattr(obj, 'post', None):
                 return "-"
             url = reverse('admin:blog_post_change', args=[obj.post.id])
             return mark_safe(f'<a href="{url}">{obj.post.title}</a>')
@@ -233,22 +225,26 @@ class CommentAdmin(admin.ModelAdmin):
     def short_content(self, obj):
         if not obj:
             return ""
-        content = obj.content[:100] if obj.content else ""
-        if len(obj.content) > 100:
-            content += "..."
-        return content
+        content = getattr(obj, 'content', '') or ''
+        short = content[:100]
+        if len(content) > 100:
+            short += "..."
+        return short
     short_content.short_description = "Комментарий"
 
     def status_badges(self, obj):
         if not obj:
             return ""
         badges = []
-        if obj.is_public:
-            badges.append('<span class="badge badge-green">Public</span>')
-        else:
-            badges.append('<span class="badge badge-gray">Hidden</span>')
-        if obj.is_moderated:
-            badges.append('<span class="badge badge-blue">Moderated</span>')
+        try:
+            if obj.is_public:
+                badges.append('<span class="badge badge-green">Public</span>')
+            else:
+                badges.append('<span class="badge badge-gray">Hidden</span>')
+            if obj.is_moderated:
+                badges.append('<span class="badge badge-blue">Moderated</span>')
+        except Exception:
+            pass
         return mark_safe(" ".join(badges))
     status_badges.short_description = "Статус"
 
@@ -268,37 +264,40 @@ class CommentAdmin(admin.ModelAdmin):
 # -----------------------
 class MediaLibraryAdmin(admin.ModelAdmin):
     list_display = ("thumbnail", "title", "file_type", "uploaded_by", "uploaded_at_display", "post_link", "file_size")
-    list_filter = ("uploaded", "uploaded_by")  # Используем реальное поле 'uploaded'
+    list_filter = ("uploaded", "uploaded_by")
     search_fields = ("title", "file")
-    readonly_fields = ("file_size", "file_type", "uploaded_at_display")  # Убрали uploaded_at, добавили свойство
+    readonly_fields = ("file_size", "file_type", "uploaded_at_display")
 
     def thumbnail(self, obj):
-        if not obj or not obj.file:
+        if not obj or not getattr(obj, 'file', None):
             return "📄"
-        if obj.file.name.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
-            try:
+        try:
+            if obj.file.name.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
                 url = obj.file.url
                 return mark_safe(f'<img src="{url}" style="width: 50px; height: 50px; object-fit: cover;" />')
-            except Exception:
-                return "🖼️"
+        except Exception:
+            pass
         return "📄"
     thumbnail.short_description = ""
 
     def file_type(self, obj):
-        if not obj or not obj.file:
+        if not obj or not getattr(obj, 'file', None):
             return "📄"
-        ext = os.path.splitext(obj.file.name)[1].lower()
-        type_icons = {
-            '.jpg': '🖼️', '.jpeg': '🖼️', '.png': '🖼️', '.gif': '🖼️', '.webp': '🖼️',
-            '.pdf': '📕', '.doc': '📘', '.docx': '📘',
-            '.mp4': '🎥', '.mov': '🎥', '.avi': '🎥',
-        }
-        return type_icons.get(ext, '📄')
+        try:
+            ext = os.path.splitext(obj.file.name)[1].lower()
+            type_icons = {
+                '.jpg': '🖼️', '.jpeg': '🖼️', '.png': '🖼️', '.gif': '🖼️', '.webp': '🖼️',
+                '.pdf': '📕', '.doc': '📘', '.docx': '📘',
+                '.mp4': '🎥', '.mov': '🎥', '.avi': '🎥',
+            }
+            return type_icons.get(ext, '📄')
+        except Exception:
+            return '📄'
     file_type.short_description = "Тип"
 
     def file_size(self, obj):
         try:
-            if not obj or not obj.file:
+            if not obj or not getattr(obj, 'file', None):
                 return "N/A"
             size = obj.file.size
             for unit in ['B', 'KB', 'MB', 'GB']:
@@ -311,19 +310,18 @@ class MediaLibraryAdmin(admin.ModelAdmin):
     file_size.short_description = "Размер"
 
     def uploaded_at_display(self, obj):
-        """Отображение uploaded_at для readonly_fields"""
         if not obj:
             return ""
-        return obj.uploaded_at
+        return getattr(obj, 'uploaded', None)
     uploaded_at_display.short_description = "Дата загрузки"
 
     def post_link(self, obj):
-        if obj and obj.post:
-            try:
+        try:
+            if obj and getattr(obj, 'post', None):
                 url = reverse('admin:blog_post_change', args=[obj.post.id])
                 return mark_safe(f'<a href="{url}">{obj.post.title}</a>')
-            except Exception:
-                return mark_safe('<span class="text-muted">Ошибка ссылки</span>')
+        except Exception:
+            pass
         return mark_safe('<span class="text-muted">Не прикреплен</span>')
     post_link.short_description = "Пост"
 
@@ -342,53 +340,137 @@ class PostRevisionAdmin(admin.ModelAdmin):
 
 
 # -----------------------
-# Registration
+# Registration (динамическая, безопасная)
 # -----------------------
 def register_admin_models(site_obj):
     """
-    Register all admin models into provided admin site.
-    We dynamically build/assign the ModelForm for Post so creation of form fields
-    that rely on related models (e.g. users.CustomUser) is deferred until runtime when models are ready.
-    This function is intended to be called from the app's AppConfig.ready().
+    Регистрирует admin модели — импорт моделей происходит здесь, в момент, когда AppConfig.ready() вызовет эту функцию.
+    Это предотвращает ошибки импорта моделей до инициализации реестра приложений.
     """
     try:
-        # If Post model exists, try to build its ModelForm dynamically using PostAdminFormBase
+        # Попробуем импортировать модуль моделей через разные возможные имена пакета.
+        blog_models = None
+        tried = []
+
+        # Первая попытка: модуль в пространстве имён backend.blog (если структура проекта backend/)
+        try:
+            blog_models = import_module('backend.blog.models')
+            tried.append('backend.blog.models')
+        except Exception as e:
+            tried.append(f'backend.blog.models failed: {e}')
+
+        # Вторая попытка: модуль как blog.models (если app в корне)
+        if blog_models is None:
+            try:
+                blog_models = import_module('blog.models')
+                tried.append('blog.models')
+            except Exception as e:
+                tried.append(f'blog.models failed: {e}')
+
+        if blog_models is None:
+            logger.error("Could not import blog.models; tried: %s", tried)
+            return False
+
+        # Получаем классы моделей, если они есть
+        Post = getattr(blog_models, 'Post', None)
+        Category = getattr(blog_models, 'Category', None)
+        Tag = getattr(blog_models, 'Tag', None)
+        Comment = getattr(blog_models, 'Comment', None)
+        PostReaction = getattr(blog_models, 'PostReaction', None)
+        PostView = getattr(blog_models, 'PostView', None)
+        PostAttachment = getattr(blog_models, 'PostAttachment', None)
+        MediaLibrary = getattr(blog_models, 'MediaLibrary', None)
+        PostRevision = getattr(blog_models, 'PostRevision', None)
+
+        # Регистрируем Post (если есть)
         if Post is not None:
             try:
                 PostForm = modelform_factory(Post, form=PostAdminFormBase, fields='__all__')
-                BasePostAdmin.form = PostForm
             except Exception as e:
                 logger.exception("Could not build Post ModelForm dynamically: %s", e)
-                # leave BasePostAdmin.form as None — admin will still work but without custom form
+                PostForm = None
 
-            site_obj.register(Post, BasePostAdmin)
+            # Создаём админ-класс динамически, чтобы назначить form и связанные опции
+            post_admin_attrs = {}
+            if PostForm is not None:
+                post_admin_attrs['form'] = PostForm
 
+            # Если модель содержит поля categories/tags/status/published_at — задаём фильтры/поля
+            # Здесь мы присваиваем просто строковые имена — если поле не существует, Django проигнорирует в админ-интерфейсе.
+            post_admin_attrs.setdefault('list_filter', ("status", "published_at", "categories", "tags"))
+            post_admin_attrs.setdefault('prepopulated_fields', {"slug": ("title",)})
+            post_admin_attrs.setdefault('filter_horizontal', ("categories", "tags"))
+
+            PostAdmin = type('PostAdmin', (BasePostAdmin,), post_admin_attrs)
+
+            try:
+                site_obj.register(Post, PostAdmin)
+                logger.info("Registered Post with custom PostAdmin")
+            except AlreadyRegistered:
+                logger.info("Post already registered")
+            except Exception as e:
+                logger.exception("Failed to register Post admin: %s", e)
+
+        # Регистрируем остальные модели, если присутствуют
         if Category is not None:
-            site_obj.register(Category, CategoryAdmin)
+            try:
+                site_obj.register(Category, CategoryAdmin)
+            except AlreadyRegistered:
+                pass
+            except Exception as e:
+                logger.exception("Failed to register Category admin: %s", e)
+
         if Tag is not None:
-            site_obj.register(Tag, TagAdmin)
+            try:
+                site_obj.register(Tag, TagAdmin)
+            except AlreadyRegistered:
+                pass
+            except Exception as e:
+                logger.exception("Failed to register Tag admin: %s", e)
+
         if Comment is not None:
-            site_obj.register(Comment, CommentAdmin)
+            try:
+                site_obj.register(Comment, CommentAdmin)
+            except AlreadyRegistered:
+                pass
+            except Exception as e:
+                logger.exception("Failed to register Comment admin: %s", e)
+
         if PostReaction is not None:
-            site_obj.register(PostReaction)
+            try:
+                site_obj.register(PostReaction)
+            except AlreadyRegistered:
+                pass
+            except Exception as e:
+                logger.exception("Failed to register PostReaction admin: %s", e)
+
         if PostView is not None:
-            site_obj.register(PostView)
+            try:
+                site_obj.register(PostView)
+            except AlreadyRegistered:
+                pass
+            except Exception as e:
+                logger.exception("Failed to register PostView admin: %s", e)
+
         if PostRevision is not None:
-            site_obj.register(PostRevision, PostRevisionAdmin)
+            try:
+                site_obj.register(PostRevision, PostRevisionAdmin)
+            except AlreadyRegistered:
+                pass
+            except Exception as e:
+                logger.exception("Failed to register PostRevision admin: %s", e)
 
-        if MediaLibrary is not None:
-            site_obj.register(MediaLibrary, MediaLibraryAdmin)
+        if PostAttachment is not None and MediaLibrary is not None:
+            try:
+                site_obj.register(MediaLibrary, MediaLibraryAdmin)
+            except AlreadyRegistered:
+                pass
+            except Exception as e:
+                logger.exception("Failed to register MediaLibrary admin: %s", e)
 
-    except AlreadyRegistered:
-        # Некоторые модели могут быть зарегистрированы в других местах — игнорируем
-        pass
+        logger.info("Registered blog admin models into custom_admin_site via register_admin_models.")
+        return True
+
     except Exception as e:
         logger.exception("Admin registration failed: %s", e)
-
-    return True
-
-# NOTE:
-# - Мы УМЫШЛЕННО НЕ выполняем автоматическую регистрацию при импортe модуля,
-#   чтобы не ломать порядок загрузки приложений при запуске/миграциях на CI/Render.
-# - Вызвать register_admin_models(admin.site) следует из backend.blog.apps.BlogConfig.ready()
-#   (в apps.py вашего blog-приложения).
+        return False
