@@ -1,3 +1,4 @@
+# backend/core/settings.py
 import os
 from pathlib import Path
 from datetime import timedelta
@@ -65,7 +66,6 @@ SUMMERNOTE_CONFIG = {
     'attachment_require_authentication': True,
 }
 
-# 🎨 Jazzmin кастомизация
 JAZZMIN_SETTINGS = {
     "site_title": "Positive Theta Admin",
     "site_header": "Positive Theta Панель",
@@ -106,7 +106,6 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
-# CSRF / CORS
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -180,34 +179,34 @@ MIDDLEWARE = [
 
 # ========== APPS ==========
 INSTALLED_APPS = [
-    # Локальные приложения — обязательно первыми!
-    "users.apps.UsersConfig",
-    "tables.apps.TablesConfig",
-    "payments.apps.PaymentsConfig",
-    "analytics.apps.AnalyticsConfig",
-    "blog.apps.BlogConfig",
+    # Local apps — указываем полные python-пути до AppConfig-ов
+    "backend.users.apps.UsersConfig",
+    "backend.tables.apps.TablesConfig",
+    "backend.payments.apps.PaymentsConfig",
+    "backend.analytics.apps.AnalyticsConfig",
+    "backend.blog.apps.BlogConfig",
 
-    # Встроенные Django приложения
-    "django.contrib.admin",
+    # Django core apps
     "django.contrib.auth",
-    "django.contrib.contenttypes",
+    "django.contrib.admin",
+    "django.contrib.contenttypes", 
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # Сторонние библиотеки
+    # Third-party apps
     "jazzmin",
     "grappelli",
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
     "whitenoise.runserver_nostatic",
-    "django_filters",
-    "django_summernote",
-    "storages",
-    "reversion",
-    "adminsortable2",
-    "filebrowser",
+    'django_filters',
+    'django_summernote',
+    'storages',
+    'reversion',
+    'adminsortable2',
+    'filebrowser',
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
@@ -291,8 +290,8 @@ SIMPLE_JWT = {
     "AUTH_COOKIE_SAMESITE": "None",
 }
 
+# Указываем модель пользователя (app_label.ModelName)
 AUTH_USER_MODEL = 'users.CustomUser'
-#AUTH_USER_MODEL = 'auth.User'
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
@@ -328,7 +327,6 @@ LOGGING = {
     'root': {'handlers': ['console', 'file'], 'level': 'INFO'},
 }
 
-# ========== CKEDITOR CONFIG ==========
 CKEDITOR_5_CONFIGS = {
     'default': {
         'toolbar': [
@@ -421,7 +419,6 @@ SUMMERNOTE_CONFIG = {
     'attachment_model': 'blog.PostAttachment',
 }
 
-# Filebrowser настройки (если используется)
 FILEBROWSER_DIRECTORY = ''
 FILEBROWSER_EXTENSIONS = {
     'Image': ['.jpg','.jpeg','.gif','.png','.tif','.tiff'],
@@ -430,5 +427,4 @@ FILEBROWSER_EXTENSIONS = {
     'Audio': ['.mp3','.wav','.aiff','.midi','.m4p']
 }
 
-# Настройки для корректной работы с Supabase
-AWS_QUERYSTRING_AUTH = False  # Важно для публичных файлов в Supabase
+AWS_QUERYSTRING_AUTH = False  # Важно для публичных файлов в Supabase/

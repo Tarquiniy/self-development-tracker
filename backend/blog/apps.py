@@ -6,16 +6,17 @@ logger = logging.getLogger(__name__)
 
 class BlogConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'blog'
+    # полное имя пакета
+    name = 'backend.blog'
     verbose_name = "Blog"
 
     def ready(self):
         # Здесь безопасно вызывать регистрацию админов — реестр приложений готов.
         try:
             from django.contrib import admin
+            # Импортируем модуль admin нашего приложения и вызываем функцию регистрации
             from . import admin as blog_admin_module
-            # Вызываем функцию регистрации — она построит форму через modelform_factory
             blog_admin_module.register_admin_models(admin.site)
         except Exception as e:
-            # Логирование, но не падение — важно для стабильности деплоя.
+            # Не падаем — логируем для дебага
             logger.exception("Error registering blog admin models in ready(): %s", e)
