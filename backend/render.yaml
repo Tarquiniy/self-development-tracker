@@ -3,31 +3,65 @@ services:
     name: django-backend
     env: python
     plan: free
-    # Build: устанавливаем зависимости, собираем статику и применяем миграции (fail fast если что-то не так)
+    region: frankfurt
+    # Build: устанавливаем зависимости и собираем статику (мigrations не запускаем в build)
     buildCommand: >
       pip install --upgrade pip &&
       pip install -r requirements.txt &&
-      python manage.py collectstatic --noinput &&
-      python manage.py makemigrations --noinput || true &&
-      python manage.py migrate --noinput
-    # Start: на каждый запуск гарантируем, что миграции применены, затем запускаем gunicorn
+      ./build.sh
+    # Start: на runtime ждём БД, применяем миграции (в loop), собираем статику и запускаем gunicorn
     startCommand: >
-      bash -lc "python manage.py migrate --noinput &&
-               gunicorn core.wsgi:application --bind 0.0.0.0:\$PORT --workers 3"
+      bash -lc "
+      set -e
+      echo '--- Start command beginning ---'
+      echo 'Using env: DJANGO_SETTINGS_MODULE='${DJANGO_SETTINGS_MODULE:-not_set}
+      echo 'Using env: PYTHONPATH='${PYTHONPATH:-not_set}
+      echo 'Using env: DATABASE_URL='${DATABASE_URL:-not_set}
+
+      # Покажем, какой AUTH_USER_MODEL и DATABASES увидит Django (поможет отладить)
+      python manage.py shell -c \"from django.conf import settings, pprint; import json; print('AUTH_USER_MODEL:', getattr(settings, 'AUTH_USER_MODEL', None)); pprint.pprint(settings.DATABASES)\" || true
+
+      # Повторяем попытки миграций, пока БД не станет доступна (runtime)
+      until python manage.py migrate --noinput --verbosity 1; do
+        echo 'Waiting for DB to be ready (retrying migrate)...'
+        sleep 3
+      done
+
+      # Собираем статику (безопасно повторять)
+      python manage.py collectstatic --noinput
+
+      # Автосоздание суперпользователя при наличии env-vars (опционально)
+      if [ -n \"${DJANGO_SUPERUSER_USERNAME}\" ] && [ -n \"${DJANGO_SUPERUSER_EMAIL}\" ] && [ -n \"${DJANGO_SUPERUSER_PASSWORD}\" ]; then
+        python manage.py shell -c \"from django.contrib.auth import get_user_model; import os; User=get_user_model(); u=os.environ.get('DJANGO_SUPERUSER_USERNAME'); e=os.environ.get('DJANGO_SUPERUSER_EMAIL'); p=os.environ.get('DJANGO_SUPERUSER_PASSWORD'); \
+if not User.objects.filter(username=u).exists(): User.objects.create_superuser(u,e,p)\"
+      fi
+
+      echo '--- Starting gunicorn ---'
+      exec gunicorn core.wsgi:application --bind 0.0.0.0:\$PORT --workers 3
+      "
     envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: core.settings
+      - key: PYTHONPATH
+        value: /opt/render/project/src/backend
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
         value: "False"
       - key: DATABASE_URL
-        # Оставьте ваш текущий DATABASE_URL как есть (в вашем файле он уже прописан).
-        # Если нужно — перезапишите здесь либо через веб-интерфейс Render.
-        value: "postgresql://postgres.fjqbhcmsqypevfbpzcxj:TrackerPass@aws-1-eu-north-1.pooler.supabase.com:5432/postgres"
+        # Рекомендуется установить через Render Dashboard (здесь можно оставить пустым)
+        value: ""
+      - key: ALLOWED_HOSTS
+        value: "sdracker.onrender.com"
       - key: SUPABASE_URL
         value: "https://fjqbhcmsqypevfbpzcxj.supabase.co"
       - key: SUPABASE_KEY
         value: "REDACTED_OR_YOUR_KEY"
-      - key: REVALIDATION_SECRET
-        value: ""
       - key: FRONTEND_URL
         value: "https://positive-theta.vercel.app"
+      - key: DJANGO_SUPERUSER_USERNAME
+        value: ""
+      - key: DJANGO_SUPERUSER_EMAIL
+        value: ""
+      - key: DJANGO_SUPERUSER_PASSWORD
+        value: ""
