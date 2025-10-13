@@ -207,6 +207,7 @@ INSTALLED_APPS = [
     "backend.payments.apps.PaymentsConfig",
     "backend.analytics.apps.AnalyticsConfig",
     "backend.blog.apps.BlogConfig",
+    "blog.models.Category"
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
