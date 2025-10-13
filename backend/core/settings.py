@@ -180,34 +180,34 @@ MIDDLEWARE = [
 
 # ========== APPS ==========
 INSTALLED_APPS = [
-    # Local apps - ДОЛЖНЫ БЫТЬ ПЕРВЫМИ
+    # Локальные приложения — обязательно первыми!
     "users.apps.UsersConfig",
-    "tables.apps.TablesConfig", 
+    "tables.apps.TablesConfig",
     "payments.apps.PaymentsConfig",
     "analytics.apps.AnalyticsConfig",
     "blog.apps.BlogConfig",
 
-    # Django core apps
-    "django.contrib.auth",
+    # Встроенные Django приложения
     "django.contrib.admin",
-    "django.contrib.contenttypes", 
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # Third-party apps
+    # Сторонние библиотеки
     "jazzmin",
     "grappelli",
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
     "whitenoise.runserver_nostatic",
-    'django_filters',
-    'django_summernote',
-    'storages',
-    'reversion',
-    'adminsortable2',
-    'filebrowser',
+    "django_filters",
+    "django_summernote",
+    "storages",
+    "reversion",
+    "adminsortable2",
+    "filebrowser",
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
