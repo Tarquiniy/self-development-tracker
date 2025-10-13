@@ -21,6 +21,7 @@ from django.db import models
 from django.utils.safestring import mark_safe
 from django.utils.html import escape
 from django.template.loader import render_to_string
+from django.forms.models import modelform_factory
 
 logger = logging.getLogger(__name__)
 
@@ -56,11 +57,11 @@ CustomUser = _get_custom_user_safely()
 PREVIEW_SALT = "post-preview-salt"
 
 # -----------------------
-# Custom Admin Form with Enhanced UX
+# Base (без привязки к модели) Admin Form — будет использована для создания финальной ModelForm через modelform_factory
 # -----------------------
-class PostAdminForm(forms.ModelForm):
+class PostAdminFormBase(forms.ModelForm):
     class Meta:
-        model = Post
+        # Не указываем model здесь — он будет задан динамически через modelform_factory
         fields = '__all__'
         widgets = {
             'excerpt': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Краткое описание поста...'}),
@@ -69,21 +70,23 @@ class PostAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Add CSS classes for styling
-        self.fields['title'].widget.attrs.update({
-            'class': 'post-title-field',
-            'placeholder': 'Введите заголовок поста...'
-        })
-        self.fields['slug'].widget.attrs.update({
-            'class': 'post-slug-field',
-            'placeholder': 'url-slug...'
-        })
+        # Безопасно обновляем атрибуты, только если поля существуют (они появятся после создания конкретной ModelForm)
+        if 'title' in self.fields:
+            self.fields['title'].widget.attrs.update({
+                'class': 'post-title-field',
+                'placeholder': 'Введите заголовок поста...'
+            })
+        if 'slug' in self.fields:
+            self.fields['slug'].widget.attrs.update({
+                'class': 'post-slug-field',
+                'placeholder': 'url-slug...'
+            })
 
 # -----------------------
-# Enhanced Admin Classes
+# Enhanced Admin Classes (используют динамически присваиваемую form)
 # -----------------------
 class BasePostAdmin(VersionAdmin):
-    form = PostAdminForm
+    form = None  # будет присвоено динамически при регистрации
     change_form_template = 'admin/blog/post/change_form_fixed.html'
 
     # Modern list display
@@ -355,10 +358,21 @@ class PostRevisionAdmin(admin.ModelAdmin):
 def register_admin_models(site_obj):
     """
     Register all admin models into provided admin site.
+    We dynamically build/assign the ModelForm for Post so creation of form fields
+    that rely on related models (e.g. users.CustomUser) is deferred until runtime when models are ready.
     """
     try:
+        # If Post model exists, try to build its ModelForm dynamically using PostAdminFormBase
         if Post is not None:
+            try:
+                PostForm = modelform_factory(Post, form=PostAdminFormBase, fields='__all__')
+                BasePostAdmin.form = PostForm
+            except Exception as e:
+                logger.exception("Could not build Post ModelForm dynamically: %s", e)
+                # leave BasePostAdmin.form as None — admin will still work but without custom form
+
             site_obj.register(Post, BasePostAdmin)
+
         if Category is not None:
             site_obj.register(Category, CategoryAdmin)
         if Tag is not None:
@@ -383,7 +397,14 @@ def register_admin_models(site_obj):
 
 # Auto-register with default admin site
 try:
+    # For auto registration we must also attempt to create Post form similarly
     if Post is not None:
+        try:
+            PostForm = modelform_factory(Post, form=PostAdminFormBase, fields='__all__')
+            BasePostAdmin.form = PostForm
+        except Exception as e:
+            logger.exception("Could not build Post ModelForm during auto-register: %s", e)
+
         admin.site.register(Post, BasePostAdmin)
     if Category is not None:
         admin.site.register(Category, CategoryAdmin)
