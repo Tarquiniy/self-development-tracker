@@ -9,13 +9,12 @@ logger = logging.getLogger(__name__)
 
 def register_user_admin(site_obj):
     """
-    Регистрирует в админке прокси-модель для кастомного пользователя.
-    Должно вызываться из UsersConfig.ready() (когда приложения уже загружены).
-    Регистрируем прокси с app_label='auth', чтобы сохранить URL-имена админа
-    ('auth_user_changelist' и т.д.) — это решает проблему NoReverseMatch в index admin.
+    Безопасная регистрация админ-интерфейса для кастомного юзера.
+    Должна вызываться в UsersConfig.ready() — когда реестр приложений уже готов.
+    Регистрируем прокси-модель с app_label='auth' чтобы сохранить стандартные URL-имена
+    ('auth_user_changelist' и т.д.) и избежать NoReverseMatch на странице админа.
     """
     try:
-        # Локально импортируем модель, чтобы не делать это на этапе импорта модуля
         from django.contrib.auth import get_user_model
         User = get_user_model()
     except Exception as exc:
@@ -27,9 +26,8 @@ def register_user_admin(site_obj):
         return False
 
     try:
-        # Динамически создаём прокси-класс, чтобы не менять оригинальную модель
+        # Динамически создаём прокси-класс (чтобы не менять оригинальную модель)
         ProxyName = f"{User.__name__}Proxy"
-        # Если класс с таким именем уже существует в модулях — это нормально, но создаём новый type
         UserProxy = type(
             ProxyName,
             (User,),
@@ -44,7 +42,6 @@ def register_user_admin(site_obj):
             }
         )
 
-        # Подкласс админа — можно подровнять под поля вашей модели
         class CustomUserAdmin(DjangoUserAdmin):
             model = User
             list_display = (
