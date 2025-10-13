@@ -1,11 +1,10 @@
-# backend/users/migrations/0002_add_supabase_uid.py
+# Migration: add supabase_uid field to CustomUser
 from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        # предполагаем, что у вас есть 0001_initial. Если имя другое — замените.
         ("users", "0001_initial"),
     ]
 
