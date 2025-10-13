@@ -1,49 +1,27 @@
 # backend/users/apps.py
-import logging
 from django.apps import AppConfig
+import logging
 
 logger = logging.getLogger(__name__)
 
+
 class UsersConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    # **Очень важно**: полное python-имя модуля (package + submodule)
-    name = 'backend.users'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "backend.users"
     verbose_name = "Users"
 
     def ready(self):
-        """
-        Регистрация admin-прокси модели выполняется здесь, когда все приложения полностью загружены.
-        Это гарантирует, что URL'ы и зависимости админа будут корректно созданы.
-        """
-        # Импортируем только внутри ready() чтобы избежать ранних импортов
+        # Импортируем сигналы (если есть)
         try:
-            from django.contrib.auth import get_user_model
-            from django.contrib import admin as django_admin
-            # импорт admin-класса, который не регистрирует модель на уровне модуля
-            from .admin import CustomUserAdmin
-        except Exception as e:
-            logger.exception("UsersConfig.ready(): cannot import admin pieces: %s", e)
-            return
+            import backend.users.signals  # noqa: F401
+        except Exception as exc:
+            logger.debug("users.signals import failed or absent: %s", exc)
 
+        # Регистрируем пользовательский админ через прокси в app 'auth'
         try:
-            User = get_user_model()
-        except Exception as e:
-            logger.exception("UsersConfig.ready(): get_user_model() failed: %s", e)
-            return
-
-        # Создаём прокси модель в рантайме, чтобы зарегистрировать её в app 'auth'
-        try:
-            class UserProxy(User):  # type: ignore
-                class Meta:
-                    proxy = True
-                    app_label = "auth"
-                    verbose_name = getattr(User._meta, "verbose_name", "user")
-                    verbose_name_plural = getattr(User._meta, "verbose_name_plural", "users")
-
-            try:
-                django_admin.site.register(UserProxy, CustomUserAdmin)
-                logger.info("UsersConfig.ready(): UserProxy registered in admin (app_label='auth').")
-            except django_admin.sites.AlreadyRegistered:
-                logger.info("UsersConfig.ready(): UserProxy already registered, skipping.")
-        except Exception as e:
-            logger.exception("UsersConfig.ready(): failed to create/register UserProxy: %s", e)
+            from django.contrib import admin
+            from .admin import register_user_admin
+            register_user_admin(admin.site)
+        except Exception as exc:
+            # Не падаем — важно, чтобы ready() не ломал процесс миграций/старта
+            logger.exception("register_user_admin failed in UsersConfig.ready(): %s", exc)
