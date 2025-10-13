@@ -179,17 +179,10 @@ MIDDLEWARE = [
 
 # ========== APPS ==========
 INSTALLED_APPS = [
-    # Local apps — указываем полные python-пути до AppConfig-ов
-    "backend.users.apps.UsersConfig",
-    "backend.tables.apps.TablesConfig",
-    "backend.payments.apps.PaymentsConfig",
-    "backend.analytics.apps.AnalyticsConfig",
-    "backend.blog.apps.BlogConfig",
-
-    # Django core apps
-    "django.contrib.auth",
+    # Django core apps (всегда первыми)
     "django.contrib.admin",
-    "django.contrib.contenttypes", 
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
@@ -201,12 +194,19 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "corsheaders",
     "whitenoise.runserver_nostatic",
-    'django_filters',
-    'django_summernote',
-    'storages',
-    'reversion',
-    'adminsortable2',
-    'filebrowser',
+    "django_filters",
+    "django_summernote",
+    "storages",
+    "reversion",
+    "adminsortable2",
+    "filebrowser",
+
+    # Local apps — обязательно в самом конце
+    "backend.users.apps.UsersConfig",
+    "backend.tables.apps.TablesConfig",
+    "backend.payments.apps.PaymentsConfig",
+    "backend.analytics.apps.AnalyticsConfig",
+    "backend.blog.apps.BlogConfig",
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
