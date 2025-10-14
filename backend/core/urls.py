@@ -8,7 +8,7 @@ from django.conf.urls.static import static
 # Импортируем custom_admin_site (он может быть определён в backend/core/admin.py)
 #from .admin import custom_admin_site
 from blog import views as blog_views
-from backend.core.admin import custom_admin_site
+from django.contrib import admin
 
 # Попытка импортировать админ-views из blog.admin (dashboard, stats, post update, media library)
 admin_dashboard_view = None
@@ -60,8 +60,7 @@ else:
     ]
 
 urlpatterns += [
-    path('admin/', custom_admin_site.urls),
-
+    path('admin/', admin.site.urls),
 ]
 
 # Регистрация дополнительных админ-views, если доступны
