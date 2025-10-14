@@ -60,7 +60,8 @@ else:
     ]
 
 urlpatterns += [
-    path("admin/", admin.site.urls),  
+    path('admin/', custom_admin_site.urls),
+
 ]
 
 # Регистрация дополнительных админ-views, если доступны

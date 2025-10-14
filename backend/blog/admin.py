@@ -326,16 +326,27 @@ admin_urls = get_admin_urls()
 def register_admin_models(site):
     try:
         if Post is not None:
-            site.register(Post, PostAdmin)
+            try:
+                site.register(Post, PostAdmin)
+            except Exception:
+                pass
+        # Регистрируем прочие модели с дефолтным ModelAdmin
+        for model in (Category, Tag, Comment, PostReaction, PostView, PostAttachment, MediaLibrary):
+            if model is None:
+                continue
+            try:
+                # если есть кастомный Admin класс — замените None соответствующим классом
+                site.register(model)
+            except Exception:
+                # уже зарегистрировано или другая ошибка — пропускаем
+                pass
     except Exception:
-        logger.exception("Failed to register Post on provided admin site")
+        logger.exception("register_admin_models failed")
 
-# export view aliases that core.admin tries to import
+# Экспорт view-алиасов, которые core.admin ожидает импортировать
 admin_media_library_view = admin_media_library
 admin_media_upload_view = admin_media_upload
 admin_preview_token_view = admin_preview_token
 admin_autosave_view = admin_autosave
-# stats view for JS/API usage
 admin_stats_api = admin_dashboard_stats
-# optional dashboard view (None if not implemented)
 admin_dashboard_view = None
