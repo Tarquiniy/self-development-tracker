@@ -5,7 +5,8 @@ from django.urls import path, include
 #from users.views import RegisterView, LoginView, ProfileView
 from django.conf.urls.static import static
 from .admin import custom_admin_site
-from blog import views as blog_views
+from backend.blog import views as blog_views
+
 from django.views.generic import TemplateView
 from django.views.generic import RedirectView
 
