@@ -4,34 +4,25 @@ from django.contrib import admin
 from django.urls import path, include
 from users.views import RegisterView, LoginView, ProfileView
 from django.conf.urls.static import static
-
-# Импортируем custom_admin_site (он может быть определён в backend/core/admin.py)
-#from .admin import custom_admin_site
-from blog import views as blog_views
-from django.contrib import admin
+from django.views.generic import TemplateView
 
 # Попытка импортировать админ-views из blog.admin (dashboard, stats, post update, media library)
 admin_dashboard_view = None
 admin_stats_api = None
 admin_post_update_view = None
 admin_media_library_view = None
+admin_autosave_view = None
+admin_preview_token_view = None
 try:
-    # blog.admin экспортирует удобные функции (admin_media_library_view, admin_dashboard_view, ...)
-    from blog.admin import admin_media_library_view, admin_dashboard_view, admin_post_update_view, admin_stats_api
+    from blog import admin as blog_admin
+    admin_dashboard_view = getattr(blog_admin, "admin_dashboard_view", None)
+    admin_stats_api = getattr(blog_admin, "admin_stats_api", None)
+    admin_media_library_view = getattr(blog_admin, "admin_media_library_view", None)
+    admin_post_update_view = getattr(blog_admin, "admin_post_update_view", None)
+    admin_autosave_view = getattr(blog_admin, "admin_autosave_view", None)
+    admin_preview_token_view = getattr(blog_admin, "admin_preview_token_view", None)
 except Exception:
-    admin_media_library_view = None
-    admin_dashboard_view = None
-    admin_post_update_view = None
-    admin_stats_api = None
-
-# Если admin_media_library_view не предоставлен из blog.admin,
-# попробуем взять MediaLibraryView из blog.views (более надёжно)
-if admin_media_library_view is None:
-    try:
-        from blog.views import MediaLibraryView
-        admin_media_library_view = MediaLibraryView.as_view()
-    except Exception:
-        admin_media_library_view = None
+    admin_dashboard_view = admin_stats_api = admin_post_update_view = admin_media_library_view = admin_autosave_view = admin_preview_token_view = None
 
 urlpatterns = [
     path('grappelli/', include('grappelli.urls')),
@@ -40,44 +31,36 @@ urlpatterns = [
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', LoginView.as_view(), name='login'),
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
-    #path('api/tables/', include(('tables.urls', 'tables'), namespace='tables')),
+    path('api/tables/', include(('tables.urls', 'tables'), namespace='tables')),
     path('summernote/', include('django_summernote.urls')),
     path('api/auth/profile/', ProfileView.as_view(), name='profile'),
-    path('preview/<str:token>/', blog_views.preview_by_token, name='post-preview'),
+    path('preview/<str:token>/', lambda req, token: blog_admin.preview_by_token(req, token) if hasattr(blog_admin, "preview_by_token") else TemplateView.as_view(template_name='404.html')(req), name='post-preview'),
 ]
 
-# ВАЖНО: регистрируем /admin/media-library/ до admin/ маршрута,
-# чтобы он не был перехвачен более общим admin/ маршрутом.
+# Регистрируем media-library route до admin/, если он предоставлен модулем blog.admin
 if admin_media_library_view:
     urlpatterns += [
         path('admin/media-library/', admin_media_library_view, name='admin-media-library'),
     ]
 else:
-    # fallback: если view недоступен — шаблон-заглушка (чтобы не было 404)
-    from django.views.generic import TemplateView
     urlpatterns += [
         path('admin/media-library/', TemplateView.as_view(template_name='admin/media_library_unavailable.html'), name='admin-media-library'),
     ]
 
+# Подключаем стандартную админку (admin.site)
 urlpatterns += [
     path('admin/', admin.site.urls),
 ]
 
-# Регистрация дополнительных админ-views, если доступны
+# Регистрация дополнительных admin-views, если доступны (не входят в стандартный admin.site)
 if admin_dashboard_view:
-    urlpatterns += [
-        path('admin/dashboard/', admin_dashboard_view, name='admin-dashboard'),
-    ]
+    urlpatterns += [ path('admin/dashboard/', admin_dashboard_view, name='admin-dashboard') ]
 
 if admin_stats_api:
-    urlpatterns += [
-        path('admin/dashboard/stats-data/', admin_stats_api, name='admin-dashboard-stats'),
-    ]
+    urlpatterns += [ path('admin/dashboard/stats-data/', admin_stats_api, name='admin-dashboard-stats') ]
 
 if admin_post_update_view:
-    urlpatterns += [
-        path('admin/posts/update/', admin_post_update_view, name='admin-post-update'),
-    ]
+    urlpatterns += [ path('admin/posts/update/', admin_post_update_view, name='admin-post-update') ]
 
 # В режиме разработки отдать media/static
 if settings.DEBUG:
