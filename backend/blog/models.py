@@ -1,29 +1,29 @@
-import os
+# backend/blog/models.py
 from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
 from django.urls import reverse
 from django.utils import timezone
+from .storages import SupabaseStorage
 
-# CKEditor5 — безопасно
+# Используем CKEditor5Field после установки пакета
 try:
     from django_ckeditor_5.fields import CKEditor5Field
     HAS_CKEDITOR = True
-except Exception:
+except ImportError:
+    # Fallback если пакет не установлен
     HAS_CKEDITOR = False
     CKEditor5Field = models.TextField
 
-# summernote attachment compatibility — безопасно
+# Импортируем AbstractAttachment для summernote
 try:
-    from django_summernote.models import AbstractAttachment  # may raise if apps not ready
+    from django_summernote.models import AbstractAttachment
     HAS_SUMMERNOTE = True
-except Exception:
+except ImportError:
     HAS_SUMMERNOTE = False
-
     class AbstractAttachment(models.Model):
         class Meta:
             abstract = True
-
 
 class Category(models.Model):
     title = models.CharField(max_length=120, unique=True)
@@ -32,8 +32,7 @@ class Category(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        app_label = "blog"
-        ordering = ["title"]
+        ordering = ['title']
         verbose_name_plural = "Categories"
 
     def save(self, *args, **kwargs):
@@ -51,7 +50,7 @@ class Category(models.Model):
         return self.title
 
     def get_absolute_url(self):
-        return reverse("blog:category-detail", kwargs={"slug": self.slug})
+        return reverse('blog:category-detail', kwargs={'slug': self.slug})
 
 
 class Tag(models.Model):
@@ -59,8 +58,7 @@ class Tag(models.Model):
     slug = models.SlugField(max_length=100, unique=True, blank=True)
 
     class Meta:
-        app_label = "blog"
-        ordering = ["title"]
+        ordering = ['title']
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -77,43 +75,82 @@ class Tag(models.Model):
         return self.title
 
 
+class PostAttachment(AbstractAttachment):
+    """
+    File attachments for posts — can be unattached (post nullable) to support media library.
+    Inherits from AbstractAttachment for django-summernote compatibility.
+    """
+    post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
+    # file field is inherited from AbstractAttachment
+    title = models.CharField(max_length=255, blank=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    # uploaded_at field is inherited from AbstractAttachment as 'uploaded'
+
+    def __str__(self):
+        return self.title or self.file.name
+
+    class Meta:
+        verbose_name = "Вложение"
+        verbose_name_plural = "Вложения"
+
+    @property
+    def uploaded_at(self):
+        """Backward compatibility property"""
+        return self.uploaded
+
+
 class Post(models.Model):
-    STATUS_CHOICES = (("draft", "Черновик"), ("published", "Опубликован"), ("archived", "В архиве"))
+    STATUS_CHOICES = (
+        ('draft', 'Черновик'),
+        ('published', 'Опубликован'),
+        ('archived', 'В архиве'),
+    )
 
     author = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="posts"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='posts'
     )
     title = models.CharField(max_length=255, verbose_name="Заголовок")
     slug = models.SlugField(max_length=300, unique=True, blank=True, db_index=True, verbose_name="URL")
     excerpt = models.TextField(blank=True, verbose_name="Краткое описание")
 
+    # CKEditor5 поле с правильным использованием verbose_name
     if HAS_CKEDITOR:
-        content = CKEditor5Field(config_name="extends", verbose_name="Содержание")
+        content = CKEditor5Field(config_name='extends', verbose_name="Содержание")
     else:
         content = models.TextField(verbose_name="Содержание")
 
     featured_image = models.URLField(blank=True, null=True, verbose_name="Главное изображение")
-    categories = models.ManyToManyField(Category, related_name="posts", blank=True, verbose_name="Категории")
-    tags = models.ManyToManyField(Tag, related_name="posts", blank=True, verbose_name="Теги")
+    categories = models.ManyToManyField(Category, related_name='posts', blank=True, verbose_name="Категории")
+    tags = models.ManyToManyField(Tag, related_name='posts', blank=True, verbose_name="Теги")
 
+    # SEO / metadata
     meta_title = models.CharField(max_length=255, blank=True, verbose_name="Мета-заголовок")
     meta_description = models.CharField(max_length=320, blank=True, verbose_name="Мета-описание")
     og_image = models.URLField(blank=True, verbose_name="Open Graph изображение")
 
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft", db_index=True, verbose_name="Статус")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', db_index=True, verbose_name="Статус")
+    
+    # Изменяем поле published_at - убираем default и делаем nullable
     published_at = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name="Дата публикации")
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлен")
 
     class Meta:
-        app_label = "blog"
-        ordering = ["-published_at", "-created_at"]
-        indexes = [models.Index(fields=["slug"]), models.Index(fields=["status", "published_at"])]
+        ordering = ['-published_at', '-created_at']  # Добавляем резервную сортировку
+        indexes = [
+            models.Index(fields=['slug']),
+            models.Index(fields=['status', 'published_at']),
+        ]
         verbose_name = "Пост"
         verbose_name_plural = "Посты"
 
     def save(self, *args, **kwargs):
+        # Auto-generate slug if missing
         if not self.slug:
             base = slugify(self.title)[:250]
             slug = base
@@ -123,10 +160,12 @@ class Post(models.Model):
                 counter += 1
             self.slug = slug
 
+        # If meta_title missing, default to title
         if not self.meta_title:
             self.meta_title = self.title
 
-        if not self.published_at and self.status == "published":
+        # Если published_at не установлено и пост публикуется, устанавливаем текущее время
+        if not self.published_at and self.status == 'published':
             self.published_at = timezone.now()
 
         super().save(*args, **kwargs)
@@ -135,57 +174,30 @@ class Post(models.Model):
         return f"{self.title} ({self.get_status_display()})"
 
     def get_absolute_url(self):
-        return reverse("blog:post-detail", kwargs={"slug": self.slug})
+        return reverse('blog:post-detail', kwargs={'slug': self.slug})
 
     @property
     def is_published(self):
-        return self.status == "published" and self.published_at and self.published_at <= timezone.now()
+        return self.status == 'published' and self.published_at and self.published_at <= timezone.now()
 
     @property
     def reading_time(self):
-        word_count = len((self.content or "").split())
+        word_count = len(self.content.split())
         return max(1, round(word_count / 200))
 
-
-class PostAttachment(AbstractAttachment if HAS_SUMMERNOTE else models.Model):
-    if not HAS_SUMMERNOTE:
-        file = models.FileField(upload_to="post_attachments", blank=True, null=True)
-        uploaded_at = models.DateTimeField(auto_now_add=True)
-
-    post = models.ForeignKey("Post", on_delete=models.CASCADE, related_name="attachments", null=True, blank=True)
-    title = models.CharField(max_length=255, blank=True)
-    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
-
-    class Meta:
-        app_label = "blog"
-        verbose_name = "Вложение"
-        verbose_name_plural = "Вложения"
-
-    def __str__(self):
-        try:
-            return self.title or (self.file.name if getattr(self, "file", None) else "")
-        except Exception:
-            return self.title or ""
-
-    @property
-    def uploaded(self):
-        return getattr(self, "uploaded_at", None)
-
-
 class Comment(models.Model):
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="comments")
-    parent = models.ForeignKey("self", on_delete=models.CASCADE, null=True, blank=True, related_name="replies")
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
     name = models.CharField(max_length=120, verbose_name="Имя")
     email = models.EmailField(blank=True, null=True, verbose_name="Email")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="comments")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='comments')
     content = models.TextField(verbose_name="Комментарий")
     is_public = models.BooleanField(default=True, db_index=True, verbose_name="Публичный")
     is_moderated = models.BooleanField(default=False, verbose_name="Промодерирован")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
 
     class Meta:
-        app_label = "blog"
-        ordering = ["created_at"]
+        ordering = ['created_at']
         verbose_name = "Комментарий"
         verbose_name_plural = "Комментарии"
 
@@ -194,15 +206,20 @@ class Comment(models.Model):
 
 
 class PostReaction(models.Model):
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="reactions", null=True, blank=True)
-    users = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="liked_posts")
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        related_name='reactions',
+        null=True,
+        blank=True
+    )
+    users = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name='liked_posts')
     anon_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        app_label = "blog"
-        unique_together = ("post",)
+        unique_together = ('post',)
         verbose_name = "Реакция"
         verbose_name_plural = "Реакции"
 
@@ -214,33 +231,35 @@ class PostReaction(models.Model):
 
 
 class PostView(models.Model):
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="views")
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='views')
     ip_address = models.GenericIPAddressField()
     user_agent = models.TextField(blank=True)
     viewed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        app_label = "blog"
         verbose_name = "Просмотр"
         verbose_name_plural = "Просмотры"
-        indexes = [models.Index(fields=["post", "viewed_at"])]
+        indexes = [
+            models.Index(fields=['post', 'viewed_at']),
+        ]
 
     def __str__(self):
         return f"Просмотр {self.post.title}"
 
 
+# ---------------------------
+# Proxy model to show "Media Library" in the Blog app list of Django admin.
 class MediaLibrary(PostAttachment):
     class Meta:
-        app_label = "blog"
         proxy = True
         verbose_name = "Медиа библиотека"
         verbose_name_plural = "Медиа библиотека"
 
 
 class PostRevision(models.Model):
-    post = models.ForeignKey("Post", related_name="revisions", on_delete=models.CASCADE)
+    post = models.ForeignKey('Post', related_name='revisions', on_delete=models.CASCADE)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
-    content = models.TextField(blank=True)
+    content = models.TextField(blank=True)   # HTML content snapshot
     title = models.CharField(max_length=300, blank=True)
     excerpt = models.TextField(blank=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
@@ -248,9 +267,10 @@ class PostRevision(models.Model):
     meta = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        app_label = "blog"
-        ordering = ["-created_at"]
-        indexes = [models.Index(fields=["post", "created_at"])]
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['post', 'created_at']),
+        ]
 
     def __str__(self):
         return f"Revision {self.id} for {self.post_id} @ {self.created_at.isoformat()}"
