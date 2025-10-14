@@ -40,7 +40,7 @@ urlpatterns = [
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', LoginView.as_view(), name='login'),
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
-    path('api/tables/', include(('tables.urls', 'tables'), namespace='tables')),
+    #path('api/tables/', include(('tables.urls', 'tables'), namespace='tables')),
     path('summernote/', include('django_summernote.urls')),
     path('api/auth/profile/', ProfileView.as_view(), name='profile'),
     path('preview/<str:token>/', blog_views.preview_by_token, name='post-preview'),
