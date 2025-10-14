@@ -5,6 +5,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# дополнительные импорты для копирования регистраций и явной регистрации auth моделей
+from django.contrib import admin as default_admin
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.contrib.auth.admin import UserAdmin, GroupAdmin
+
 
 class CustomAdminSite(admin.AdminSite):
     site_header = "Positive Theta Admin"
@@ -48,8 +54,7 @@ class CustomAdminSite(admin.AdminSite):
         return custom_urls + urls
 
 
-# create site
-#custom_admin_site = CustomAdminSite(name="custom_admin")
+# create site; используем имя "admin" чтобы сохранить стандартный namespace
 custom_admin_site = CustomAdminSite(name="admin")
 
 # TRY to register blog models into custom_admin_site using blog.admin.register_admin_models
@@ -68,5 +73,36 @@ except Exception as e:
     logger.debug("Could not import blog.admin for explicit registration: %s", e)
 
 
-__all__ = ["custom_admin_site", "CustomAdminSite"]
+# Копируем регистрации из стандартного admin.site в custom_admin_site,
+# чтобы обеспечить наличие тех же url names (auth, sessions, site models и т.д.)
+try:
+    for model, model_admin in list(default_admin.site._registry.items()):
+        # пропускаем, если уже зарегистрировано в custom_admin_site
+        if model in custom_admin_site._registry:
+            continue
+        try:
+            ModelAdminClass = model_admin.__class__
+            custom_admin_site.register(model, ModelAdminClass)
+        except Exception:
+            # попытка зарегистрировать без кастомного класса
+            try:
+                custom_admin_site.register(model)
+            except Exception:
+                logger.exception("Failed to register model %s into custom_admin_site", model)
+except Exception as e:
+    logger.exception("Failed to copy default admin registrations: %s", e)
 
+
+# Явная регистрация User и Group на случай, если они не были в default_admin.site._registry
+try:
+    custom_admin_site.register(get_user_model(), UserAdmin)
+except Exception:
+    logger.debug("User model already registered or failed to register on custom_admin_site.")
+
+try:
+    custom_admin_site.register(Group, GroupAdmin)
+except Exception:
+    logger.debug("Group model already registered or failed to register on custom_admin_site.")
+
+
+__all__ = ["custom_admin_site", "CustomAdminSite"]
