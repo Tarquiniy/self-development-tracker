@@ -351,6 +351,7 @@ admin_autosave_view = admin_autosave
 admin_stats_api = admin_dashboard_stats
 admin_dashboard_view = None
 
+# ----- ensure blog models are registered in default admin.site -----
 def _ensure_blog_models_registered():
     models_to_register = (Post, Category, Tag, Comment, PostReaction, PostView, PostAttachment, MediaLibrary)
     for m in models_to_register:
@@ -360,6 +361,7 @@ def _ensure_blog_models_registered():
             if m not in admin.site._registry:
                 admin.site.register(m)
         except Exception:
+            # попытаемся без кастомного класса; если и это упадет — логируем
             try:
                 admin.site.register(m)
             except Exception:
