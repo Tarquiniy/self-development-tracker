@@ -350,3 +350,19 @@ admin_preview_token_view = admin_preview_token
 admin_autosave_view = admin_autosave
 admin_stats_api = admin_dashboard_stats
 admin_dashboard_view = None
+
+def _ensure_blog_models_registered():
+    models_to_register = (Post, Category, Tag, Comment, PostReaction, PostView, PostAttachment, MediaLibrary)
+    for m in models_to_register:
+        if not m:
+            continue
+        try:
+            if m not in admin.site._registry:
+                admin.site.register(m)
+        except Exception:
+            try:
+                admin.site.register(m)
+            except Exception:
+                logger.exception("Failed to register blog model %s in admin.site", getattr(m, "__name__", str(m)))
+
+_ensure_blog_models_registered()
