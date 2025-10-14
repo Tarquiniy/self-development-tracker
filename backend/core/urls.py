@@ -49,7 +49,7 @@ urlpatterns = [
     path("admin/", custom_admin_site.urls),
     #path('api/auth/register/', RegisterView.as_view(), name='register'),
     #path('api/auth/login/', LoginView.as_view(), name='login'),
-    path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
+    path('api/blog/', include(('backend.blog.urls', 'blog'), namespace='blog')),
     #path('api/tables/', include(('tables.urls', 'tables'), namespace='tables')),
     path('summernote/', include('django_summernote.urls')),
     #path('api/auth/profile/', ProfileView.as_view(), name='profile'),
