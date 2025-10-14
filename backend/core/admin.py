@@ -49,7 +49,8 @@ class CustomAdminSite(admin.AdminSite):
 
 
 # create site
-custom_admin_site = CustomAdminSite(name="custom_admin")
+#custom_admin_site = CustomAdminSite(name="custom_admin")
+custom_admin_site = CustomAdminSite(name="admin")
 
 # TRY to register blog models into custom_admin_site using blog.admin.register_admin_models
 try:
