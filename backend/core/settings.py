@@ -179,7 +179,7 @@ MIDDLEWARE = [
 
 # ========== APPS ==========
 INSTALLED_APPS = [
-    # Django core apps (всегда первыми)
+    # Django core apps (first)
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -187,7 +187,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # Third-party apps
+    # Third-party apps (before your local apps)
     "jazzmin",
     "grappelli",
     "rest_framework",
@@ -201,13 +201,12 @@ INSTALLED_APPS = [
     "adminsortable2",
     "filebrowser",
 
-    # Local apps — обязательно в самом конце
+    # Local apps (after third-party)
     "backend.users.apps.UsersConfig",
     "backend.tables.apps.TablesConfig",
     "backend.payments.apps.PaymentsConfig",
     "backend.analytics.apps.AnalyticsConfig",
     "backend.blog.apps.BlogConfig",
-    "blog.models.Category"
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"

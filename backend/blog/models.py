@@ -17,11 +17,9 @@ except Exception:
 
 # Попытка совместимости с django-summernote AbstractAttachment не должна ломать импорт
 try:
-    from django_summernote.models import AbstractAttachment
-    HAS_SUMMERNOTE = True
+    from django_summernote.models import AbstractAttachment  # может вызвать AppRegistryNotReady при раннем импорте
 except Exception:
-    AbstractAttachment = None
-    HAS_SUMMERNOTE = False
+    # Безопасная абстрактная заглушка — если django_summernote недоступен
     class AbstractAttachment(models.Model):
         class Meta:
             abstract = True
