@@ -323,3 +323,19 @@ def get_admin_urls():
 
 admin_urls = get_admin_urls()
 
+def register_admin_models(site):
+    try:
+        if Post is not None:
+            site.register(Post, PostAdmin)
+    except Exception:
+        logger.exception("Failed to register Post on provided admin site")
+
+# export view aliases that core.admin tries to import
+admin_media_library_view = admin_media_library
+admin_media_upload_view = admin_media_upload
+admin_preview_token_view = admin_preview_token
+admin_autosave_view = admin_autosave
+# stats view for JS/API usage
+admin_stats_api = admin_dashboard_stats
+# optional dashboard view (None if not implemented)
+admin_dashboard_view = None
