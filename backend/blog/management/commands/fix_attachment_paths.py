@@ -1,6 +1,6 @@
 import os
 from django.core.management.base import BaseCommand
-from backend.blog.models import PostAttachment
+from blog.models import PostAttachment
 
 
 class Command(BaseCommand):

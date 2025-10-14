@@ -17,7 +17,7 @@ class SupabaseStorage(object):
     Легковесный адаптер для использования Supabase public storage как DEFAULT_FILE_STORAGE.
     Не выполняет жёсткой инициализации boto3 при импорте проекта.
     Рекомендуется установить в settings:
-        DEFAULT_FILE_STORAGE = 'backend.blog.storages.SupabaseStorage'
+        DEFAULT_FILE_STORAGE = 'blog.storages.SupabaseStorage'
     и задать SUPABASE_URL и AWS_STORAGE_BUCKET_NAME в окружении/settings.
 
     Поведение:

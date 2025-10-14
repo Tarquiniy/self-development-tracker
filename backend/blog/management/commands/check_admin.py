@@ -1,7 +1,7 @@
 # backend/blog/management/commands/check_admin.py
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
-from backend.blog.models import Post
+from blog.models import Post
 
 User = get_user_model()
 

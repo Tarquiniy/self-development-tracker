@@ -322,7 +322,7 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
-DEFAULT_FILE_STORAGE = "backend.blog.storages.SupabaseStorage"
+DEFAULT_FILE_STORAGE = "blog.storages.SupabaseStorage"
 
 if not DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

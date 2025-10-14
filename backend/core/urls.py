@@ -7,7 +7,7 @@ from django.conf.urls.static import static
 
 # Импортируем custom_admin_site (он может быть определён в backend/core/admin.py)
 from .admin import custom_admin_site
-from backend.blog import views as blog_views
+from blog import views as blog_views
 
 
 # Попытка импортировать админ-views из blog.admin (dashboard, stats, post update, media library)
