@@ -47,6 +47,7 @@ class Category(models.Model):
     class Meta:
         ordering = ['title']
         verbose_name_plural = "Categories"
+        app_label = "blog"
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -72,6 +73,7 @@ class Tag(models.Model):
 
     class Meta:
         ordering = ['title']
+        app_label = "blog"
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -110,8 +112,8 @@ class Post(models.Model):
         content = models.TextField(verbose_name="Содержание")
 
     featured_image = models.URLField(blank=True, null=True, verbose_name="Главное изображение")
-    categories = models.ManyToManyField(Category, related_name='posts', blank=True, verbose_name="Категории")
-    tags = models.ManyToManyField(Tag, related_name='posts', blank=True, verbose_name="Теги")
+    categories = models.ManyToManyField('blog.Category', related_name='posts', blank=True, verbose_name="Категории")
+    tags = models.ManyToManyField('blog.Tag', related_name='posts', blank=True, verbose_name="Теги")
 
     meta_title = models.CharField(max_length=255, blank=True, verbose_name="Мета-заголовок")
     meta_description = models.CharField(max_length=320, blank=True, verbose_name="Мета-описание")
@@ -131,6 +133,7 @@ class Post(models.Model):
         ]
         verbose_name = "Пост"
         verbose_name_plural = "Посты"
+        app_label = "blog"
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -184,13 +187,14 @@ class PostAttachment(BaseAttachment):
         file = models.FileField(upload_to="post_attachments", blank=True, null=True)
         uploaded_at = models.DateTimeField(auto_now_add=True)
 
-    post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
+    post = models.ForeignKey('blog.Post', on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
     title = models.CharField(max_length=255, blank=True)
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
 
     class Meta:
         verbose_name = "Вложение"
         verbose_name_plural = "Вложения"
+        app_label = "blog"
 
     def __str__(self):
         try:
@@ -207,7 +211,7 @@ class PostAttachment(BaseAttachment):
 
 
 class Comment(models.Model):
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
+    post = models.ForeignKey('blog.Post', on_delete=models.CASCADE, related_name='comments')
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
     name = models.CharField(max_length=120, verbose_name="Имя")
     email = models.EmailField(blank=True, null=True, verbose_name="Email")
@@ -221,13 +225,14 @@ class Comment(models.Model):
         ordering = ['created_at']
         verbose_name = "Комментарий"
         verbose_name_plural = "Комментарии"
+        app_label = "blog"
 
     def __str__(self):
         return f"Комментарий к {self.post.title} от {self.name[:20]}"
 
 
 class PostReaction(models.Model):
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='reactions', null=True, blank=True)
+    post = models.ForeignKey('blog.Post', on_delete=models.CASCADE, related_name='reactions', null=True, blank=True)
     users = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name='liked_posts')
     anon_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -237,6 +242,7 @@ class PostReaction(models.Model):
         unique_together = ('post',)
         verbose_name = "Реакция"
         verbose_name_plural = "Реакции"
+        app_label = "blog"
 
     def likes_count(self):
         return self.anon_count + self.users.count()
@@ -246,7 +252,7 @@ class PostReaction(models.Model):
 
 
 class PostView(models.Model):
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='views')
+    post = models.ForeignKey('blog.Post', on_delete=models.CASCADE, related_name='views')
     ip_address = models.GenericIPAddressField()
     user_agent = models.TextField(blank=True)
     viewed_at = models.DateTimeField(auto_now_add=True)
@@ -255,6 +261,7 @@ class PostView(models.Model):
         verbose_name = "Просмотр"
         verbose_name_plural = "Просмотры"
         indexes = [models.Index(fields=['post', 'viewed_at'])]
+        app_label = "blog"
 
     def __str__(self):
         return f"Просмотр {self.post.title}"
@@ -265,10 +272,11 @@ class MediaLibrary(PostAttachment):
         proxy = True
         verbose_name = "Медиа библиотека"
         verbose_name_plural = "Медиа библиотека"
+        app_label = "blog"
 
 
 class PostRevision(models.Model):
-    post = models.ForeignKey('Post', related_name='revisions', on_delete=models.CASCADE)
+    post = models.ForeignKey('blog.Post', related_name='revisions', on_delete=models.CASCADE)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     content = models.TextField(blank=True)
     title = models.CharField(max_length=300, blank=True)
@@ -280,6 +288,7 @@ class PostRevision(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [models.Index(fields=['post', 'created_at'])]
+        app_label = "blog"
 
     def __str__(self):
         return f"Revision {self.id} for {self.post_id} @ {self.created_at.isoformat()}"
