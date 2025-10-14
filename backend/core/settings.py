@@ -448,4 +448,4 @@ FILEBROWSER_EXTENSIONS = {
 }
 
 # Настройки для корректной работы с Supabase
-AWS_QUERYSTRING_AUTH = False  # Важно для публичных файлов в Supabase
+AWS_QUERYSTRING_AUTH = False  # Важно для публичных файлов в Supabase   
