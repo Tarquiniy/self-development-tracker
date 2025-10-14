@@ -59,10 +59,8 @@ else:
         path('admin/media-library/', TemplateView.as_view(template_name='admin/media_library_unavailable.html'), name='admin-media-library'),
     ]
 
-# Подключаем кастомную админку (или стандартную замените на admin.site.urls если хотите).
-# Важно: только ОДИН маршрут 'admin/' — его нельзя дублировать.
 urlpatterns += [
-    path('admin/', custom_admin_site.urls),  # если хотите использовать стандартную админку - замените на admin.site.urls
+    path("admin/", admin.site.urls),  
 ]
 
 # Регистрация дополнительных админ-views, если доступны

@@ -1,12 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-backend/blog/admin.py
-Полный admin.py с интеграцией CKEditor5 (замена TipTap).
-Основная логика оригинального admin.py сохранена; произведены целенаправленные
-замены виджетов/атрибутов/Media (tiptap -> ckeditor).
-Источник оригинала: файл, присланный пользователем.
-"""
 import os
 import json
 import logging
