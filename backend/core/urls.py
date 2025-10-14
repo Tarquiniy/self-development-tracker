@@ -19,7 +19,7 @@ admin_autosave_view = None
 admin_preview_token_view = None
 
 try:
-    from blog.admin import (
+    from backend.blog.admin import (
         admin_media_library_view,
         admin_dashboard_view,
         admin_post_update_view,
@@ -38,7 +38,7 @@ except Exception:
 # Если admin_media_library_view не предоставлен из blog.admin, попробуем взять MediaLibraryView из blog.views
 if admin_media_library_view is None:
     try:
-        from blog.views import MediaLibraryView
+        from backend.blog.views import MediaLibraryView
         admin_media_library_view = MediaLibraryView.as_view()
     except Exception:
         admin_media_library_view = None

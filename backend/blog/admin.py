@@ -51,7 +51,7 @@ def register_blog_admin(site_obj):
             tried.append(f"{modname}: {exc}")
 
     if blog_models is None:
-        logger.error("Could not import blog.models; tried: %s", tried)
+        logger.error("Could not import backend.blog.models; tried: %s", tried)
         return False
 
     Post = getattr(blog_models, 'Post', None)
@@ -108,3 +108,4 @@ def register_blog_admin(site_obj):
     safe_register(PostRevision)
 
     return True
+

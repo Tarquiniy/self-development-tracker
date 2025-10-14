@@ -14,13 +14,13 @@ class CustomAdminSite(admin.AdminSite):
     def get_urls(self):
         """
         Add optional blog admin views (dashboard, media library, stats) lazily.
-        Import blog.admin module and attach existing views if present.
+        import backend.blog.admin module and attach existing views if present.
         """
         urls = super().get_urls()
         custom_urls = []
 
         try:
-            from blog import admin as blog_admin
+            from backend.blog import admin as blog_admin
 
             admin_dashboard_view = getattr(blog_admin, "admin_dashboard_view", None)
             admin_stats_api = getattr(blog_admin, "admin_stats_api", None)
@@ -43,7 +43,7 @@ class CustomAdminSite(admin.AdminSite):
                 custom_urls.append(path("preview/token/", self.admin_view(admin_preview_token_view), name="admin-preview-token"))
 
         except Exception as e:
-            logger.exception("Failed to import blog.admin views into custom admin urls: %s", e)
+            logger.exception("Failed to import backend.blog.admin views into custom admin urls: %s", e)
 
         return custom_urls + urls
 
@@ -53,7 +53,7 @@ custom_admin_site = CustomAdminSite(name="custom_admin")
 
 # TRY to register blog models into custom_admin_site using blog.admin.register_admin_models
 try:
-    from blog import admin as blog_admin_module
+    from backend.blog import admin as blog_admin_module
     register_fn = getattr(blog_admin_module, "register_admin_models", None)
     if callable(register_fn):
         try:
@@ -64,7 +64,8 @@ try:
     else:
         logger.debug("blog.admin.register_admin_models not found — skipping explicit registration.")
 except Exception as e:
-    logger.debug("Could not import blog.admin for explicit registration: %s", e)
+    logger.debug("Could not import backend.blog.admin for explicit registration: %s", e)
 
 
 __all__ = ["custom_admin_site", "CustomAdminSite"]
+
