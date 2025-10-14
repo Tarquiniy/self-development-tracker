@@ -6,25 +6,15 @@ from django import forms
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
 from django.urls import reverse
-from django.shortcuts import render, redirect
-from django.http import JsonResponse, Http404
 from django.utils import timezone
-from django.views.decorators.http import require_http_methods, require_POST, require_GET
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
-from django.core import signing
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models.functions import TruncDate
-from django.db.models import Count
-from django.db import models
 from django.utils.safestring import mark_safe
-from django.utils.html import escape
-from django.template.loader import render_to_string
 from django.forms.models import modelform_factory
 
 logger = logging.getLogger(__name__)
 
 PREVIEW_SALT = "post-preview-salt"
+
 
 # -----------------------
 # Base (без привязки к модели) Admin Form — будет использована для создания финальной ModelForm через modelform_factory
@@ -119,9 +109,9 @@ class BasePostAdmin(admin.ModelAdmin):
         try:
             change_url = reverse('admin:blog_post_change', args=[obj.id])
         except Exception:
-            # fallback: try admin lookup by actual app_label/model if possible
+            # fallback: generic admin reverse
             try:
-                change_url = reverse('admin:%s_%s_change' % (obj._meta.app_label, obj._meta.model_name), args=[obj.pk])
+                change_url = reverse(f'admin:{obj._meta.app_label}_{obj._meta.model_name}_change', args=[obj.pk])
             except Exception:
                 change_url = '#'
         try:
@@ -275,7 +265,8 @@ class CommentAdmin(admin.ModelAdmin):
 # -----------------------
 class MediaLibraryAdmin(admin.ModelAdmin):
     list_display = ("thumbnail", "title", "file_type", "uploaded_by", "uploaded_at_display", "post_link", "file_size")
-    list_filter = ("uploaded", "uploaded_by")
+    # убираем 'uploaded' из list_filter (он может быть property в модели); используем реальные поля
+    list_filter = ("uploaded_by",)
     search_fields = ("title", "file")
     readonly_fields = ("file_size", "file_type", "uploaded_at_display")
 
@@ -323,7 +314,8 @@ class MediaLibraryAdmin(admin.ModelAdmin):
     def uploaded_at_display(self, obj):
         if not obj:
             return ""
-        return getattr(obj, 'uploaded', None)
+        # в моделях поле может называться uploaded_at или uploaded — поддерживаем оба варианта
+        return getattr(obj, 'uploaded_at', None) or getattr(obj, 'uploaded', None)
     uploaded_at_display.short_description = "Дата загрузки"
 
     def post_link(self, obj):
@@ -379,8 +371,9 @@ def _make_proxy_for_model(model_cls, proxy_app_label='blog'):
 
 def register_admin_models(site_obj):
     """
-    Регистрирует admin модели — импорт моделей происходит здесь, в момент, когда AppConfig.ready() вызовет эту функцию.
-    Регистрируем прокси-модели с app_label='blog' чтобы избежать NoReverseMatch для нестандартных шаблонов/названий.
+    Регистратор admin-моделей.
+    Импорт моделей делаем здесь, в runtime (вызывается из AppConfig.ready()).
+    Возвращает True/False.
     """
     try:
         # Попробуем импортировать модуль моделей через разные возможные имена пакета.
@@ -415,22 +408,12 @@ def register_admin_models(site_obj):
         MediaLibrary = getattr(blog_models, 'MediaLibrary', None)
         PostRevision = getattr(blog_models, 'PostRevision', None)
 
-        # Для каждой модели создаём прокси с app_label='blog' и регистрируем прокси в админке.
-        # Это даёт URL-имена вида 'blog_post_add' и т.п., которые могут требоваться кастомными шаблонами.
-        # При этом оригинальные модели остаются нетронутыми и миграции не изменяются.
-
-        def _register(model_cls, admin_cls=None, proxy_app_label='blog', model_name=None):
+        def _register(model_cls, admin_cls=None, proxy_app_label='blog'):
             if model_cls is None:
                 return
             try:
                 Proxy = _make_proxy_for_model(model_cls, proxy_app_label=proxy_app_label)
-                if Proxy is None:
-                    # Fallback: регистрируем оригинальную модель, если прокси не создан
-                    target = model_cls
-                else:
-                    target = Proxy
-
-                # Если был передан admin_cls - используем его, иначе регистрируем дефолтный
+                target = Proxy if Proxy is not None else model_cls
                 try:
                     if admin_cls:
                         site_obj.register(target, admin_cls)
@@ -440,7 +423,6 @@ def register_admin_models(site_obj):
                 except AlreadyRegistered:
                     logger.debug("%s already registered", getattr(model_cls, '__name__', model_cls))
                 except Exception as e:
-                    # если регистрация прокси не удалась (например, конфликт имен), попытаться зарегистрировать оригинал
                     logger.exception("Failed to register %s (%s). Attempting original model registration. Error: %s", model_cls, target, e)
                     try:
                         site_obj.register(model_cls, admin_cls) if admin_cls else site_obj.register(model_cls)
@@ -498,10 +480,16 @@ def register_admin_models(site_obj):
         return False
 
 
-# Авто-регистрация при импорте (безопасно — регистрация использует try/except)
-try:
-    register_admin_models(admin.site)
-except Exception:
-    # Если регистрация не проходит во время импорта (например, при сборке/проверке миграций),
-    # логируем и продолжаем — критичные ошибки будут проявляться позже при runtime.
-    logger.exception("Auto-registration of blog admin models failed during import.")
+# Экспортируем функцию, ожидаемую в BlogConfig.ready()
+def register_blog_admin(site_obj=None):
+    """
+    Обёртка, которую импортирует BlogConfig.ready().
+    Если site_obj не передан — используется django.contrib.admin.site.
+    Возвращает результат register_admin_models.
+    """
+    try:
+        site = site_obj if site_obj is not None else admin.site
+        return register_admin_models(site)
+    except Exception as e:
+        logger.exception("register_blog_admin failed: %s", e)
+        return False
