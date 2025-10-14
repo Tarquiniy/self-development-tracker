@@ -9,36 +9,36 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Make sure Django's admin modules are discovered (loads app admin.py files)
+# ensure admin autodiscover (loads app admin.py)
 admin.autodiscover()
 
-# Force admin visual text and namespace name to standard values
-admin.site.site_header = "Positive Theta Admin"
-admin.site.site_title = "Positive Theta"
-admin.site.index_title = "Панель управления Positive Theta"
-# Ensure namespace used by templates / third-party packages is 'admin'
-admin.site.name = "admin"
-
-# Ensure auth models registered (safe no-op if already registered)
+# Ensure AUTH user and Group are registered on admin.site
 try:
     from django.contrib.auth import get_user_model
     from django.contrib.auth.models import Group
-    from django.contrib.auth.admin import UserAdmin, GroupAdmin
-
-    try:
-        admin.site.register(get_user_model(), UserAdmin)
-    except Exception:
-        # already registered or custom admin exists
-        pass
-
-    try:
-        admin.site.register(Group, GroupAdmin)
-    except Exception:
-        pass
+    from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin, GroupAdmin as DefaultGroupAdmin
+    UserModel = get_user_model()
+    if UserModel not in admin.site._registry:
+        try:
+            admin.site.register(UserModel, DefaultUserAdmin)
+        except Exception:
+            # если кастомный UserAdmin требует другой конфигурации — пропускаем, но логируем
+            logger.debug("Could not register UserModel with DefaultUserAdmin; it may be already registered or require custom admin.")
+    if Group not in admin.site._registry:
+        try:
+            admin.site.register(Group, DefaultGroupAdmin)
+        except Exception:
+            logger.debug("Could not register Group with DefaultGroupAdmin; it may be already registered.")
 except Exception as e:
     logger.debug("Auth registration check failed: %s", e)
 
-# Try to import optional blog admin helper views (media library, dashboard, etc.)
+# Set admin site titles and ensure namespace name is 'admin'
+admin.site.site_header = "Positive Theta Admin"
+admin.site.site_title = "Positive Theta"
+admin.site.index_title = "Панель управления Positive Theta"
+# admin.site.name is internal, but templates expect 'admin:' namespace which admin.site.urls provides
+
+# Optional blog admin helper views (do not replace standard admin.site)
 admin_media_library_view = None
 admin_dashboard_view = None
 admin_stats_api = None
@@ -54,7 +54,6 @@ try:
     admin_autosave_view = getattr(blog_admin, "admin_autosave_view", None)
     admin_preview_token_view = getattr(blog_admin, "admin_preview_token_view", None)
 except Exception:
-    # optional helpers not present — that's fine
     pass
 
 urlpatterns = [
@@ -64,13 +63,13 @@ urlpatterns = [
     path("api/auth/register/", RegisterView.as_view(), name="register"),
     path("api/auth/login/", LoginView.as_view(), name="login"),
     path("api/blog/", include(("blog.urls", "blog"), namespace="blog")),
-    #path("api/tables/", include(("tables.urls", "tables"), namespace="tables")),
+    path("api/tables/", include(("tables.urls", "tables"), namespace="tables")),
     path("summernote/", include("django_summernote.urls")),
     path("api/auth/profile/", ProfileView.as_view(), name="profile"),
     path("preview/<str:token>/", (blog_admin.preview_by_token if 'blog_admin' in locals() and hasattr(blog_admin, "preview_by_token") else TemplateView.as_view(template_name="404.html")), name="post-preview"),
 ]
 
-# register media-library route before admin/ if provided by blog.admin
+# media-library route before admin/ if provided by blog.admin
 if admin_media_library_view:
     urlpatterns += [
         path("admin/media-library/", admin_media_library_view, name="admin-media-library"),
@@ -85,7 +84,7 @@ urlpatterns += [
     path("admin/", admin.site.urls),
 ]
 
-# Additional optional admin views if provided by blog.admin (kept outside admin.site)
+# Additional optional admin views (kept outside admin.site)
 if admin_dashboard_view:
     urlpatterns += [path("admin/dashboard/", admin_dashboard_view, name="admin-dashboard")]
 
@@ -95,7 +94,7 @@ if admin_stats_api:
 if admin_post_update_view:
     urlpatterns += [path("admin/posts/update/", admin_post_update_view, name="admin-post-update")]
 
-# Serve media / static in DEBUG
+# Serve media/static in DEBUG
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
