@@ -1,200 +1,120 @@
-# backend/blog/widgets.py
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
-CKEditor 5 Widget for Django Admin
-Modern, powerful editor replacement for TipTap
-"""
+backend/blog/widgets.py
+CKEditor 5 admin widget replacement for TipTap.
 
+This file defines CKEditorWidget which renders a textarea fallback and a wrapper
+with JSON config that the client-side init script reads to create CKEditor.
+"""
+import json
 from django import forms
-from django.utils.safestring import mark_safe
 from django.utils.html import escape
+from django.utils.safestring import mark_safe
+
+CKEDITOR_CDN = "https://cdn.jsdelivr.net/npm/@ckeditor/ckeditor5-build-classic@44.3.0/build/ckeditor.js"
 
 
-class CKEditor5Widget(forms.Textarea):
+class CKEditorWidget(forms.Textarea):
     """
-    CKEditor 5 Widget for Django Admin
-    Features:
-    - Modern CKEditor 5 with latest features
-    - Image upload integration with existing media library
-    - Auto-save functionality
-    - Preview support
+    Django form widget that renders a textarea plus a div wrapper with
+    data-ckeditor-config which the admin/frontend JS will use to initialize CKEditor.
     """
-    
+    template_name = None  # we're rendering manually in render()
+
+    class Media:
+        js = (
+            CKEDITOR_CDN,
+            "admin/js/ckeditor_upload_adapter.js",
+            "admin/js/ckeditor_init.js",
+        )
+        css = {
+            "all": (
+                "admin/css/ckeditor_admin.css",
+            )
+        }
+
     def __init__(self, attrs=None):
         base_attrs = {
-            "class": "ckeditor5-widget",
+            "class": "admin-advanced-editor admin-ckeditor-textarea",
+            # defaults that can be overridden via attrs
+            "data-editor": "auto",  # 'auto'|'ckeditor'|'fallback'
             "data-upload-url": "/api/blog/media/upload/",
-            "data-preview-url": "/admin/posts/preview-token/",
+            "data-preview-token-url": "/admin/posts/preview-token/",
         }
         if attrs:
             base_attrs.update(attrs)
         super().__init__(attrs=base_attrs)
 
-    def render(self, name, value, attrs=None, renderer=None):
-        attrs = attrs or {}
-        attrs.update(self.attrs)
-        attrs['class'] = attrs.get('class', '') + ' ckeditor5-widget'
-        
-        # Render the textarea
-        textarea_html = super().render(name, value, attrs, renderer)
-        
-        # Add CKEditor 5 initialization script
-        widget_id = attrs.get('id', f'id_{name}')
-        
-        editor_script = f"""
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {{
-            const textarea = document.getElementById('{widget_id}');
-            if (textarea && typeof ClassicEditor !== 'undefined') {{
-                ClassicEditor
-                    .create(textarea, {{
-                        toolbar: {{
-                            items: [
-                                'heading', '|',
-                                'bold', 'italic', 'underline', 'strikethrough', '|',
-                                'link', 'imageUpload', 'mediaEmbed', '|',
-                                'alignment', '|',
-                                'bulletedList', 'numberedList', 'todoList', '|',
-                                'outdent', 'indent', '|',
-                                'blockQuote', 'insertTable', '|',
-                                'undo', 'redo', '|',
-                                'code', 'codeBlock', '|',
-                                'fontFamily', 'fontSize', 'fontColor', 'fontBackgroundColor', '|',
-                                'highlight', '|',
-                                'horizontalLine', 'pageBreak', '|',
-                                'sourceEditing'
-                            ],
-                            shouldNotGroupWhenFull: true
-                        }},
-                        image: {{
-                            toolbar: [
-                                'imageTextAlternative', 'toggleImageCaption', '|',
-                                'imageStyle:inline', 'imageStyle:block', 'imageStyle:side', '|',
-                                'linkImage'
-                            ],
-                            upload: {{
-                                types: ['jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'svg']
-                            }}
-                        }},
-                        table: {{
-                            contentToolbar: [
-                                'tableColumn', 'tableRow', 'mergeTableCells', '|',
-                                'tableProperties', 'tableCellProperties'
-                            ]
-                        }},
-                        link: {{
-                            addTargetToExternalLinks: true,
-                            defaultProtocol: 'https://'
-                        }},
-                        mediaEmbed: {{
-                            previewsInData: true
-                        }},
-                        licenseKey: '',
-                        simpleUpload: {{
-                            uploadUrl: '{attrs.get("data-upload-url", "/api/blog/media/upload/")}',
-                            withCredentials: true,
-                            headers: {{
-                                'X-CSRFToken': getCookie('csrftoken')
-                            }}
-                        }},
-                        autosave: {{
-                            save(editor) {{
-                                return saveContent(editor, '{widget_id}');
-                            }}
-                        }}
-                    }})
-                    .then(editor => {{
-                        window.editor = editor;
-                        
-                        // Handle form submission
-                        const form = textarea.closest('form');
-                        if (form) {{
-                            form.addEventListener('submit', function() {{
-                                textarea.value = editor.getData();
-                            }});
-                        }}
-                        
-                        // Auto-save every 30 seconds
-                        setInterval(() => {{
-                            if (editor.plugins.get('Autosave').hasDirty()) {{
-                                editor.plugins.get('Autosave').save();
-                            }}
-                        }}, 30000);
-                    }})
-                    .catch(error => {{
-                        console.error('CKEditor 5 initialization failed:', error);
-                    }});
-            }} else {{
-                console.warn('CKEditor 5 not available or textarea not found');
-            }}
-            
-            function getCookie(name) {{
-                let cookieValue = null;
-                if (document.cookie && document.cookie !== '') {{
-                    const cookies = document.cookie.split(';');
-                    for (let i = 0; i < cookies.length; i++) {{
-                        const cookie = cookies[i].trim();
-                        if (cookie.substring(0, name.length + 1) === (name + '=')) {{
-                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                            break;
-                        }}
-                    }}
-                }}
-                return cookieValue;
-            }}
-            
-            async function saveContent(editor, widgetId) {{
-                try {{
-                    const content = editor.getData();
-                    const title = document.querySelector('[name="title"]')?.value || '';
-                    const excerpt = document.querySelector('[name="excerpt"]')?.value || '';
-                    const postId = document.querySelector('[name="id"]')?.value || '';
-                    
-                    const response = await fetch('/api/blog/revisions/autosave/', {{
-                        method: 'POST',
-                        headers: {{
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': getCookie('csrftoken')
-                        }},
-                        body: JSON.stringify({{
-                            post_id: postId,
-                            title: title,
-                            content: content,
-                            excerpt: excerpt,
-                            autosave: true
-                        }})
-                    }});
-                    
-                    if (response.ok) {{
-                        const data = await response.json();
-                        console.log('Auto-save successful:', data);
-                        return data;
-                    }}
-                }} catch (error) {{
-                    console.error('Auto-save failed:', error);
-                }}
-            }}
-        }});
-        </script>
+    def get_config(self, name, value, attrs):
         """
-        
-        # Add CKEditor 5 CSS and JS
-        cdn_links = """
-        <link href="https://cdn.ckeditor.com/ckeditor5/41.0.0/classic/ckeditor5.css" rel="stylesheet">
-        <script src="https://cdn.ckeditor.com/ckeditor5/41.0.0/classic/ckeditor5.js"></script>
-        <script src="https://cdn.ckeditor.com/ckeditor5/41.0.0/classic/translations/en.js"></script>
+        Return a serializable config dict for the client-side initializer.
         """
-        
-        return mark_safe(cdn_links + textarea_html + editor_script)
-
-    class Media:
-        css = {
-            'all': ('admin/css/ckeditor5-admin.css',)
+        final = attrs or {}
+        cfg = {
+            "editor": final.get("data-editor", "auto"),
+            "uploadUrl": final.get("data-upload-url", "/api/blog/media/upload/"),
+            "previewTokenUrl": final.get("data-preview-token-url", "/admin/posts/preview-token/"),
+            "name": name,
+            "id": final.get("id") or f"id_{name}",
+            "initialData": value or "",
         }
+        extra = final.get("data-ckeditor-extra")
+        if extra:
+            try:
+                if isinstance(extra, str):
+                    extra_parsed = json.loads(extra)
+                else:
+                    extra_parsed = extra
+                if isinstance(extra_parsed, dict):
+                    cfg.update(extra_parsed)
+            except Exception:
+                pass
+        return cfg
+
+    def render(self, name, value, attrs=None, renderer=None):
+        final_attrs = self.build_attrs(self.attrs, attrs or {})
+        textarea_value = escape(self.format_value(value) or "")
+        # ensure id exists
+        final_id = final_attrs.get("id") or f"id_{name}"
+        final_attrs["id"] = final_id
+
+        # build attribute string safely
+        parts = []
+        for k, v in final_attrs.items():
+            if v is None or v == "":
+                continue
+            parts.append(f'{k}="{escape(str(v))}"')
+        attr_str = " ".join(parts)
+
+        config = self.get_config(name, value, final_attrs)
+        try:
+            cfg_json = json.dumps(config, ensure_ascii=False)
+        except Exception:
+            cfg_json = "{}"
+
+        # wrapper for the visual editor — JS will replace the inner container with CKEditor instance
+        wrapper_html = (
+            f'<div class="admin-ckeditor-widget" data-ckeditor-config="{escape(cfg_json)}" '
+            f'id="{escape(final_id)}_ckeditor_wrapper">'
+            f'<div class="ckeditor-toolbar"></div><div class="ckeditor-editor" contenteditable="true"></div>'
+            f'</div>'
+        )
+
+        textarea_html = f'<textarea {attr_str}>{textarea_value}</textarea>'
+        noscript_html = '<noscript><p>Включите JavaScript для использования визуального редактора; доступен простой textarea.</p></noscript>'
+
+        # Combine: textarea first (keeps forms working without JS), then wrapper
+        html = textarea_html + wrapper_html + noscript_html
+        return mark_safe(html)
 
 
-class CKEditorWidget(CKEditor5Widget):
-    """Backwards compatibility alias"""
+class SimpleEditorWidget(CKEditorWidget):
+    """
+    Alias for CKEditorWidget — kept for backward compatibility with code that
+    referenced SimpleEditorWidget.
+    """
     pass
 
 
-__all__ = ["CKEditor5Widget", "CKEditorWidget"]
+__all__ = ["CKEditorWidget", "SimpleEditorWidget"]
