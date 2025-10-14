@@ -63,6 +63,8 @@ SUMMERNOTE_CONFIG = {
         ],
     },
     'attachment_require_authentication': True,
+    # Убедитесь, что модель наследует от AbstractAttachment
+    'attachment_model': 'blog.PostAttachment',
 }
 
 # 🎨 Jazzmin кастомизация
@@ -133,8 +135,15 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = ['DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'PUT']
 CORS_ALLOW_HEADERS = [
     'accept', 'accept-encoding', 'authorization', 'content-type',
-    'dnt', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with',
+    'dnt', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with', 'x-revalidation-secret',
 ]
+
+CORS_EXPOSE_HEADERS = [
+    'Content-Type',
+    'X-CSRFToken',
+]
+
+CORS_PREFLIGHT_MAX_AGE = 86400
 
 SESSION_COOKIE_SAMESITE = 'None'
 SESSION_COOKIE_SECURE = True
@@ -146,7 +155,7 @@ STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 #STATICFILES_DIRS = [os.path.join(BASE_DIR, "backend", "static"),]
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, "blog", "static"),
+    os.path.join(BASE_DIR, "static"),
 ]
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
@@ -171,7 +180,7 @@ if os.environ.get('DATABASE_URL'):
 
 # ========== MIDDLEWARE ==========
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",  # Должен быть первым
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -180,6 +189,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "backend.core.cors_middleware.CorsMiddleware",  # Раскомментируйте если нужно
 ]
 
 # ========== APPS ==========
@@ -193,6 +203,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    'django.contrib.sites',
     'django_extensions',
 
     # Third-party
@@ -214,6 +225,8 @@ INSTALLED_APPS = [
     "analytics",
     "blog",
 ]
+
+SITE_ID = 1
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
 CKEDITOR_ALLOW_NONIMAGE_FILES = False
@@ -278,7 +291,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
-    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],  # Для API разрешаем любой доступ
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
 }
@@ -400,3 +413,39 @@ CKEDITOR_5_CONFIGS = {
 
 CKEDITOR_5_FILE_UPLOAD_PERMISSION = "staff"
 CKEDITOR_5_UPLOAD_FILE_TYPES = ['jpeg', 'jpg', 'png', 'gif', 'bmp', 'webp', 'svg']
+
+ADMIN_MEDIA_PREFIX = '/static/admin/'
+
+# Summernote настройки
+SUMMERNOTE_THEME = 'bs4'
+SUMMERNOTE_CONFIG = {
+    'summernote': {
+        'width': '100%',
+        'height': '480',
+        'toolbar': [
+            ['style', ['style']],
+            ['font', ['bold', 'italic', 'underline', 'clear']],
+            ['fontname', ['fontname']],
+            ['color', ['color']],
+            ['para', ['ul', 'ol', 'paragraph']],
+            ['height', ['height']],
+            ['table', ['table']],
+            ['insert', ['link', 'picture', 'video']],
+            ['view', ['fullscreen', 'codeview', 'help']],
+        ],
+    },
+    'attachment_require_authentication': True,
+    'attachment_model': 'blog.PostAttachment',
+}
+
+# Filebrowser настройки (если используется)
+FILEBROWSER_DIRECTORY = ''
+FILEBROWSER_EXTENSIONS = {
+    'Image': ['.jpg','.jpeg','.gif','.png','.tif','.tiff'],
+    'Document': ['.pdf','.doc','.docx','.txt'],
+    'Video': ['.mov','.mp4','.m4v','.avi'],
+    'Audio': ['.mp3','.wav','.aiff','.midi','.m4p']
+}
+
+# Настройки для корректной работы с Supabase
+AWS_QUERYSTRING_AUTH = False  # Важно для публичных файлов в Supabase
