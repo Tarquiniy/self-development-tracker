@@ -1,7 +1,6 @@
 # backend/users/admin.py
 import logging
 from django.contrib import admin
-from django.contrib.admin.sites import AlreadyRegistered
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 logger = logging.getLogger(__name__)
@@ -28,13 +27,6 @@ if User is not None:
             search_fields = ("email", "username", "first_name", "last_name")
             ordering = ("email",)
 
-        try:
-            admin.site.register(User, SimpleUserAdmin)
-            logger.info("Registered CustomUser in admin.site")
-        except AlreadyRegistered:
-            logger.info("CustomUser already registered in admin.site; skipping")
-
-    except Exception as e:
-        logger.exception("Failed to register CustomUser admin: %s", e)
-else:
-    logger.debug("Skipping CustomUser admin registration (model not available)")
+        admin.site.register(User, SimpleUserAdmin)
+    except Exception:
+        logger.exception("Failed to register CustomUser in admin")

@@ -291,8 +291,7 @@ SIMPLE_JWT = {
 }
 
 # Указываем модель пользователя (app_label.ModelName)
-AUTH_USER_MODEL = "backend.users.CustomUser"
-#AUTH_USER_MODEL = 'users.CustomUser'
+AUTH_USER_MODEL = 'users.CustomUser'
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
