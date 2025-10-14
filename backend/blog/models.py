@@ -1,9 +1,13 @@
 # backend/blog/models.py
+import logging
+
 from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
 from django.urls import reverse
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 # Не инстанцируем storage при импорте моделей.
 # Рекомендуется в settings указать DEFAULT_FILE_STORAGE = 'backend.blog.storages.SupabaseStorage'
@@ -15,14 +19,24 @@ except Exception:
     HAS_CKEDITOR = False
     CKEditor5Field = models.TextField
 
-# Попытка совместимости с django-summernote AbstractAttachment не должна ломать импорт
+# Попытка совместимости с django-summernote AbstractAttachment.
+# IMPORT SAFE: если django_summernote при импорте попытается обратиться к registry
+# до его инициализации, мы перехватим ошибку и просто отметим, что summernote
+# недоступен на этапе импорта. В этом случае в наследовании PostAttachment
+# будет использован обычный models.Model.
+HAS_SUMMERNOTE = False
+AbstractAttachment = None
 try:
     from django_summernote.models import AbstractAttachment  # может вызвать AppRegistryNotReady при раннем импорте
-except Exception:
-    # Безопасная абстрактная заглушка — если django_summernote недоступен
-    class AbstractAttachment(models.Model):
-        class Meta:
-            abstract = True
+    HAS_SUMMERNOTE = True
+    AbstractAttachment = AbstractAttachment
+except Exception as exc:
+    HAS_SUMMERNOTE = False
+    AbstractAttachment = None
+    logger.warning(
+        "django_summernote not available at import time (%s). PostAttachment will fall back to models.Model.", exc
+    )
+
 
 class Category(models.Model):
     title = models.CharField(max_length=120, unique=True)
@@ -104,7 +118,6 @@ class Post(models.Model):
     og_image = models.URLField(blank=True, verbose_name="Open Graph изображение")
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', db_index=True, verbose_name="Статус")
-    # делаем published_at nullable, чтобы миграции и создание черновиков были безопасными
     published_at = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name="Дата публикации")
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
@@ -138,7 +151,9 @@ class Post(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.title} ({self.get_status_display()})"
+        status = getattr(self, "status", "")
+        display = getattr(self, "get_status_display", lambda: status)()
+        return f"{self.title} ({display})"
 
     def get_absolute_url(self):
         return reverse('blog:post-detail', kwargs={'slug': self.slug})
@@ -153,14 +168,19 @@ class Post(models.Model):
         return max(1, round(word_count / 200))
 
 
-class PostAttachment(AbstractAttachment if HAS_SUMMERNOTE else models.Model):
+# Наследуем от AbstractAttachment только если summernote успешно импортирован.
+# В противном случае используем обычную models.Model.
+BaseAttachment = AbstractAttachment if HAS_SUMMERNOTE and AbstractAttachment is not None else models.Model
+
+
+class PostAttachment(BaseAttachment):
     """
     Вложения для постов. Если django-summernote установлен, используется AbstractAttachment.
     В противном случае реализуем минимальную совместимую модель.
     Важно: не инстанцируем специфичный storage здесь. Используйте DEFAULT_FILE_STORAGE в settings.
     """
-    if not HAS_SUMMERNOTE:
-        # минимальный набор полей
+    # поля, которые нужны в fallback-варианте
+    if not (HAS_SUMMERNOTE and AbstractAttachment is not None):
         file = models.FileField(upload_to="post_attachments", blank=True, null=True)
         uploaded_at = models.DateTimeField(auto_now_add=True)
 
@@ -174,11 +194,13 @@ class PostAttachment(AbstractAttachment if HAS_SUMMERNOTE else models.Model):
 
     def __str__(self):
         try:
-            return self.title or (self.file.name if getattr(self, 'file', None) else "")
+            fname = getattr(self, 'file', None)
+            if fname and getattr(fname, 'name', None):
+                return self.title or fname.name
+            return self.title or ""
         except Exception:
             return self.title or ""
 
-    # backward-compat property
     @property
     def uploaded(self):
         return getattr(self, 'uploaded_at', None)
