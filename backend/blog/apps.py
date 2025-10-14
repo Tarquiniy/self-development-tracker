@@ -1,19 +1,22 @@
-# backend/blog/apps.py
 from django.apps import AppConfig
 import logging
 
 logger = logging.getLogger(__name__)
 
+
 class BlogConfig(AppConfig):
-    default_auto_field = "django.db.models.BigAutoField"
     name = "backend.blog"
-    verbose_name = "Blog"
+    label = "blog"
+    default_auto_field = "django.db.models.BigAutoField"
 
     def ready(self):
-        # Регистрируем админ динамически, чтобы избежать ранних импортов моделей
+        # Отложенная регистрация admin — выполняется только когда apps готовы
         try:
             from django.contrib import admin
-            from .admin import register_blog_admin
-            register_blog_admin(admin.site)
-        except Exception as exc:
-            logger.exception("register_blog_admin failed in BlogConfig.ready(): %s", exc)
+            from .admin import register_admin_models
+            # register_admin_models должен быть безопасен и идемпотентен
+            register_admin_models(admin.site)
+            logger.info("register_admin_models executed from BlogConfig.ready()")
+        except Exception as e:
+            logger.exception("register_blog_admin failed in BlogConfig.ready(): %s", e)
+    

@@ -21,23 +21,93 @@ PREVIEW_SALT = "post-preview-salt"
 # -----------------------
 class PostAdminFormBase(forms.ModelForm):
     class Meta:
-        # Model будет задан динамически через modelform_factory при регистрации
         fields = "__all__"
         widgets = {
-            "excerpt": forms.Textarea(attrs={"rows": 3, "placeholder": "Краткое описание поста..."}),
-            "meta_description": forms.Textarea(attrs={"rows": 2, "placeholder": "Мета-описание для SEO..."}),
+            "excerpt": forms.Textarea(attrs={"rows": 3}),
+            "meta_description": forms.Textarea(attrs={"rows": 2}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Безопасно обновляем атрибуты, только если поля существуют
         if "title" in self.fields:
-            self.fields["title"].widget.attrs.update(
-                {"class": "post-title-field", "placeholder": "Введите заголовок поста..."}
-            )
+            self.fields["title"].widget.attrs.update({"placeholder": "Введите заголовок"})
         if "slug" in self.fields:
-            self.fields["slug"].widget.attrs.update({"class": "post-slug-field", "placeholder": "url-slug..."})
+            self.fields["slug"].widget.attrs.update({"placeholder": "url-slug"})
 
+class SimpleAdmin(admin.ModelAdmin):
+    readonly_fields = ()
+    list_display = ("__str__",)
+    search_fields = ("__str__",)
+
+def _is_registered(site, model):
+    return model in getattr(site, "_registry", {})
+
+
+def register_admin_models(site_obj):
+    """
+    Безопасно регистрируем все модели из backend.blog.models.
+    Функция идемпотентна — повторный вызов не зарегистрирует модель повторно.
+    """
+    tried = []
+    blog_models = None
+    try:
+        blog_models = import_module("backend.blog.models")
+        tried.append("backend.blog.models")
+    except Exception as e:
+        tried.append(f"backend.blog.models failed: {e}")
+
+    if blog_models is None:
+        try:
+            blog_models = import_module("blog.models")
+            tried.append("blog.models")
+        except Exception as e:
+            tried.append(f"blog.models failed: {e}")
+
+    if blog_models is None:
+        logger.error("Could not import blog.models. Tried: %s", tried)
+        return False
+
+    model_names = (
+        "Post",
+        "Category",
+        "Tag",
+        "Comment",
+        "PostReaction",
+        "PostView",
+        "PostAttachment",
+        "MediaLibrary",
+        "PostRevision",
+    )
+
+    for name in model_names:
+        model = getattr(blog_models, name, None)
+        if model is None:
+            continue
+        if _is_registered(site_obj, model):
+            logger.debug("Model %s already registered in admin; skipping.", name)
+            continue
+
+        try:
+            # For Post try to build custom form
+            if name == "Post":
+                try:
+                    PostForm = modelform_factory(model, form=PostAdminFormBase, fields="__all__")
+                except Exception:
+                    PostForm = None
+                admin_class = type("PostAdmin", (admin.ModelAdmin,), {"form": PostForm or None, "list_display": ("title",)})
+            elif name == "MediaLibrary":
+                admin_class = type("MediaLibraryAdmin", (admin.ModelAdmin,), {"list_display": ("__str__",)})
+            else:
+                admin_class = SimpleAdmin
+
+            site_obj.register(model, admin_class)
+            logger.info("Registered admin for %s", name)
+        except AlreadyRegistered:
+            logger.info("%s already registered", name)
+        except Exception as e:
+            logger.exception("Failed to register %s: %s", name, e)
+
+    return True
 
 # -----------------------
 # Enhanced Admin Classes (не зависят от конкретных моделей на этапе импорта)
