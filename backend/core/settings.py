@@ -1,4 +1,3 @@
-# backend/core/settings.py
 import os
 from pathlib import Path
 from datetime import timedelta
@@ -66,6 +65,7 @@ SUMMERNOTE_CONFIG = {
     'attachment_require_authentication': True,
 }
 
+# 🎨 Jazzmin кастомизация
 JAZZMIN_SETTINGS = {
     "site_title": "Positive Theta Admin",
     "site_header": "Positive Theta Панель",
@@ -106,6 +106,7 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
+# CSRF / CORS
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -143,8 +144,12 @@ CSRF_COOKIE_SECURE = True
 # ========== STATIC ==========
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-STATICFILES_DIRS = [BASE_DIR / 'blog' / 'static']
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+#STATICFILES_DIRS = [os.path.join(BASE_DIR, "backend", "static"),]
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "blog", "static"),
+]
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # ========== DATABASE ==========
 DATABASES = {
@@ -179,34 +184,35 @@ MIDDLEWARE = [
 
 # ========== APPS ==========
 INSTALLED_APPS = [
-    # Django core apps (first)
+    "jazzmin",
+    "django_ckeditor_5",
+    'grappelli',
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    'django_extensions',
 
-    # Third-party apps (before your local apps)
-    "jazzmin",
-    "grappelli",
+    # Third-party
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
     "whitenoise.runserver_nostatic",
-    "django_filters",
-    "django_summernote",
-    "storages",
-    "reversion",
-    "adminsortable2",
-    "filebrowser",
+    'django_filters',
+    'django_summernote',
+    'storages',
+    'reversion',
+    'adminsortable2',
+    'filebrowser',
 
-    # Local apps (after third-party)
-    "backend.users.apps.UsersConfig",
-    "backend.tables.apps.TablesConfig",
-    "backend.payments.apps.PaymentsConfig",
-    "backend.analytics.apps.AnalyticsConfig",
-    "backend.blog.apps.BlogConfig",
+    # Local apps
+    "users",
+    "tables",
+    "payments",
+    "analytics",
+    "blog",
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
@@ -290,8 +296,7 @@ SIMPLE_JWT = {
     "AUTH_COOKIE_SAMESITE": "None",
 }
 
-# Указываем модель пользователя (app_label.ModelName)
-AUTH_USER_MODEL = 'users.CustomUser'
+AUTH_USER_MODEL = "users.CustomUser"
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
@@ -327,10 +332,11 @@ LOGGING = {
     'root': {'handlers': ['console', 'file'], 'level': 'INFO'},
 }
 
+# ========== CKEDITOR CONFIG ==========
 CKEDITOR_5_CONFIGS = {
     'default': {
         'toolbar': [
-            'heading', '|',
+            'heading', '|', 
             'bold', 'italic', 'underline', 'strikethrough', '|',
             'link', 'blockQuote', 'imageUpload', 'mediaEmbed', '|',
             'alignment', 'bulletedList', 'numberedList', '|',
@@ -394,37 +400,3 @@ CKEDITOR_5_CONFIGS = {
 
 CKEDITOR_5_FILE_UPLOAD_PERMISSION = "staff"
 CKEDITOR_5_UPLOAD_FILE_TYPES = ['jpeg', 'jpg', 'png', 'gif', 'bmp', 'webp', 'svg']
-
-ADMIN_MEDIA_PREFIX = '/static/admin/'
-
-# Summernote настройки
-SUMMERNOTE_THEME = 'bs4'
-SUMMERNOTE_CONFIG = {
-    'summernote': {
-        'width': '100%',
-        'height': '480',
-        'toolbar': [
-            ['style', ['style']],
-            ['font', ['bold', 'italic', 'underline', 'clear']],
-            ['fontname', ['fontname']],
-            ['color', ['color']],
-            ['para', ['ul', 'ol', 'paragraph']],
-            ['height', ['height']],
-            ['table', ['table']],
-            ['insert', ['link', 'picture', 'video']],
-            ['view', ['fullscreen', 'codeview', 'help']],
-        ],
-    },
-    'attachment_require_authentication': True,
-    'attachment_model': 'blog.PostAttachment',
-}
-
-FILEBROWSER_DIRECTORY = ''
-FILEBROWSER_EXTENSIONS = {
-    'Image': ['.jpg','.jpeg','.gif','.png','.tif','.tiff'],
-    'Document': ['.pdf','.doc','.docx','.txt'],
-    'Video': ['.mov','.mp4','.m4v','.avi'],
-    'Audio': ['.mp3','.wav','.aiff','.midi','.m4p']
-}
-
-AWS_QUERYSTRING_AUTH = False  # Важно для публичных файлов в Supabase/
