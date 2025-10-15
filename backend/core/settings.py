@@ -129,7 +129,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://cs88500-wordpress-o0a99.tw1.ru",
     "https://sdracker.onrender.com",
     "https://positive-theta.vercel.app",
-    "https://positive-theta.onrender.com/",
+    "https://positive-theta.onrender.com",
 ]
 
 CORS_ALLOW_ALL_ORIGINS = False
