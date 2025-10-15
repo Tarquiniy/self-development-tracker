@@ -152,8 +152,7 @@ CSRF_COOKIE_SECURE = True
 
 # ========== STATIC ==========
 STATIC_URL = "/static/"
-STATIC_ROOT =  BASE_DIR / "staticfiles"
-#STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 #STATICFILES_DIRS = [os.path.join(BASE_DIR, "backend", "static"),]
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "static"),
@@ -323,7 +322,7 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
-DEFAULT_FILE_STORAGE = "blog.storages.SupabaseStorage"
+DEFAULT_FILE_STORAGE = "backend.blog.storages.SupabaseStorage"
 
 if not DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -449,4 +448,4 @@ FILEBROWSER_EXTENSIONS = {
 }
 
 # Настройки для корректной работы с Supabase
-AWS_QUERYSTRING_AUTH = False  # Важно для публичных файлов в Supabase   
+AWS_QUERYSTRING_AUTH = False  # Важно для публичных файлов в Supabase
