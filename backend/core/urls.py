@@ -4,6 +4,10 @@ from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import TemplateView
 from django.conf.urls.static import static
+from django.shortcuts import redirect
+from django.utils.functional import cached_property
+from django.urls import path
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -62,6 +66,31 @@ try:
 except Exception:
     blog_admin = None
     logger.debug("blog.admin import failed or helpers missing")
+
+def _redirect_to_users_changelist(request):
+    # try users_customuser_changelist, fallback to admin:index
+    try:
+        return redirect("admin:users_customuser_changelist")
+    except Exception:
+        return redirect("admin:index")
+
+def _redirect_to_users_add(request):
+    try:
+        return redirect("admin:users_customuser_add")
+    except Exception:
+        return redirect("admin:index")
+
+# patch admin.site.get_urls to expose compatibility names inside "admin:" namespace
+_original_admin_get_urls = admin.site.get_urls
+
+def _admin_get_urls_with_compat():
+    extra = [
+        path("auth/user/", _redirect_to_users_changelist, name="auth_user_changelist"),
+        path("auth/user/add/", _redirect_to_users_add, name="auth_user_add"),
+    ]
+    return extra + _original_admin_get_urls()
+
+admin.site.get_urls = _admin_get_urls_with_compat
 
 # --- URL patterns ---
 urlpatterns = [
