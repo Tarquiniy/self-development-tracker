@@ -13,7 +13,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
             username = telegram_data.get('username', '')
             first_name = telegram_data.get('first_name', '')
             last_name = telegram_data.get('last_name', '')
-            
+
             # Поиск пользователя по telegram_id
             try:
                 user = User.objects.get(telegram_id=telegram_id)
