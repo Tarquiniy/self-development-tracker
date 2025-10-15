@@ -8,7 +8,7 @@ from django.conf import settings
 class CustomUser(AbstractUser):
     email = models.EmailField(_('email address'), unique=True)
     #phone = models.CharField(max_length=15, blank=True, null=True)
-    email_verified = models.BooleanField(default=False)
+    #email_verified = models.BooleanField(default=False)
     #phone_verified = models.BooleanField(default=False)
     supabase_uid = models.CharField(max_length=255, blank=True, null=True)
 
