@@ -3,7 +3,6 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include, reverse
 from django.views.generic import TemplateView
-from users.views import RegisterView, LoginView, ProfileView
 from django.conf.urls.static import static
 import logging
 import types
@@ -12,8 +11,25 @@ from django.utils.html import escape
 from django.shortcuts import redirect
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from importlib import import_module
+from django.utils.module_loading import import_string
 
 logger = logging.getLogger(__name__)
+
+# -----------------------
+# Helper: lazy-load a class-based view by dotted path.
+# This prevents importing project views at URLConf import time.
+# -----------------------
+def lazy_class_view(dotted_path):
+    """
+    Return a callable that imports dotted_path and calls .as_view()
+    on each request. Safer during startup because import happens
+    only when the URL is hit (reduces risk during migrate/startup).
+    """
+    def _call(request, *args, **kwargs):
+        view_cls = import_string(dotted_path)
+        return view_cls.as_view()(request, *args, **kwargs)
+    return _call
 
 # -----------------------
 # Safe admin index: не вызывает self.each_context, чтобы избежать NoReverseMatch
@@ -28,8 +44,6 @@ def _safe_admin_index(self, request, extra_context=None):
         except Exception:
             continue
 
-        # Попытка получить changelist/add URL для модели.
-        # Если не получается — пропускаем модель.
         admin_url = None
         add_url = None
         for cand in (f"admin:{app_label}_{model_name}_changelist", f"{app_label}_{model_name}_changelist"):
@@ -60,7 +74,6 @@ def _safe_admin_index(self, request, extra_context=None):
             }],
         })
 
-    # Простая безопасная HTML-страница, использующая заранее разрешённые URL.
     items = []
     for a in app_list:
         m = a["models"][0]
@@ -86,11 +99,8 @@ def _safe_admin_index(self, request, extra_context=None):
 # Привязываем безопасный index к admin.site
 admin.site.index = types.MethodType(_safe_admin_index, admin.site)
 
-# Загружаем admin.py в приложениях (best-effort)
-try:
-    admin.autodiscover()
-except Exception:
-    logger.exception("admin.autodiscover() failed")
+# НЕ вызываем admin.autodiscover() здесь — он может инициировать ранние импорты.
+# admin.autodiscover()
 
 # Best-effort получить user model и зарегистрировать Group если нужно
 try:
@@ -114,7 +124,7 @@ admin.site.site_header = "Positive Theta Admin"
 admin.site.site_title = "Positive Theta"
 admin.site.index_title = "Панель управления Positive Theta"
 
-# Подключаем вспомогательные views из blog.admin (если есть)
+# Подключаем вспомогательные views из blog.admin (если есть) — импорт в try/except
 admin_media_library_view = None
 admin_dashboard_view = None
 admin_stats_api = None
@@ -133,7 +143,9 @@ except Exception:
     blog_admin = None
     logger.debug("blog.admin import failed or helpers missing")
 
+# -----------------------
 # Простые редиректы-совместимости для шаблонов, которые ожидают конкретные имена URL.
+# -----------------------
 def _find_registered_model(app_label_hint=None, model_name_hint=None):
     for m in admin.site._registry.keys():
         try:
@@ -153,14 +165,12 @@ def _find_registered_model(app_label_hint=None, model_name_hint=None):
 
 def _redirect_to_computed_admin(app_label_hint=None, model_name_hint=None, action="changelist", fallback="/admin/"):
     def _view(request, *args, **kwargs):
-        # пробуем стандартное namespaced имя
         if app_label_hint and model_name_hint:
             cand = f"admin:{app_label_hint}_{model_name_hint}_{action}"
             try:
                 return redirect(reverse(cand))
             except Exception:
                 pass
-        # ищем реально зарегистрированную модель
         res = _find_registered_model(app_label_hint, model_name_hint)
         if res:
             app_label, model_name = res
@@ -172,16 +182,19 @@ def _redirect_to_computed_admin(app_label_hint=None, model_name_hint=None, actio
         return redirect(fallback)
     return _view
 
+# -----------------------
 # URL patterns
+# -----------------------
 urlpatterns = [
     path("grappelli/", include("grappelli.urls")),
 
-    path("api/auth/register/", RegisterView.as_view(), name="register"),
-    path("api/auth/login/", LoginView.as_view(), name="login"),
+    # API / auth — загружаем views лениво чтобы не импортировать их при старте
+    path("api/auth/register/", lazy_class_view("users.views.RegisterView"), name="register"),
+    path("api/auth/login/", lazy_class_view("users.views.LoginView"), name="login"),
     path("api/blog/", include(("blog.urls", "blog"), namespace="blog")),
     path("summernote/", include("django_summernote.urls")),
-    path("api/auth/profile/", ProfileView.as_view(), name="profile"),
-    path("preview/<str:token>/", (blog_admin.preview_by_token if blog_admin and hasattr(blog_admin, "preview_by_token") else TemplateView.as_view(template_name="404.html")), name="post-preview"),
+    path("api/auth/profile/", lazy_class_view("users.views.ProfileView"), name="profile"),
+    path("preview/<str:token>/", (getattr(blog_admin, "preview_by_token") if blog_admin and hasattr(blog_admin, "preview_by_token") else TemplateView.as_view(template_name="404.html")), name="post-preview"),
 ]
 
 # media-library до admin/
@@ -208,7 +221,7 @@ if admin_stats_api:
 if admin_post_update_view:
     urlpatterns += [path("admin/posts/update/", admin_post_update_view, name="admin-post-update")]
 
-# serve static/media in debug
+# serve static/media in DEBUG
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
