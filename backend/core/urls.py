@@ -13,7 +13,6 @@ from django.utils.html import escape
 from django.shortcuts import redirect
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin, GroupAdmin as DefaultGroupAdmin
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +74,7 @@ except Exception:
     logger.exception("admin.autodiscover() failed")
 
 # -----------------------
-# Ensure User/Group registration and create AUTH proxy under 'auth' app label
+# Ensure User and Group are registered (best-effort)
 # -----------------------
 try:
     UserModel = get_user_model()
@@ -83,77 +82,18 @@ except Exception:
     UserModel = None
     logger.exception("Failed to get user model")
 
-# Try to use project-specific UserAdmin if exists
+# Best-effort register of Group (if not registered)
 try:
-    from users.admin import UserAdmin as ProjectUserAdmin
-except Exception:
-    ProjectUserAdmin = None
-
-# Register the real UserModel if not already registered (best-effort)
-if UserModel:
-    try:
-        if UserModel not in admin.site._registry:
-            if ProjectUserAdmin is not None:
-                try:
-                    admin.site.register(UserModel, ProjectUserAdmin)
-                except Exception:
-                    try:
-                        admin.site.register(UserModel, DefaultUserAdmin)
-                    except Exception:
-                        logger.debug("Failed to register UserModel with both ProjectUserAdmin and DefaultUserAdmin.")
-            else:
-                try:
-                    admin.site.register(UserModel, DefaultUserAdmin)
-                except Exception:
-                    logger.debug("Failed to register UserModel with DefaultUserAdmin.")
-    except Exception:
-        logger.exception("Error while registering UserModel in admin.site")
-
-# Ensure Group registered
-try:
+    from django.contrib.auth.admin import GroupAdmin as DefaultGroupAdmin
     if Group not in admin.site._registry:
         try:
             admin.site.register(Group, DefaultGroupAdmin)
         except Exception:
-            logger.debug("Failed to register Group with DefaultGroupAdmin.")
+            logger.debug("Could not register Group in admin.site")
 except Exception:
-    logger.exception("Error while registering Group in admin.site")
+    logger.debug("GroupAdmin import/registration failed")
 
-# --- Create proxy model named 'User' with app_label='auth' if ('auth','user') missing ---
-try:
-    try:
-        has_auth_user = any((m._meta.app_label == "auth" and m._meta.model_name == "user") for m in admin.site._registry.keys())
-    except Exception:
-        has_auth_user = False
-        logger.exception("Failed while checking existing admin registrations for auth.user")
-
-    if not has_auth_user and UserModel:
-        try:
-            ProxyAttrs = {
-                "__module__": "backend.core._auth_proxy",
-                "Meta": type("Meta", (), {"proxy": True, "app_label": "auth",
-                                         "verbose_name": getattr(UserModel._meta, "verbose_name", "user"),
-                                         "verbose_name_plural": getattr(UserModel._meta, "verbose_name_plural", "users")})
-            }
-            ProxyModel = type("User", (UserModel,), ProxyAttrs)
-            try:
-                if ProjectUserAdmin is not None:
-                    admin.site.register(ProxyModel, ProjectUserAdmin)
-                else:
-                    admin.site.register(ProxyModel, DefaultUserAdmin)
-            except Exception:
-                try:
-                    admin.site.unregister(ProxyModel)
-                except Exception:
-                    pass
-                try:
-                    admin.site.register(ProxyModel, DefaultUserAdmin)
-                except Exception:
-                    logger.exception("Failed to register auth proxy model 'User' in admin.site")
-        except Exception:
-            logger.exception("Failed to create/register auth proxy model")
-except Exception:
-    logger.exception("Unexpected error during auth-proxy setup")
+# (Не создаём proxy моделей. Proxy ранее вызывал конфликты в registry.)
 
 # Set admin titles
 admin.site.site_header = "Positive Theta Admin"
@@ -179,17 +119,80 @@ try:
     admin_preview_token_view = getattr(blog_admin, "admin_preview_token_view", None)
 except Exception:
     blog_admin = None
-    logger.debug("blog.admin import failed or blog_admin helpers missing")
+    logger.debug("blog.admin import failed or helpers missing")
 
 # -----------------------
-# Helper redirect for templates that call bare names (temporary)
+# Dynamic resolver for compatibility aliases
 # -----------------------
-def _redirect_to_admin(namespaced_name, fallback="/admin/"):
-    def _view(request, *args, **kwargs):
+def _find_registered_model(app_label_hint=None, model_name_hint=None, model_class_hint=None):
+    """
+    Найти модель, зарегистрированную в admin.site, подходящую под hint'ы.
+    Возвращает (app_label, model_name) или None.
+    """
+    for m in admin.site._registry.keys():
         try:
-            return redirect(reverse(namespaced_name))
+            ma = m._meta
         except Exception:
-            return redirect(fallback)
+            continue
+        # exact class match
+        if model_class_hint is not None and m is model_class_hint:
+            return ma.app_label, ma.model_name
+        # if hint is model class
+        if model_class_hint is not None and hasattr(model_class_hint, "_meta") and ma.model_name == getattr(model_class_hint._meta, "model_name", None):
+            return ma.app_label, ma.model_name
+        # match model_name
+        if model_name_hint and ma.model_name == model_name_hint:
+            # if app_label_hint provided, ensure match
+            if app_label_hint:
+                if ma.app_label == app_label_hint:
+                    return ma.app_label, ma.model_name
+                else:
+                    continue
+            return ma.app_label, ma.model_name
+        # match by app_label if no model_name_hint
+        if app_label_hint and ma.app_label == app_label_hint and not model_name_hint:
+            return ma.app_label, ma.model_name
+    return None
+
+def _redirect_to_computed_admin(app_label_hint=None, model_name_hint=None, action="changelist", fallback="/admin/"):
+    """
+    Возвращает view, который редиректит на корректный admin URL,
+    вычисленный по hint'ам. action in {"changelist","add"}.
+    """
+    def _view(request, *args, **kwargs):
+        # try direct namespaced reverse first
+        if app_label_hint and model_name_hint:
+            cand = f"admin:{app_label_hint}_{model_name_hint}_{action}"
+            try:
+                return redirect(reverse(cand))
+            except Exception:
+                pass
+        # find actual registered model that matches hints
+        target = None
+        if model_name_hint == "user":
+            # prefer actual UserModel class if available
+            try:
+                real_user = get_user_model()
+            except Exception:
+                real_user = None
+            if real_user:
+                # find registration for real_user class
+                res = _find_registered_model(model_class_hint=real_user)
+                if res:
+                    target = res
+        if not target:
+            res = _find_registered_model(app_label_hint, model_name_hint)
+            if res:
+                target = res
+        if target:
+            app_label, model_name = target
+            cand = f"admin:{app_label}_{model_name}_{action}"
+            try:
+                return redirect(reverse(cand))
+            except Exception:
+                pass
+        # fallback: admin root
+        return redirect(fallback)
     return _view
 
 # -----------------------
@@ -217,11 +220,14 @@ else:
         path("admin/media-library/", TemplateView.as_view(template_name="admin/media_library_unavailable.html"), name="admin-media-library"),
     ]
 
-# Compatibility aliases for templates calling bare names (temporary)
+# compatibility aliases using dynamic resolver (temporary)
 urlpatterns += [
-    path("admin/auth/user/", _redirect_to_admin("admin:auth_user_changelist"), name="auth_user_changelist"),
-    path("admin/blog/comment/", _redirect_to_admin("admin:blog_comment_changelist"), name="blog_comment_changelist"),
-    path("admin/blog/post/add/", _redirect_to_admin("admin:blog_post_add"), name="blog_post_add"),
+    # resolves to the actual admin changelist for the user model
+    path("admin/auth/user/", _redirect_to_computed_admin(app_label_hint="auth", model_name_hint="user", action="changelist"), name="auth_user_changelist"),
+    # resolves to blog comment changelist (or closest match)
+    path("admin/blog/comment/", _redirect_to_computed_admin(app_label_hint="blog", model_name_hint="comment", action="changelist"), name="blog_comment_changelist"),
+    # resolves to blog post add form
+    path("admin/blog/post/add/", _redirect_to_computed_admin(app_label_hint="blog", model_name_hint="post", action="add"), name="blog_post_add"),
 ]
 
 # Use standard admin.site (ensures expected "admin:" namespace and URL names)
