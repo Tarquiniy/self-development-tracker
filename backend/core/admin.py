@@ -1,15 +1,12 @@
 # backend/core/admin.py
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, reverse
+from django.shortcuts import redirect
+from django.http import HttpResponse
+import types
 import logging
 
 logger = logging.getLogger(__name__)
-
-# дополнительные импорты для копирования регистраций и явной регистрации auth моделей
-from django.contrib import admin as default_admin
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
-from django.contrib.auth.admin import UserAdmin, GroupAdmin
 
 
 class CustomAdminSite(admin.AdminSite):
@@ -17,47 +14,83 @@ class CustomAdminSite(admin.AdminSite):
     site_title = "Positive Theta"
     index_title = "Панель управления Positive Theta"
 
+    def _find_registered_model(self, app_label_hint=None, model_name_hint=None):
+        """
+        Возвращает кортеж (app_label, model_name) реально зарегистрированной модели,
+        максимально соответствующей подсказкам. Иначе None.
+        """
+        for m in self._registry.keys():
+            try:
+                ma = m._meta
+            except Exception:
+                continue
+            if model_name_hint and ma.model_name == model_name_hint:
+                if app_label_hint:
+                    if ma.app_label == app_label_hint:
+                        return ma.app_label, ma.model_name
+                    else:
+                        continue
+                return ma.app_label, ma.model_name
+            if app_label_hint and ma.app_label == app_label_hint and not model_name_hint:
+                return ma.app_label, ma.model_name
+        return None
+
+    def _compat_redirect_view(self, app_label_hint=None, model_name_hint=None, action="changelist", fallback="/admin/"):
+        def _view(request, *args, **kwargs):
+            # Если точно есть модель с такими подсказками, пробуем namespaced URL
+            if app_label_hint and model_name_hint:
+                cand = f"admin:{app_label_hint}_{model_name_hint}_{action}"
+                try:
+                    return redirect(reverse(cand))
+                except Exception:
+                    pass
+            # Находим любую зарегистрированную модель, подходящую подсказкам
+            res = self._find_registered_model(app_label_hint, model_name_hint)
+            if res:
+                app_label, model_name = res
+                cand = f"admin:{app_label}_{model_name}_{action}"
+                try:
+                    return redirect(reverse(cand))
+                except Exception:
+                    pass
+            # fallback
+            return redirect(fallback)
+        return _view
+
     def get_urls(self):
         """
-        Add optional blog admin views (dashboard, media library, stats) lazily.
-        import blog.admin module and attach existing views if present.
+        Добавляем совместимые маршруты до стандартных admin.urls.
+        Они попадут в namespace 'admin' поскольку сайт создаётся с name='admin'
+        и в проекте подключается custom_admin_site.urls под 'admin/'.
         """
         urls = super().get_urls()
-        custom_urls = []
-
-        try:
-            from blog import admin as blog_admin
-
-            admin_dashboard_view = getattr(blog_admin, "admin_dashboard_view", None)
-            admin_stats_api = getattr(blog_admin, "admin_stats_api", None)
-            admin_media_library_view = getattr(blog_admin, "admin_media_library_view", None)
-            admin_post_update_view = getattr(blog_admin, "admin_post_update_view", None)
-            admin_autosave_view = getattr(blog_admin, "admin_autosave_view", None)
-            admin_preview_token_view = getattr(blog_admin, "admin_preview_token_view", None)
-
-            if admin_dashboard_view:
-                custom_urls.append(path("", self.admin_view(admin_dashboard_view), name="index"))
-            if admin_stats_api:
-                custom_urls.append(path("dashboard/stats-data/", self.admin_view(admin_stats_api), name="dashboard-stats-data"))
-            if admin_media_library_view:
-                custom_urls.append(path("media-library/", self.admin_view(admin_media_library_view), name="admin-media-library"))
-            if admin_post_update_view:
-                custom_urls.append(path("post/update/", self.admin_view(admin_post_update_view), name="admin-post-update"))
-            if admin_autosave_view:
-                custom_urls.append(path("post/autosave/", self.admin_view(admin_autosave_view), name="admin-post-autosave"))
-            if admin_preview_token_view:
-                custom_urls.append(path("preview/token/", self.admin_view(admin_preview_token_view), name="admin-preview-token"))
-
-        except Exception as e:
-            logger.exception("Failed to import blog.admin views into custom admin urls: %s", e)
-
-        return custom_urls + urls
+        custom = [
+            path("auth/user/", self.admin_view(self._compat_redirect_view("auth", "user", "changelist")), name="auth_user_changelist"),
+            path("blog/comment/", self.admin_view(self._compat_redirect_view("blog", "comment", "changelist")), name="blog_comment_changelist"),
+            path("blog/post/add/", self.admin_view(self._compat_redirect_view("blog", "post", "add")), name="blog_post_add"),
+            # медиа/другие совместимости можно добавить здесь по аналогии
+        ]
+        return custom + urls
 
 
-# create site; используем имя "admin" чтобы сохранить стандартный namespace
+# Экспортируем экземпляр site, используемый в urls.py
 custom_admin_site = CustomAdminSite(name="admin")
 
-# TRY to register blog models into custom_admin_site using blog.admin.register_admin_models
+# Зарегистрируйте стандартные модели (Group и т.п.) если ещё не зарегистрированы.
+# Не удаляем существующие регистрационные соглашения — это best-effort.
+try:
+    from django.contrib.auth.models import Group as _Group
+    from django.contrib.auth.admin import GroupAdmin as DefaultGroupAdmin
+    if _Group not in custom_admin_site._registry:
+        try:
+            custom_admin_site.register(_Group, DefaultGroupAdmin)
+        except Exception:
+            logger.debug("Could not register Group into custom_admin_site")
+except Exception:
+    logger.debug("Group registration attempt failed in custom_admin_site")
+
+# Попытка загрузить и зарегистрировать модели из приложений (best-effort)
+# Если у вас есть custom registration helper в blog.admin, можно вызвать его.
 try:
     from blog import admin as blog_admin_module
     register_fn = getattr(blog_admin_module, "register_admin_models", None)
@@ -65,44 +98,11 @@ try:
         try:
             register_fn(custom_admin_site)
             logger.info("Registered blog admin models into custom_admin_site via register_admin_models.")
-        except Exception as inner_exc:
-            logger.exception("register_admin_models exists but failed when called: %s", inner_exc)
-    else:
-        logger.debug("blog.admin.register_admin_models not found — skipping explicit registration.")
-except Exception as e:
-    logger.debug("Could not import blog.admin for explicit registration: %s", e)
-
-
-# Копируем регистрации из стандартного admin.site в custom_admin_site,
-# чтобы обеспечить наличие тех же url names (auth, sessions, site models и т.д.)
-try:
-    for model, model_admin in list(default_admin.site._registry.items()):
-        # пропускаем, если уже зарегистрировано в custom_admin_site
-        if model in custom_admin_site._registry:
-            continue
-        try:
-            ModelAdminClass = model_admin.__class__
-            custom_admin_site.register(model, ModelAdminClass)
         except Exception:
-            # попытка зарегистрировать без кастомного класса
-            try:
-                custom_admin_site.register(model)
-            except Exception:
-                logger.exception("Failed to register model %s into custom_admin_site", model)
-except Exception as e:
-    logger.exception("Failed to copy default admin registrations: %s", e)
-
-
-# Явная регистрация User и Group на случай, если они не были в default_admin.site._registry
-try:
-    custom_admin_site.register(get_user_model(), UserAdmin)
+            logger.exception("register_admin_models exists but failed when called")
 except Exception:
-    logger.debug("User model already registered or failed to register on custom_admin_site.")
-
-try:
-    custom_admin_site.register(Group, GroupAdmin)
-except Exception:
-    logger.debug("Group model already registered or failed to register on custom_admin_site.")
+    # не критично
+    pass
 
 
 __all__ = ["custom_admin_site", "CustomAdminSite"]

@@ -7,6 +7,7 @@ from django.conf.urls.static import static
 from django.shortcuts import redirect
 from django.utils.functional import cached_property
 from django.urls import path
+from core.admin import custom_admin_site
 
 import logging
 
@@ -95,7 +96,7 @@ admin.site.get_urls = _admin_get_urls_with_compat
 # --- URL patterns ---
 urlpatterns = [
     path("grappelli/", include("grappelli.urls")),
-    path("admin/", admin.site.urls),  # <- гарантирует namespace 'admin'
+    #path("admin/", admin.site.urls),  # <- гарантирует namespace 'admin'
     path("api/blog/", include(("blog.urls", "blog"), namespace="blog")),
     path("summernote/", include("django_summernote.urls")),
     path("api/auth/register/", include(("users.urls", "users"), namespace="users") if False else TemplateView.as_view(template_name="404.html")),  # замените при наличии users.urls
@@ -118,3 +119,5 @@ if admin_post_update_view:
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+urlpatterns += [ path("admin/", custom_admin_site.urls), ]
