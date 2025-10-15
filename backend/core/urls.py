@@ -12,9 +12,6 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.html import escape
 from django.shortcuts import redirect
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
-from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin, GroupAdmin as DefaultGroupAdmin
 
 logger = logging.getLogger(__name__)
 
@@ -22,16 +19,11 @@ logger = logging.getLogger(__name__)
 # Safe admin index to avoid NoReverseMatch during rendering
 # -----------------------
 def _safe_admin_index(self, request, extra_context=None):
-    """
-    Формирует корректный app_list, пропуская модели, для которых reverse() падает.
-    Рендерит стандартный admin/index.html с этим безопасным app_list.
-    """
     app_list = []
     for model in list(self._registry.keys()):
         opts = model._meta
         app_label = opts.app_label
         model_name = opts.model_name
-        # candidates: namespaced admin url first, then bare name
         candidates = [
             f"admin:{app_label}_{model_name}_changelist",
             f"{app_label}_{model_name}_changelist",
@@ -72,14 +64,23 @@ def _safe_admin_index(self, request, extra_context=None):
 # Привязываем безопасный index к admin.site
 admin.site.index = types.MethodType(_safe_admin_index, admin.site)
 
+
 # -----------------------
-# Ensure admin autodiscover and register User/Group if missing
+# Ensure admin autodiscover
 # -----------------------
 admin.autodiscover()
 
+# -----------------------
+# Ensure User/Group registration and create AUTH proxy under 'auth' app label
+# -----------------------
 try:
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
+    from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin, GroupAdmin as DefaultGroupAdmin
+
     UserModel = get_user_model()
-    # Try to use project-specific UserAdmin if exists
+
+    # Try to register user's model with any project-specific admin, otherwise default
     try:
         from users.admin import UserAdmin as ProjectUserAdmin
     except Exception:
@@ -99,23 +100,52 @@ try:
                 admin.site.register(UserModel, DefaultUserAdmin)
             except Exception:
                 logger.debug("Failed to register UserModel with DefaultUserAdmin.")
-except Exception:
-    logger.exception("Failed to ensure user model registered in admin.site")
 
-# Ensure Group registered
-try:
+    # Ensure Group registered
     if Group not in admin.site._registry:
         try:
             admin.site.register(Group, DefaultGroupAdmin)
         except Exception:
             logger.debug("Failed to register Group with DefaultGroupAdmin.")
+
+    # --- PROXY MODEL: register a proxy with app_label='auth' to provide admin:auth_user_changelist ---
+    # This creates the exact admin URL names some templates/plugins expect (admin:auth_user_changelist).
+    try:
+        # Dynamically create proxy model type
+        if not any((m._meta.app_label == "auth" and m._meta.model_name == UserModel._meta.model_name) for m in admin.site._registry.keys()):
+            ProxyAttrs = {
+                "__module__": "backend.core.urls._auth_proxy",  # module name for proxy class
+                "Meta": type("Meta", (), {"proxy": True, "app_label": "auth", "verbose_name": UserModel._meta.verbose_name, "verbose_name_plural": UserModel._meta.verbose_name_plural})
+            }
+            ProxyModel = type(f"{UserModel.__name__}AuthProxy", (UserModel,), ProxyAttrs)
+            # Register proxy model under default UserAdmin (or project admin if available)
+            try:
+                if ProjectUserAdmin is not None:
+                    admin.site.register(ProxyModel, ProjectUserAdmin)
+                else:
+                    admin.site.register(ProxyModel, DefaultUserAdmin)
+            except Exception:
+                # If registration fails silently, attempt to unregister then register
+                try:
+                    admin.site.unregister(ProxyModel)
+                except Exception:
+                    pass
+                try:
+                    admin.site.register(ProxyModel, DefaultUserAdmin)
+                except Exception:
+                    logger.debug("Failed to register proxy User model for auth namespace.")
+    except Exception:
+        logger.exception("Failed to create/register auth proxy model.")
+
 except Exception:
-    logger.exception("Failed to ensure Group registered in admin.site")
+    logger.exception("Error while ensuring user/group admin registration.")
+
 
 # Set admin titles
 admin.site.site_header = "Positive Theta Admin"
 admin.site.site_title = "Positive Theta"
 admin.site.index_title = "Панель управления Positive Theta"
+
 
 # -----------------------
 # Optional blog admin helper views
@@ -137,8 +167,9 @@ try:
 except Exception:
     blog_admin = None
 
+
 # -----------------------
-# Helper redirect for templates that call bare names (compatibility)
+# Helper redirect for templates that call bare names (temporary)
 # -----------------------
 def _redirect_to_admin(namespaced_name, fallback="/admin/"):
     def _view(request, *args, **kwargs):
@@ -148,6 +179,10 @@ def _redirect_to_admin(namespaced_name, fallback="/admin/"):
             return redirect(fallback)
     return _view
 
+
+# -----------------------
+# URL patterns
+# -----------------------
 urlpatterns = [
     path("grappelli/", include("grappelli.urls")),
 
@@ -155,7 +190,6 @@ urlpatterns = [
     path("api/auth/register/", RegisterView.as_view(), name="register"),
     path("api/auth/login/", LoginView.as_view(), name="login"),
     path("api/blog/", include(("blog.urls", "blog"), namespace="blog")),
-    # path("api/tables/", include(("tables.urls", "tables"), namespace="tables")),
     path("summernote/", include("django_summernote.urls")),
     path("api/auth/profile/", ProfileView.as_view(), name="profile"),
     path("preview/<str:token>/", (blog_admin.preview_by_token if blog_admin and hasattr(blog_admin, "preview_by_token") else TemplateView.as_view(template_name="404.html")), name="post-preview"),
@@ -171,7 +205,7 @@ else:
         path("admin/media-library/", TemplateView.as_view(template_name="admin/media_library_unavailable.html"), name="admin-media-library"),
     ]
 
-# Compatibility aliases for templates calling bare names (temporary, remove after fixing templates)
+# Compatibility aliases for templates calling bare names (temporary)
 urlpatterns += [
     path("admin/auth/user/", _redirect_to_admin("admin:auth_user_changelist"), name="auth_user_changelist"),
     path("admin/blog/comment/", _redirect_to_admin("admin:blog_comment_changelist"), name="blog_comment_changelist"),
