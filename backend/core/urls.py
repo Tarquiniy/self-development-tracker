@@ -168,18 +168,8 @@ def _redirect_to_computed_admin(app_label_hint=None, model_name_hint=None, actio
         return redirect(fallback)
     return _view
 
-# compatibility URL targets (root-level paths that templates may call without namespace)
-compat_paths = [
-    path("admin/auth/user/", _redirect_to_computed_admin(app_label_hint="auth", model_name_hint="user", action="changelist"), name="auth_user_changelist"),
-    path("admin/blog/comment/", _redirect_to_computed_admin(app_label_hint="blog", model_name_hint="comment", action="changelist"), name="blog_comment_changelist"),
-    path("admin/blog/post/add/", _redirect_to_computed_admin(app_label_hint="blog", model_name_hint="post", action="add"), name="blog_post_add"),
-]
-
-# ALSO register these names inside the 'admin' namespace so reverse(..., current_app='admin') works.
-# We include compat_paths under namespace 'admin' before mounting real admin.site.urls.
-compat_namespace = (compat_paths, "compat_admin")  # app_name doesn't matter; we set instance namespace 'admin' via include
 # -----------------------
-# Main urlpatterns
+# URL patterns
 # -----------------------
 urlpatterns = [
     path("grappelli/", include("grappelli.urls")),
@@ -203,16 +193,14 @@ else:
         path("admin/media-library/", TemplateView.as_view(template_name="admin/media_library_unavailable.html"), name="admin-media-library"),
     ]
 
-# mount compatibility patterns into the 'admin' namespace (so admin templates that call names without explicit namespace
-# and set current_app='admin' will resolve).
+# compatibility aliases using dynamic resolver (root-level only)
 urlpatterns += [
-    path("", include(compat_namespace, namespace="admin")),
+    path("admin/auth/user/", _redirect_to_computed_admin(app_label_hint="auth", model_name_hint="user", action="changelist"), name="auth_user_changelist"),
+    path("admin/blog/comment/", _redirect_to_computed_admin(app_label_hint="blog", model_name_hint="comment", action="changelist"), name="blog_comment_changelist"),
+    path("admin/blog/post/add/", _redirect_to_computed_admin(app_label_hint="blog", model_name_hint="post", action="add"), name="blog_post_add"),
 ]
 
-# also keep root-level compatibility (some templates may call un-namespaced names)
-urlpatterns += compat_paths
-
-# finally mount the real admin
+# Use standard admin.site (ensures expected "admin:" namespace and URL names)
 urlpatterns += [
     path("admin/", admin.site.urls),
 ]
