@@ -15,7 +15,7 @@ from django.template.response import TemplateResponse
 logger = logging.getLogger(__name__)
 
 # -----------------------
-# lazy loader for class-based views (prevents imports при старте)
+# lazy loader for class-based views (prevents imports at URLConf import time)
 # -----------------------
 def lazy_class_view(dotted_path):
     def _call(request, *args, **kwargs):
@@ -24,8 +24,8 @@ def lazy_class_view(dotted_path):
     return _call
 
 # -----------------------
-# Safe admin index: не вызывает self.each_context
-# Возвращает TemplateResponse('admin/index.html') с минимально необходимым контекстом.
+# Safe admin index: не вызывает self.each_context.
+# Возвращает TemplateResponse('admin/index.html') с минимальным контекстом.
 # -----------------------
 def _safe_admin_index(self, request, extra_context=None):
     app_list = []
@@ -78,7 +78,6 @@ def _safe_admin_index(self, request, extra_context=None):
     if extra_context:
         context.update(extra_context)
 
-    # Возвращаем TemplateResponse (у него correct charset и статика подключится)
     return TemplateResponse(request, "admin/index.html", context)
 
 
@@ -87,13 +86,24 @@ admin.site.index = types.MethodType(_safe_admin_index, admin.site)
 
 # НЕ вызываем admin.autodiscover() здесь чтобы не форсировать ранние импорты
 
-# Try best-effort get user model (не критично)
+# Попробуем зарегистрировать модель пользователя в admin.site, если ещё не зарегистрирована.
+# Это устраняет ошибки с отсутствующими admin url-именами (например auth_user_changelist).
 try:
     from django.contrib.auth import get_user_model
     UserModel = get_user_model()
+    if UserModel and UserModel not in admin.site._registry:
+        try:
+            # Попытка использовать project-specific UserAdmin, если есть
+            from users.admin import UserAdmin as ProjectUserAdmin  # may raise
+            admin.site.register(UserModel, ProjectUserAdmin)
+        except Exception:
+            try:
+                from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
+                admin.site.register(UserModel, DefaultUserAdmin)
+            except Exception:
+                logger.exception("Failed to register UserModel in admin.site with DefaultUserAdmin")
 except Exception:
-    UserModel = None
-    logger.debug("Failed to get user model at URLConf load")
+    logger.debug("Failed to get/register user model in URLConf")
 
 # Ensure Group registered if not present
 try:
@@ -131,7 +141,7 @@ except Exception:
     blog_admin = None
     logger.debug("blog.admin import failed or helpers missing")
 
-# Helpers: поиска зарегистрированной модели и редиректа к ней
+# Helpers: поиск зарегистрированных моделей и редирект к ним
 def _find_registered_model(app_label_hint=None, model_name_hint=None):
     for m in admin.site._registry.keys():
         try:
