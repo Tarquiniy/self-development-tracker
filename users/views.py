@@ -35,7 +35,7 @@ class ProfileView(APIView):
                     'username': user.username,
                     'first_name': user.first_name,
                     'last_name': user.last_name,
-                    'phone': user.phone,
+                    #'phone': user.phone,
                 },
                 'subscription_active': profile.subscription_active,
                 'subscription_expires': profile.subscription_expires,
@@ -61,8 +61,8 @@ class ProfileView(APIView):
                 user.first_name = request.data['first_name']
             if 'last_name' in request.data:
                 user.last_name = request.data['last_name']
-            if 'phone' in request.data:
-                user.phone = request.data['phone']
+            #if 'phone' in request.data:
+                #user.phone = request.data['phone']
             user.save()
             
             # Обновление данных профиля
@@ -81,7 +81,7 @@ class ProfileView(APIView):
                     'username': user.username,
                     'first_name': user.first_name,
                     'last_name': user.last_name,
-                    'phone': user.phone,
+                    #'phone': user.phone,
                 },
                 'subscription_active': profile.subscription_active,
                 'subscription_expires': profile.subscription_expires,
