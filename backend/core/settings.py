@@ -101,6 +101,7 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") + [
     ".vercel.app",
     ".onrender.com",
     "sdracker.onrender.com",
+    "positive-theta.onrender.com",
     "cs88500-wordpress-o0a99.tw1.ru",
 ]
 

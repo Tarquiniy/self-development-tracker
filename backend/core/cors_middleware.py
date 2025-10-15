@@ -14,6 +14,7 @@ class CorsMiddleware(MiddlewareMixin):
             "https://cs88500-wordpress-o0a99.tw1.ru",
             "https://sdracker.onrender.com",
             "https://positive-theta.vercel.app",
+            "https://positive-theta.onrender.com",
         ]
         
         if origin in allowed_origins:

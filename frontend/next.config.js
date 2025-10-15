@@ -8,6 +8,7 @@ const nextConfig = {
       'fjqbhcmsqypevfbpzcxj.supabase.co',
       'sdtracker.vercel.app',
       'positive-theta.vercel.app',
+      "https://positive-theta.onrender.com",
     ],
   },
 }
