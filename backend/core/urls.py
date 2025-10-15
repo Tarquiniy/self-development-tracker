@@ -1,7 +1,7 @@
 # backend/core/urls.py
 from django.conf import settings
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, reverse
 from django.views.generic import TemplateView
 from users.views import RegisterView, LoginView, ProfileView
 from django.conf.urls.static import static
@@ -9,7 +9,6 @@ import logging
 import types
 from django.http import HttpResponse
 from django.template.response import TemplateResponse
-from django.urls import reverse
 from django.utils.html import escape
 from django.shortcuts import redirect
 
@@ -64,7 +63,6 @@ def _safe_admin_index(self, request, extra_context=None):
 # Привязываем безопасный index к admin.site
 admin.site.index = types.MethodType(_safe_admin_index, admin.site)
 
-
 # -----------------------
 # Ensure admin autodiscover
 # -----------------------
@@ -80,52 +78,62 @@ try:
 
     UserModel = get_user_model()
 
-    # Try to register user's model with any project-specific admin, otherwise default
+    # Try to use project-specific UserAdmin if exists
     try:
         from users.admin import UserAdmin as ProjectUserAdmin
     except Exception:
         ProjectUserAdmin = None
 
-    if UserModel not in admin.site._registry:
-        if ProjectUserAdmin is not None:
-            try:
-                admin.site.register(UserModel, ProjectUserAdmin)
-            except Exception:
+    # Register the real UserModel if not already registered (best-effort)
+    try:
+        if UserModel not in admin.site._registry:
+            if ProjectUserAdmin is not None:
+                try:
+                    admin.site.register(UserModel, ProjectUserAdmin)
+                except Exception:
+                    try:
+                        admin.site.register(UserModel, DefaultUserAdmin)
+                    except Exception:
+                        logger.debug("Failed to register UserModel with both ProjectUserAdmin and DefaultUserAdmin.")
+            else:
                 try:
                     admin.site.register(UserModel, DefaultUserAdmin)
                 except Exception:
-                    logger.debug("Failed to register UserModel with both ProjectUserAdmin and DefaultUserAdmin.")
-        else:
-            try:
-                admin.site.register(UserModel, DefaultUserAdmin)
-            except Exception:
-                logger.debug("Failed to register UserModel with DefaultUserAdmin.")
+                    logger.debug("Failed to register UserModel with DefaultUserAdmin.")
+    except Exception:
+        logger.exception("Error while registering UserModel in admin.site")
 
     # Ensure Group registered
-    if Group not in admin.site._registry:
-        try:
-            admin.site.register(Group, DefaultGroupAdmin)
-        except Exception:
-            logger.debug("Failed to register Group with DefaultGroupAdmin.")
-
-    # --- PROXY MODEL: register a proxy with app_label='auth' to provide admin:auth_user_changelist ---
-    # This creates the exact admin URL names some templates/plugins expect (admin:auth_user_changelist).
     try:
-        # Dynamically create proxy model type
-        if not any((m._meta.app_label == "auth" and m._meta.model_name == UserModel._meta.model_name) for m in admin.site._registry.keys()):
+        if Group not in admin.site._registry:
+            try:
+                admin.site.register(Group, DefaultGroupAdmin)
+            except Exception:
+                logger.debug("Failed to register Group with DefaultGroupAdmin.")
+    except Exception:
+        logger.exception("Error while registering Group in admin.site")
+
+    # --- Create proxy model named 'User' with app_label='auth' if ('auth','user') missing ---
+    try:
+        has_auth_user = any((m._meta.app_label == "auth" and m._meta.model_name == "user") for m in admin.site._registry.keys())
+        if not has_auth_user:
+            # Dynamically create a proxy subclass with class name 'User' so model_name == 'user'
             ProxyAttrs = {
-                "__module__": "backend.core.urls._auth_proxy",  # module name for proxy class
-                "Meta": type("Meta", (), {"proxy": True, "app_label": "auth", "verbose_name": UserModel._meta.verbose_name, "verbose_name_plural": UserModel._meta.verbose_name_plural})
+                "__module__": "backend.core._auth_proxy",
+                "Meta": type("Meta", (), {"proxy": True, "app_label": "auth",
+                                         "verbose_name": getattr(UserModel._meta, "verbose_name", "user"),
+                                         "verbose_name_plural": getattr(UserModel._meta, "verbose_name_plural", "users")})
             }
-            ProxyModel = type(f"{UserModel.__name__}AuthProxy", (UserModel,), ProxyAttrs)
-            # Register proxy model under default UserAdmin (or project admin if available)
+            # class name 'User' ensures model_name == 'user'
+            ProxyModel = type("User", (UserModel,), ProxyAttrs)
+            # Register proxy model using project admin if available, otherwise default
             try:
                 if ProjectUserAdmin is not None:
                     admin.site.register(ProxyModel, ProjectUserAdmin)
                 else:
                     admin.site.register(ProxyModel, DefaultUserAdmin)
             except Exception:
-                # If registration fails silently, attempt to unregister then register
+                # try unregister (in case of partial) then register with DefaultUserAdmin
                 try:
                     admin.site.unregister(ProxyModel)
                 except Exception:
@@ -133,19 +141,14 @@ try:
                 try:
                     admin.site.register(ProxyModel, DefaultUserAdmin)
                 except Exception:
-                    logger.debug("Failed to register proxy User model for auth namespace.")
-    except Exception:
-        logger.exception("Failed to create/register auth proxy model.")
-
+                    logger.exception("Failed to register auth proxy model 'User' in admin.site")
 except Exception:
-    logger.exception("Error while ensuring user/group admin registration.")
-
+    logger.exception("Error while ensuring auth proxy model registration")
 
 # Set admin titles
 admin.site.site_header = "Positive Theta Admin"
 admin.site.site_title = "Positive Theta"
 admin.site.index_title = "Панель управления Positive Theta"
-
 
 # -----------------------
 # Optional blog admin helper views
@@ -167,7 +170,6 @@ try:
 except Exception:
     blog_admin = None
 
-
 # -----------------------
 # Helper redirect for templates that call bare names (temporary)
 # -----------------------
@@ -178,7 +180,6 @@ def _redirect_to_admin(namespaced_name, fallback="/admin/"):
         except Exception:
             return redirect(fallback)
     return _view
-
 
 # -----------------------
 # URL patterns
