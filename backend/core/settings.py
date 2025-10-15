@@ -36,7 +36,7 @@ AWS_S3_OBJECT_PARAMETERS = {
 if SUPABASE_URL and AWS_STORAGE_BUCKET_NAME:
     MEDIA_URL = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/{AWS_STORAGE_BUCKET_NAME}/"
 else:
-    MEDIA_URL = os.environ.get("MEDIA_URL", "/media/")
+    MEDIA_URL = os.environ.get('MEDIA_URL', '/media/')
 
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
@@ -101,7 +101,6 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") + [
     ".vercel.app",
     ".onrender.com",
     "sdracker.onrender.com",
-    "positive-theta.onrender.com",
     "cs88500-wordpress-o0a99.tw1.ru",
 ]
 
@@ -129,7 +128,6 @@ CORS_ALLOWED_ORIGINS = [
     "https://cs88500-wordpress-o0a99.tw1.ru",
     "https://sdracker.onrender.com",
     "https://positive-theta.vercel.app",
-    "https://positive-theta.onrender.com",
 ]
 
 CORS_ALLOW_ALL_ORIGINS = False
@@ -154,36 +152,36 @@ CSRF_COOKIE_SECURE = True
 
 # ========== STATIC ==========
 STATIC_URL = "/static/"
-STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+STATIC_ROOT =  BASE_DIR / "staticfiles"
+#STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+#STATICFILES_DIRS = [os.path.join(BASE_DIR, "backend", "static"),]
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "static"),
+]
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # ========== DATABASE ==========
-if os.environ.get("DATABASE_URL"):
-    DATABASES = {
-        "default": dj_database_url.config(
-            default=os.environ.get("DATABASE_URL"),
-            conn_max_age=600,
-            conn_health_checks=True,
-        )
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('SUPABASE_DB_NAME', 'postgres'),
+        'USER': os.environ.get('SUPABASE_DB_USER', 'postgres'),
+        'PASSWORD': os.environ.get('SUPABASE_DB_PASSWORD', ''),
+        'HOST': os.environ.get('SUPABASE_DB_HOST', 'db.fjqbhcmsqypevfbpzcxj.supabase.co'),
+        'PORT': os.environ.get('SUPABASE_DB_PORT', '5432'),
     }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.environ.get("SUPABASE_DB_NAME", "postgres"),
-            "USER": os.environ.get("SUPABASE_DB_USER", "postgres"),
-            "PASSWORD": os.environ.get("SUPABASE_DB_PASSWORD", ""),
-            "HOST": os.environ.get("SUPABASE_DB_HOST", "localhost"),
-            "PORT": os.environ.get("SUPABASE_DB_PORT", "5432"),
-        }
-    }
+}
+if os.environ.get('DATABASE_URL'):
+    DATABASES['default'] = dj_database_url.config(
+        default=os.environ.get('DATABASE_URL'),
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
 
 # ========== MIDDLEWARE ==========
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",  # Должен быть первым
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -192,37 +190,36 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "backend.core.cors_middleware.CorsMiddleware",  # Раскомментируйте если нужно
 ]
-
-ROOT_URLCONF = "core.urls"
 
 # ========== APPS ==========
 INSTALLED_APPS = [
-    # Админ и django-contrib
+    "jazzmin",
+    "django_ckeditor_5",
+    'grappelli',
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "django.contrib.sites",
+    'django.contrib.sites',
+    'django_extensions',
 
-    # Сторонние
-    "corsheaders",
+    # Third-party
     "rest_framework",
     "rest_framework.authtoken",
-    "django_filters",
-    "django_summernote",
+    "corsheaders",
     "whitenoise.runserver_nostatic",
-    "jazzmin",
-    "grappelli",
-    "storages",
-    "reversion",
-    "adminsortable2",
-    "filebrowser",
-    "django_extensions",
+    'django_filters',
+    'django_summernote',
+    'storages',
+    'reversion',
+    'adminsortable2',
+    'filebrowser',
 
-    # Локальные приложения (ВАЖНО: users должен быть здесь)
+    # Local apps
     "users",
     "tables",
     "payments",
@@ -245,21 +242,24 @@ JWT_SECRET = os.environ.get('DJANGO_JWT_SECRET', os.environ.get('SECRET_KEY'))
 JWT_ALGORITHM = 'HS256'
 JWT_EXP_DELTA_SECONDS = 60 * 60 * 24 * 7
 
+ROOT_URLCONF = "core.urls"
+
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [os.path.join(BASE_DIR, "templates")],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
+                "django.template.context_processors.debug",
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "django.template.context_processors.static",
             ],
         },
     },
 ]
-
 
 WSGI_APPLICATION = "core.wsgi.application"
 
@@ -280,9 +280,8 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = "ru-ru"
-TIME_ZONE = os.getenv("TIME_ZONE", "UTC")
+TIME_ZONE = "Europe/Moscow"
 USE_I18N = True
-USE_L10N = True
 USE_TZ = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -324,7 +323,7 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
-DEFAULT_FILE_STORAGE = "backend.blog.storages.SupabaseStorage"
+DEFAULT_FILE_STORAGE = "blog.storages.SupabaseStorage"
 
 if not DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -450,4 +449,4 @@ FILEBROWSER_EXTENSIONS = {
 }
 
 # Настройки для корректной работы с Supabase
-AWS_QUERYSTRING_AUTH = False  # Важно для публичных файлов в Supabase
+AWS_QUERYSTRING_AUTH = False  # Важно для публичных файлов в Supabase   
