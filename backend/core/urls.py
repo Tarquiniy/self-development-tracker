@@ -6,31 +6,57 @@ from django.views.generic import TemplateView
 from users.views import RegisterView, LoginView, ProfileView
 from django.conf.urls.static import static
 import logging
+from django.contrib import admin as _admin
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group as _Group
+from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin, GroupAdmin as DefaultGroupAdmin
 
 logger = logging.getLogger(__name__)
 
 # ensure admin autodiscover (loads app admin.py)
 admin.autodiscover()
 
-# Ensure AUTH user and Group are registered on admin.site
+UserModel = get_user_model()
+
+# Попытка найти кастомный UserAdmin в users.admin, иначе использовать стандартный
 try:
-    from django.contrib.auth import get_user_model
-    from django.contrib.auth.models import Group
-    from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin, GroupAdmin as DefaultGroupAdmin
-    UserModel = get_user_model()
-    if UserModel not in admin.site._registry:
+    from users.admin import UserAdmin as ProjectUserAdmin
+except Exception:
+    ProjectUserAdmin = None
+
+try:
+    if UserModel not in _admin.site._registry:
+        if ProjectUserAdmin is not None:
+            try:
+                _admin.site.register(UserModel, ProjectUserAdmin)
+            except Exception:
+                # если кастомный UserAdmin несовместим — пробуем стандартный
+                from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
+                try:
+                    _admin.site.register(UserModel, DefaultUserAdmin)
+                except Exception:
+                    pass
+        else:
+            from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
+            try:
+                _admin.site.register(UserModel, DefaultUserAdmin)
+            except Exception:
+                pass
+except Exception:
+    # логируем молча — регистрация не критична в рантайме здесь
+    import logging
+    logging.getLogger(__name__).exception("Failed to ensure user registration in admin.site")
+
+# Ensure Group registered
+try:
+    from django.contrib.auth.admin import GroupAdmin as DefaultGroupAdmin
+    if _Group not in _admin.site._registry:
         try:
-            admin.site.register(UserModel, DefaultUserAdmin)
+            _admin.site.register(_Group, DefaultGroupAdmin)
         except Exception:
-            # если кастомный UserAdmin требует другой конфигурации — пропускаем, но логируем
-            logger.debug("Could not register UserModel with DefaultUserAdmin; it may be already registered or require custom admin.")
-    if Group not in admin.site._registry:
-        try:
-            admin.site.register(Group, DefaultGroupAdmin)
-        except Exception:
-            logger.debug("Could not register Group with DefaultGroupAdmin; it may be already registered.")
-except Exception as e:
-    logger.debug("Auth registration check failed: %s", e)
+            pass
+except Exception:
+    pass
 
 # Set admin site titles and ensure namespace name is 'admin'
 admin.site.site_header = "Positive Theta Admin"
