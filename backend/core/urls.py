@@ -9,30 +9,23 @@ import types
 from django.http import HttpResponse
 from django.utils.html import escape
 from django.shortcuts import redirect
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
-from importlib import import_module
 from django.utils.module_loading import import_string
+from django.template.response import TemplateResponse
 
 logger = logging.getLogger(__name__)
 
 # -----------------------
-# Helper: lazy-load a class-based view by dotted path.
-# This prevents importing project views at URLConf import time.
+# lazy loader for class-based views (prevents imports при старте)
 # -----------------------
 def lazy_class_view(dotted_path):
-    """
-    Return a callable that imports dotted_path and calls .as_view()
-    on each request. Safer during startup because import happens
-    only when the URL is hit (reduces risk during migrate/startup).
-    """
     def _call(request, *args, **kwargs):
         view_cls = import_string(dotted_path)
         return view_cls.as_view()(request, *args, **kwargs)
     return _call
 
 # -----------------------
-# Safe admin index: не вызывает self.each_context, чтобы избежать NoReverseMatch
+# Safe admin index: не вызывает self.each_context
+# Возвращает TemplateResponse('admin/index.html') с минимально необходимым контекстом.
 # -----------------------
 def _safe_admin_index(self, request, extra_context=None):
     app_list = []
@@ -63,7 +56,7 @@ def _safe_admin_index(self, request, extra_context=None):
             continue
 
         app_list.append({
-            "name": opts.app_label,
+            "name": getattr(opts, "verbose_name", app_label).title(),
             "app_label": app_label,
             "models": [{
                 "name": getattr(opts, "verbose_name_plural", model_name).title(),
@@ -74,42 +67,37 @@ def _safe_admin_index(self, request, extra_context=None):
             }],
         })
 
-    items = []
-    for a in app_list:
-        m = a["models"][0]
-        link = f'<a href="{escape(m["admin_url"])}">{escape(a["name"])} — {escape(m["name"])}</a>' if m["admin_url"] != "#" else f'{escape(a["name"])} — {escape(m["name"])}'
-        if m.get("add_url"):
-            link += f' &nbsp; <a href="{escape(m["add_url"])}">add</a>'
-        items.append(f"<li>{link}</li>")
-    body = f"""
-    <html>
-      <head><title>{escape(self.index_title or 'Admin')}</title></head>
-      <body>
-        <h1>{escape(self.site_header or 'Admin')}</h1>
-        <ul>
-          {''.join(items) or '<li>(нет доступных моделей)</li>'}
-        </ul>
-        <p><a href="/admin/login/">Войти в админку</a></p>
-      </body>
-    </html>
-    """
-    return HttpResponse(body, content_type="text/html")
+    context = {
+        "site_title": self.site_title,
+        "site_header": self.site_header,
+        "title": self.index_title,
+        "app_list": app_list,
+        "available_apps": app_list,
+        "has_permission": True,
+    }
+    if extra_context:
+        context.update(extra_context)
+
+    # Возвращаем TemplateResponse (у него correct charset и статика подключится)
+    return TemplateResponse(request, "admin/index.html", context)
 
 
 # Привязываем безопасный index к admin.site
 admin.site.index = types.MethodType(_safe_admin_index, admin.site)
 
-# НЕ вызываем admin.autodiscover() здесь — он может инициировать ранние импорты.
-# admin.autodiscover()
+# НЕ вызываем admin.autodiscover() здесь чтобы не форсировать ранние импорты
 
-# Best-effort получить user model и зарегистрировать Group если нужно
+# Try best-effort get user model (не критично)
 try:
+    from django.contrib.auth import get_user_model
     UserModel = get_user_model()
 except Exception:
     UserModel = None
-    logger.exception("Failed to get user model")
+    logger.debug("Failed to get user model at URLConf load")
 
+# Ensure Group registered if not present
 try:
+    from django.contrib.auth.models import Group
     from django.contrib.auth.admin import GroupAdmin as DefaultGroupAdmin
     if Group not in admin.site._registry:
         try:
@@ -119,12 +107,12 @@ try:
 except Exception:
     logger.debug("GroupAdmin import/registration failed")
 
-# Установки заголовков админки
+# Admin titles
 admin.site.site_header = "Positive Theta Admin"
 admin.site.site_title = "Positive Theta"
 admin.site.index_title = "Панель управления Positive Theta"
 
-# Подключаем вспомогательные views из blog.admin (если есть) — импорт в try/except
+# Try to import optional blog admin helpers (best-effort)
 admin_media_library_view = None
 admin_dashboard_view = None
 admin_stats_api = None
@@ -143,9 +131,7 @@ except Exception:
     blog_admin = None
     logger.debug("blog.admin import failed or helpers missing")
 
-# -----------------------
-# Простые редиректы-совместимости для шаблонов, которые ожидают конкретные имена URL.
-# -----------------------
+# Helpers: поиска зарегистрированной модели и редиректа к ней
 def _find_registered_model(app_label_hint=None, model_name_hint=None):
     for m in admin.site._registry.keys():
         try:
@@ -182,13 +168,9 @@ def _redirect_to_computed_admin(app_label_hint=None, model_name_hint=None, actio
         return redirect(fallback)
     return _view
 
-# -----------------------
 # URL patterns
-# -----------------------
 urlpatterns = [
     path("grappelli/", include("grappelli.urls")),
-
-    # API / auth — загружаем views лениво чтобы не импортировать их при старте
     path("api/auth/register/", lazy_class_view("users.views.RegisterView"), name="register"),
     path("api/auth/login/", lazy_class_view("users.views.LoginView"), name="login"),
     path("api/blog/", include(("blog.urls", "blog"), namespace="blog")),
@@ -197,23 +179,19 @@ urlpatterns = [
     path("preview/<str:token>/", (getattr(blog_admin, "preview_by_token") if blog_admin and hasattr(blog_admin, "preview_by_token") else TemplateView.as_view(template_name="404.html")), name="post-preview"),
 ]
 
-# media-library до admin/
 if admin_media_library_view:
     urlpatterns += [path("admin/media-library/", admin_media_library_view, name="admin-media-library")]
 else:
     urlpatterns += [path("admin/media-library/", TemplateView.as_view(template_name="admin/media_library_unavailable.html"), name="admin-media-library")]
 
-# небольшие совместимость-редиректы (root-level)
 urlpatterns += [
     path("admin/auth/user/", _redirect_to_computed_admin(app_label_hint="auth", model_name_hint="user", action="changelist"), name="auth_user_changelist"),
     path("admin/blog/comment/", _redirect_to_computed_admin(app_label_hint="blog", model_name_hint="comment", action="changelist"), name="blog_comment_changelist"),
     path("admin/blog/post/add/", _redirect_to_computed_admin(app_label_hint="blog", model_name_hint="post", action="add"), name="blog_post_add"),
 ]
 
-# стандартный админ
 urlpatterns += [path("admin/", admin.site.urls)]
 
-# дополнительные admin views вне admin.site
 if admin_dashboard_view:
     urlpatterns += [path("admin/dashboard/", admin_dashboard_view, name="admin-dashboard")]
 if admin_stats_api:
@@ -221,7 +199,6 @@ if admin_stats_api:
 if admin_post_update_view:
     urlpatterns += [path("admin/posts/update/", admin_post_update_view, name="admin-post-update")]
 
-# serve static/media in DEBUG
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
