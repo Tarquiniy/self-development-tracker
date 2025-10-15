@@ -12,7 +12,7 @@ class CorsMiddleware(MiddlewareMixin):
             "http://localhost:3000", 
             "http://127.0.0.1:3000",
             "https://cs88500-wordpress-o0a99.tw1.ru",
-            "https://sdracker.onrender.com",
+            "https://positive-theta.onrender.com",
             "https://positive-theta.vercel.app",
         ]
         

@@ -4,7 +4,7 @@ const nextConfig = {
   images: {
     domains: [
       'cs88500-wordpress-o0a99.tw1.ru',
-      'sdracker.onrender.com',
+      'positive-theta.onrender.com',
       'fjqbhcmsqypevfbpzcxj.supabase.co',
       'sdtracker.vercel.app',
       'positive-theta.vercel.app',

@@ -100,7 +100,7 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") + [
     "sdtracker.vercel.app",
     ".vercel.app",
     ".onrender.com",
-    "sdracker.onrender.com",
+    "positive-theta.onrender.com",
     "cs88500-wordpress-o0a99.tw1.ru",
 ]
 
@@ -115,7 +115,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.vercel.app",
     "https://*.onrender.com",
     "https://*.supabase.co",
-    "https://sdracker.onrender.com",
+    "https://positive-theta.onrender.com",
     "https://sdtracker.vercel.app",
     "https://positive-theta.vercel.app",
     "https://cs88500-wordpress-o0a99.tw1.ru",
@@ -126,7 +126,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://cs88500-wordpress-o0a99.tw1.ru",
-    "https://sdracker.onrender.com",
+    "https://positive-theta.onrender.com",
     "https://positive-theta.vercel.app",
 ]
 
