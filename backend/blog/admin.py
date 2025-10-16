@@ -176,7 +176,7 @@ class BasePostAdmin(VersionAdmin):
                     updated += 1
                 except Exception as e:
                     logger.error("Error updating SEO meta: %s", e)
-        self.message_user(request, f"SEO мета-заголовки обновлены для {updated} постов.")
+        self.message_user(request, f"SEO мета-заголовки обновлены для {updated} постов")
     update_seo_meta.short_description = "🔍 Обновить SEO мета-данные"
 
 
