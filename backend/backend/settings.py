@@ -18,9 +18,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'apps.users',
-    'apps.posts',
-    'sslserver'
-]
+    'apps.posts',]
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',

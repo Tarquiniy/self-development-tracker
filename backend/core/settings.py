@@ -19,7 +19,6 @@ INSTALLED_APPS = [
     'corsheaders',
     'apps.users',
     'apps.posts',
-    'sslserver'
 ]
 
 MIDDLEWARE = [
