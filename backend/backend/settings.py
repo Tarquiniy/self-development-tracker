@@ -19,6 +19,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'apps.users',
     'apps.posts',
+    'sslserver'
 ]
 
 MIDDLEWARE = [
@@ -87,7 +88,7 @@ REST_FRAMEWORK = {
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
