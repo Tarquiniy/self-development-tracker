@@ -198,6 +198,7 @@ INSTALLED_APPS = [
     # Third-party apps
     "jazzmin",
     "grappelli",
+    'django_ckeditor_5',
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
