@@ -1,8 +1,0 @@
-/* backend/blog/static/admin/admin-post-form.css */
-.post-edit-page { padding-bottom:80px; }
-.post-edit-grid .card { padding:12px; }
-.post-header { display:flex;align-items:center;gap:12px }
-.post-header .button { min-width:110px }
-.featured-placeholder { color:#6b7280 }
-.preview-inner { display:flex;flex-direction:column;gap:12px }
-.preview-body { color:#111 }
