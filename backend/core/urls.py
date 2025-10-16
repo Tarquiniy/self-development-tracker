@@ -1,5 +1,5 @@
 # backend/core/urls.py
-from django.conf import settings\n
+from django.conf import settings
 # ---- quick admin alias helpers (auto-added) ----
 from django.shortcuts import redirect
 from django.urls import reverse
