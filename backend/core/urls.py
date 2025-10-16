@@ -1,5 +1,33 @@
 # backend/core/urls.py
-from django.conf import settings
+from django.conf import settings\n
+# ---- quick admin alias helpers (auto-added) ----
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.http import HttpResponseNotFound
+from django.urls import path as _path
+
+def _alias_to_admin(namespaced_name, fallback_to_index=True):
+    def view(request, *args, **kwargs):
+        try:
+            target = reverse(namespaced_name)
+            return redirect(target)
+        except Exception:
+            if fallback_to_index:
+                try:
+                    return redirect(reverse("admin:index"))
+                except Exception:
+                    return HttpResponseNotFound("Admin URL not available")
+            return HttpResponseNotFound("Not found")
+    return view
+
+_alias_urlpatterns = [
+    _path('auth_user_changelist/', _alias_to_admin('admin:auth_user_changelist'), name='auth_user_changelist'),
+    _path('auth_user_change/', _alias_to_admin('admin:auth_user_change'), name='auth_user_change'),
+    _path('auth_group_changelist/', _alias_to_admin('admin:auth_group_changelist'), name='auth_group_changelist'),
+]
+# ---- end quick alias ----
+
+
 from django.contrib import admin
 from django.urls import path, include
 #from users.views import RegisterView, LoginView, ProfileView
@@ -42,7 +70,7 @@ if admin_media_library_view is None:
     except Exception:
         admin_media_library_view = None
 
-urlpatterns = [
+urlpatterns = _alias_urlpatterns + [
     path('grappelli/', include('grappelli.urls')),
     # Регистрируем кастомную админку (только один раз)
     path("admin/", custom_admin_site.urls),
