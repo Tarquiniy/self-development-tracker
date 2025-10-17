@@ -1,0 +1,17 @@
+/* backend/blog/static/blog/admin-post-form.css */
+:root{
+  --bg:#f8fafc; --card:#ffffff; --muted:#6b7280; --text:#0f172a; --shadow:0 6px 18px rgba(2,6,23,0.06);
+}
+body{background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+.admin-container{max-width:1280px;margin:16px auto;padding:8px}
+.top-toolbar .button{background:#f3f4f6;border:1px solid #e6e9ef;padding:6px 10px;border-radius:8px}
+.button-primary{background:#0ea5a1;color:#fff;border:none}
+.post-edit-grid{display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start}
+.card{background:var(--card);border-radius:12px;padding:14px;box-shadow:var(--shadow)}
+.post-edit-grid form{display:flex;flex-direction:column;gap:12px}
+.post-preview{display:flex;flex-direction:column;gap:8px}
+#preview-title{font-size:18px;margin:0}
+#preview-excerpt{color:var(--muted);font-size:13px}
+.preview-body{font-size:14px;color:var(--text);line-height:1.5;max-height:320px;overflow:auto}
+/* responsive */
+@media (max-width:1000px){.post-edit-grid{grid-template-columns:1fr}.post-preview{order:2}}

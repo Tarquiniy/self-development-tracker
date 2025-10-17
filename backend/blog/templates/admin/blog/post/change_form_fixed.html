@@ -1,0 +1,65 @@
+{% extends "admin/change_form.html" %}
+{% load static i18n %}
+
+{% block extrahead %}
+<link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+<link rel="stylesheet" href="{% static 'admin/css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'blog/admin-post-form.css' %}">
+<script src="{% static 'blog/admin-post-form.js' %}"></script>
+<style>
+  /* quick fallback styles to ensure layout loads even if static files missing */
+  .admin-container { max-width: 1400px; margin: 16px auto; padding: 8px; }
+  .post-edit-grid { display: grid; grid-template-columns: 1fr 380px; gap: 16px; align-items: start; }
+  .card { background: #fff; border-radius: 10px; padding: 14px; box-shadow: 0 6px 18px rgba(15,23,42,0.06); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+  <div class="top-toolbar" style="display:flex;justify-content:space-between;gap:12px;margin-bottom:12px;align-items:center">
+    <div style="display:flex;gap:8px;align-items:center">
+      <a class="button" href="{{ original }}">{{ _('Back') }}</a>
+      <button id="preview-button" class="button" type="button">{{ _('Preview') }}</button>
+      <button id="publish-button" class="button button-primary" type="button">{{ _('Save and publish') }}</button>
+    </div>
+    <div class="meta-actions" style="display:flex;gap:8px;align-items:center">
+      <span class="muted">{{ opts.verbose_name }}</span>
+    </div>
+  </div>
+
+  <div class="post-edit-grid">
+    <div class="card" id="post-edit-card">
+      {% if adminform.form.non_field_errors %}
+        <div class="errors">{{ adminform.form.non_field_errors }}</div>
+      {% endif %}
+
+      <form method="post" enctype="multipart/form-data" id="post-edit-form" novalidate>
+        {% csrf_token %}
+        {{ adminform.form.as_p }}
+
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <input type="submit" value="{{ _('Save') }}" class="button button-secondary" />
+          <input type="submit" name="_continue" value="{{ _('Save and continue editing') }}" class="button" />
+        </div>
+      </form>
+    </div>
+
+    <aside class="card" id="post-preview-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong>{{ _('Live preview') }}</strong>
+        <button id="open-media-btn" class="button">{{ _('Media') }}</button>
+      </div>
+
+      <div id="post-preview" class="post-preview">
+        <div id="preview-thumb" style="height:160px;background:#f3f4f6;border-radius:8px;margin-bottom:10px;display:flex;align-items:center;justify-content:center">Preview image</div>
+        <h3 id="preview-title">Заголовок поста</h3>
+        <div id="preview-excerpt" class="muted">Краткое описание поста...</div>
+        <div style="margin-top:12px;font-size:13px;color:#6b7280">{{ _('Author') }}: <span id="preview-author">-</span></div>
+        <hr style="margin:12px 0" />
+        <div id="preview-body" class="preview-body">Контент превью...</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+{% endblock %}
