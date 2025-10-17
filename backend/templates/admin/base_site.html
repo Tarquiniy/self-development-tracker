@@ -1,0 +1,32 @@
+{% load static i18n %}
+{% extends "admin/base.html" %}
+
+{% block title %}Positive Theta — Панель управления{% endblock %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'admin/css/custom_admin.css' %}">
+{% endblock %}
+
+{% block branding %}
+  <a class="pt-logo" href="{% url 'admin:index' %}">
+    <span class="pt-logo-mark">Θ</span>
+    <span class="pt-logo-text">Positive Theta</span>
+  </a>
+{% endblock %}
+
+{% block nav-global %}
+  <div class="pt-topbar">
+    <div class="pt-search">
+      <form action="{% url 'admin:search' %}" method="get">
+        <input name="q" placeholder="{% trans 'Поиск по админке…' %}" aria-label="search admin">
+      </form>
+    </div>
+
+    <div class="pt-actions">
+      <a href="{% url 'admin:blog_post_add' %}" class="pt-btn primary">Создать пост</a>
+      <a href="{% url 'admin:auth_user_changelist' %}" class="pt-btn">Пользователи</a>
+      <a href="{% url 'admin:logout' %}" class="pt-btn outline">Выйти</a>
+    </div>
+  </div>
+{% endblock %}

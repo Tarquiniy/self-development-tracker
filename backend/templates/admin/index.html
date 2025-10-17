@@ -1,106 +1,96 @@
-{# templates/admin/index.html #}
-{% load static i18n %}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8">
-  <title>{{ site_title|default:"Admin" }}</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="{% static 'admin/css/custom_admin_dashboard.css' %}">
-  {# подключаем стандартные админ-стили, чтобы не ломать внешний вид #}
-  <link rel="stylesheet" href="{% static 'admin/css/admin.css' %}">
-</head>
-<body class="dashboard-body">
-  <header class="dashboard-header">
-    <div class="container">
-      <div class="left">
-        <h1 class="site-title">{{ site_header|default:site_title }}</h1>
-        <p class="site-sub">Управление сайтом — быстрый доступ к блогу и медиатеке</p>
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block content %}
+  <div class="pt-dashboard">
+    <div class="pt-cards">
+      <div class="pt-card">
+        <div class="pt-card-title">Посты</div>
+        <div class="pt-card-value">{{ app_list|length }}</div>
+        <div class="pt-card-sub">Блог / Категории / Теги</div>
       </div>
-      <div class="right">
-        <div class="user-block">Добро пожаловать, {{ user.get_full_name|default:user.username }}</div>
+
+      <div class="pt-card">
+        <div class="pt-card-title">Последние изменения</div>
+        <div class="pt-card-value">
+          {% if recent_actions %}
+            {{ recent_actions|length }}
+          {% else %}
+            0
+          {% endif %}
+        </div>
+        <div class="pt-card-sub">Действия редакторов</div>
+      </div>
+
+      <div class="pt-card">
+        <div class="pt-card-title">Черновики</div>
+        <div class="pt-card-value">
+          {% with drafts=app_list|default_if_none:None %}
+            {% comment %} Это декоративно: оставляем подсказку {% endcomment %}
+            —
+          {% endwith %}
+        </div>
+        <div class="pt-card-sub">Проверить и опубликовать</div>
       </div>
     </div>
-  </header>
 
-  <main class="dashboard-main container">
-    <section class="quick-actions">
-      <a href="{% url 'admin:blog_post_add' %}" class="btn btn-primary">Создать пост</a>
-      <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-outline">Все посты</a>
-      <a href="/admin/media-library/" class="btn btn-outline">Медиатека</a>
-      <a href="{% url 'admin:blog_comment_changelist' %}" class="btn btn-outline">Комментарии</a>
-      <a href="{% url 'admin:auth_user_changelist' %}" class="btn btn-outline">Пользователи</a>
-    </section>
-
-    <section class="stats-grid" id="dashboard-stats">
-      <!-- карточки статистики будут заполнены JS -->
-      <div class="stat-card">
-        <div class="stat-title">Загрузка…</div>
-        <div class="stat-value">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">Загрузка…</div>
-        <div class="stat-value">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">Загрузка…</div>
-        <div class="stat-value">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">Загрузка…</div>
-        <div class="stat-value">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">Загрузка…</div>
-        <div class="stat-value">—</div>
-      </div>
-    </section>
-
-    <section class="apps-and-recent">
-      <div class="apps">
-        <h3>Приложения</h3>
-        <div class="apps-grid">
-          {% for app in app_list %}
-            <div class="app">
-              <div class="app-title">{{ app.name }}</div>
-              <ul class="models">
-                {% for model in app.models %}
-                  <li><a href="{{ model.admin_url }}">{{ model.name }}</a></li>
-                {% endfor %}
-              </ul>
-            </div>
-          {% endfor %}
+    <div class="pt-main">
+      <section class="pt-section">
+        <h2>Быстрые действия</h2>
+        <div class="pt-quick-actions">
+          <a href="{% url 'admin:blog_post_add' %}" class="pt-action">
+            <div class="pt-action-icon">✏️</div>
+            <div class="pt-action-text">Новый пост</div>
+          </a>
+          <a href="{% url 'admin:blog_post_changelist' %}" class="pt-action">
+            <div class="pt-action-icon">📋</div>
+            <div class="pt-action-text">Управлять постами</div>
+          </a>
+          <a href="{% url 'admin:blog_category_changelist' %}" class="pt-action">
+            <div class="pt-action-icon">🏷️</div>
+            <div class="pt-action-text">Категории</div>
+          </a>
+          <a href="{% url 'admin:auth_user_changelist' %}" class="pt-action">
+            <div class="pt-action-icon">👥</div>
+            <div class="pt-action-text">Пользователи</div>
+          </a>
         </div>
-      </div>
+      </section>
 
-      <div class="recent">
-        <h3>Подсказки</h3>
-        <div class="panel">
-          <p>Быстрые операции:</p>
-          <ul>
-            <li>Нажмите «Создать пост», чтобы открыть форму создания нового поста.</li>
-            <li>Откройте медиатеку, чтобы загрузить изображения и прикрепить к постам.</li>
-            <li>Используйте автосохранение при редактировании поста.</li>
-          </ul>
+      <section class="pt-section">
+        <h2>Последние записи</h2>
+        <div class="pt-table-wrap">
+          <table class="pt-table">
+            <thead>
+              <tr>
+                <th>Заголовок</th>
+                <th>Автор</th>
+                <th>Статус</th>
+                <th>Дата</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for post in recent_posts %}
+                <tr>
+                  <td class="title-col">{{ post.title|default:"(без названия)" }}</td>
+                  <td>{{ post.author }}</td>
+                  <td><span class="badge badge-{{ post.status }}">{{ post.get_status_display }}</span></td>
+                  <td>{{ post.published_at|date:"Y-m-d H:i" }}</td>
+                  <td>
+                    <a class="link" href="{% url 'admin:blog_post_change' post.pk %}">Ред.</a>
+                    {% if post.get_absolute_url %}
+                      <a target="_blank" class="link" href="{{ post.get_absolute_url }}">Просмотр</a>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="5" class="muted">Записей пока нет</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
-      </div>
-    </section>
-  </main>
-
-  <footer class="dashboard-footer">
-    <div class="container">
-      <span>Positive Theta Admin — удобная панель управления</span>
-      <small>— версия интерфейса: 1</small>
+      </section>
     </div>
-  </footer>
-
-  <script>
-    // перед подключением внешнего js — подгружаем базовый CSRF token
-    const ADMIN_CSRF = (function(){
-      function getCookie(name){let v=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');return v?v.pop():"";}
-      return { csrfToken: getCookie('csrftoken') };
-    })();
-  </script>
-  <script src="{% static 'admin/js/admin_dashboard.js' %}"></script>
-</body>
-</html>
+  </div>
+{% endblock %}
