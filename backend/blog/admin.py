@@ -18,7 +18,7 @@ from django.db.models.functions import TruncDate
 from django.db.models import Count
 from django.db import models
 from django.utils.safestring import mark_safe
-from django.utils.html import escape
+from django.utils.html import escape, format_html
 from django.template.loader import render_to_string
 
 logger = logging.getLogger(__name__)
@@ -59,15 +59,17 @@ class PostAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Add CSS classes for styling
-        self.fields['title'].widget.attrs.update({
-            'class': 'post-title-field',
-            'placeholder': 'Введите заголовок поста...'
-        })
-        self.fields['slug'].widget.attrs.update({
-            'class': 'post-slug-field',
-            'placeholder': 'url-slug...'
-        })
+        # Add CSS classes for styling; protect if fields absent
+        if 'title' in self.fields:
+            self.fields['title'].widget.attrs.update({
+                'class': 'post-title-field',
+                'placeholder': 'Введите заголовок поста...'
+            })
+        if 'slug' in self.fields:
+            self.fields['slug'].widget.attrs.update({
+                'class': 'post-slug-field',
+                'placeholder': 'url-slug...'
+            })
 
 # -----------------------
 # Enhanced Admin Classes
@@ -118,26 +120,71 @@ class BasePostAdmin(VersionAdmin):
             'published': 'green',
             'archived': 'orange'
         }
-        color = status_colors.get(obj.status, 'gray')
-        return mark_safe(f'<span class="status-badge status-{color}">{obj.get_status_display()}</span>')
+        color = status_colors.get(getattr(obj, "status", None), 'gray')
+        return format_html('<span class="status-badge status-{}">{}</span>', color, escape(getattr(obj, "get_status_display", lambda: "")()))
     status_badge.short_description = "Статус"
     status_badge.admin_order_field = 'status'
 
     def reading_time_display(self, obj):
         if not obj:
             return "0 мин"
-        return f"{obj.reading_time} мин"
+        return f"{getattr(obj, 'reading_time', 0)} мин"
     reading_time_display.short_description = "Время чтения"
 
     def actions_column(self, obj):
+        """
+        Безопасная колонка действий:
+         - Показываем кнопку "Редактировать" (admin change) если можем получить URL
+         - Показываем кнопку "Просмотреть" только если у объекта есть валидный публичный URL
+        Всю работу с URL оборачиваем в try/except, чтобы исключения не ломали страницу.
+        """
         if not obj:
             return ""
-        return mark_safe(f'''
-            <div class="action-buttons">
-                <a href="{reverse('admin:blog_post_change', args=[obj.id])}" class="button edit-btn">✏️</a>
-                <a href="{obj.get_absolute_url() if hasattr(obj, 'get_absolute_url') else '#'}" target="_blank" class="button view-btn">👁️</a>
-            </div>
-        ''')
+        try:
+            # Получаем public URL через get_absolute_url, только если slug присутствует
+            view_url = None
+            try:
+                slug = getattr(obj, "slug", None)
+                if slug:
+                    if hasattr(obj, "get_absolute_url") and callable(getattr(obj, "get_absolute_url")):
+                        try:
+                            u = obj.get_absolute_url()
+                            if u:
+                                view_url = u
+                        except Exception:
+                            view_url = None
+            except Exception:
+                view_url = None
+
+            # Получаем admin change URL
+            edit_url = None
+            try:
+                edit_url = reverse("admin:blog_post_change", args=[getattr(obj, "pk", None)])
+            except Exception:
+                edit_url = None
+
+            # Формируем кнопки
+            if view_url:
+                view_btn = format_html(
+                    '<a href="{}" target="_blank" class="button view-btn" title="Открыть на сайте">👁️</a>',
+                    view_url
+                )
+            else:
+                view_btn = format_html('<span class="button view-btn disabled" title="Нет публичного URL">👁️</span>')
+
+            if edit_url:
+                edit_btn = format_html(
+                    '<a href="{}" class="button edit-btn" title="Редактировать">✏️</a>',
+                    edit_url
+                )
+            else:
+                edit_btn = format_html('<span class="button edit-btn disabled" title="Недоступно">✏️</span>')
+
+            return format_html('<div class="action-buttons">{}&nbsp;{}</div>', view_btn, edit_btn)
+        except Exception:
+            # На случай неожиданных ошибок — не ломать listing
+            return ""
+
     actions_column.short_description = "Действия"
 
     def make_published(self, request, queryset):
@@ -155,7 +202,7 @@ class BasePostAdmin(VersionAdmin):
         for p in queryset:
             old_slug = getattr(p, "slug", "") or ""
             p.pk = None
-            p.slug = f"{old_slug}-copy"
+            p.slug = f"{old_slug}-copy" if old_slug else ""
             p.title = f"{getattr(p, 'title', '')} (копия)"
             p.status = "draft"
             try:
@@ -169,8 +216,8 @@ class BasePostAdmin(VersionAdmin):
     def update_seo_meta(self, request, queryset):
         updated = 0
         for post in queryset:
-            if not post.meta_title:
-                post.meta_title = post.title
+            if not getattr(post, "meta_title", None):
+                post.meta_title = getattr(post, "title", "")
                 try:
                     post.save()
                     updated += 1
@@ -189,7 +236,7 @@ class CategoryAdmin(admin.ModelAdmin):
         if not obj:
             return 0
         count = obj.posts.count() if hasattr(obj, 'posts') else 0
-        return mark_safe(f'<span class="badge">{count}</span>')
+        return format_html('<span class="badge">{}</span>', count)
     post_count.short_description = "Постов"
 
 
@@ -202,7 +249,7 @@ class TagAdmin(admin.ModelAdmin):
         if not obj:
             return 0
         count = obj.posts.count() if hasattr(obj, 'posts') else 0
-        return mark_safe(f'<span class="badge">{count}</span>')
+        return format_html('<span class="badge">{}</span>', count)
     post_count.short_description = "Постов"
 
 
@@ -215,15 +262,21 @@ class CommentAdmin(admin.ModelAdmin):
     def author_name(self, obj):
         if not obj:
             return "-"
-        return obj.name or f"User #{obj.user_id}" if obj.user else "Anonymous"
+        # защитимся от отсутствия user атрибута
+        try:
+            if getattr(obj, "user", None):
+                return getattr(obj, "user").get_full_name() if getattr(obj.user, "get_full_name", None) else getattr(obj.user, "username", f"User #{getattr(obj, 'user_id', '')}")
+            return getattr(obj, "name", "") or "Anonymous"
+        except Exception:
+            return getattr(obj, "name", "") or "Anonymous"
     author_name.short_description = "Автор"
 
     def post_link(self, obj):
         try:
-            if not obj or not obj.post:
+            if not obj or not getattr(obj, "post", None):
                 return "-"
             url = reverse('admin:blog_post_change', args=[obj.post.id])
-            return mark_safe(f'<a href="{url}">{obj.post.title}</a>')
+            return format_html('<a href="{}">{}</a>', url, escape(getattr(obj.post, "title", "—")))
         except Exception:
             return "-"
     post_link.short_description = "Пост"
@@ -231,23 +284,24 @@ class CommentAdmin(admin.ModelAdmin):
     def short_content(self, obj):
         if not obj:
             return ""
-        content = obj.content[:100] if obj.content else ""
-        if len(obj.content) > 100:
-            content += "..."
-        return content
+        content = getattr(obj, "content", "") or ""
+        short = content[:100]
+        if len(content) > 100:
+            short += "..."
+        return short
     short_content.short_description = "Комментарий"
 
     def status_badges(self, obj):
         if not obj:
             return ""
         badges = []
-        if obj.is_public:
+        if getattr(obj, "is_public", False):
             badges.append('<span class="badge badge-green">Public</span>')
         else:
             badges.append('<span class="badge badge-gray">Hidden</span>')
-        if obj.is_moderated:
+        if getattr(obj, "is_moderated", False):
             badges.append('<span class="badge badge-blue">Moderated</span>')
-        return mark_safe(" ".join(badges))
+        return format_html(" ".join(badges))
     status_badges.short_description = "Статус"
 
     def approve_comments(self, request, queryset):
@@ -271,19 +325,19 @@ class MediaLibraryAdmin(admin.ModelAdmin):
     readonly_fields = ("file_size", "file_type", "uploaded_at_display")  # Убрали uploaded_at, добавили свойство
 
     def thumbnail(self, obj):
-        if not obj or not obj.file:
+        if not obj or not getattr(obj, "file", None):
             return "📄"
-        if obj.file.name.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
-            try:
+        try:
+            if obj.file.name.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
                 url = obj.file.url
-                return mark_safe(f'<img src="{url}" style="width: 50px; height: 50px; object-fit: cover;" />')
-            except Exception:
-                return "🖼️"
+                return format_html('<img src="{}" style="width: 50px; height: 50px; object-fit: cover;" />', url)
+        except Exception:
+            return "🖼️"
         return "📄"
     thumbnail.short_description = ""
 
     def file_type(self, obj):
-        if not obj or not obj.file:
+        if not obj or not getattr(obj, "file", None):
             return "📄"
         ext = os.path.splitext(obj.file.name)[1].lower()
         type_icons = {
@@ -296,7 +350,7 @@ class MediaLibraryAdmin(admin.ModelAdmin):
 
     def file_size(self, obj):
         try:
-            if not obj or not obj.file:
+            if not obj or not getattr(obj, "file", None):
                 return "N/A"
             size = obj.file.size
             for unit in ['B', 'KB', 'MB', 'GB']:
@@ -312,17 +366,17 @@ class MediaLibraryAdmin(admin.ModelAdmin):
         """Отображение uploaded_at для readonly_fields"""
         if not obj:
             return ""
-        return obj.uploaded_at
+        return getattr(obj, "uploaded_at", "")
     uploaded_at_display.short_description = "Дата загрузки"
 
     def post_link(self, obj):
-        if obj and obj.post:
+        if obj and getattr(obj, "post", None):
             try:
                 url = reverse('admin:blog_post_change', args=[obj.post.id])
-                return mark_safe(f'<a href="{url}">{obj.post.title}</a>')
+                return format_html('<a href="{}">{}</a>', url, escape(getattr(obj.post, "title", "—")))
             except Exception:
-                return mark_safe('<span class="text-muted">Ошибка ссылки</span>')
-        return mark_safe('<span class="text-muted">Не прикреплен</span>')
+                return format_html('<span class="text-muted">Ошибка ссылки</span>')
+        return format_html('<span class="text-muted">Не прикреплен</span>')
     post_link.short_description = "Пост"
 
 
@@ -363,7 +417,11 @@ def register_admin_models(site_obj):
             site_obj.register(PostRevision, PostRevisionAdmin)
 
         if PostAttachment is not None:
-            site_obj.register(MediaLibrary, MediaLibraryAdmin)
+            # Если PostAttachment представляет файлы — регистрируем MediaLibrary
+            try:
+                site_obj.register(MediaLibrary, MediaLibraryAdmin)
+            except AlreadyRegistered:
+                pass
 
     except Exception as e:
         logger.exception("Admin registration failed: %s", e)

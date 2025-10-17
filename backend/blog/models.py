@@ -36,14 +36,22 @@ class Category(models.Model):
         verbose_name_plural = "Categories"
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            base = slugify(self.title)[:120]
-            slug = base
-            counter = 1
-            while Category.objects.filter(slug=slug).exclude(pk=self.pk).exists():
-                slug = f"{base}-{counter}"
-                counter += 1
-            self.slug = slug
+        """
+        Если slug пустой, пробуем автогенерацию из title и обеспечить уникальность.
+        Это предотвращает появление пустых slug в админке.
+        """
+        # Попытка сгенерировать slug, если он пуст
+        if not self.slug and getattr(self, "title", None):
+            base_slug = slugify(self.title)[:200]  # ограничиваем длину
+            slug_candidate = base_slug or "post"
+            # Проверяем уникальность и добавляем суффикс при коллизии
+            i = 0
+            ModelClass = self.__class__
+            while ModelClass.objects.filter(slug=slug_candidate).exclude(pk=self.pk).exists():
+                i += 1
+                slug_candidate = f"{base_slug[:190]}-{i}"
+            self.slug = slug_candidate
+
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -174,7 +182,18 @@ class Post(models.Model):
         return f"{self.title} ({self.get_status_display()})"
 
     def get_absolute_url(self):
-        return reverse('blog:post-detail', kwargs={'slug': self.slug})
+        """
+        Возвращает URL поста или None/#, если slug отсутствует или reverse выбрасывает ошибку.
+        Это предотвращает NoReverseMatch при пустом slug.
+        """
+        if not getattr(self, "slug", None):
+            # Вернуть None или '#', в шаблоне/админе мы будем учитывать это
+            return None
+        try:
+            return reverse("blog:post-detail", kwargs={"slug": self.slug})
+        except Exception:
+            # В редких случаях reverse может упасть — возвращаем None
+            return None
 
     @property
     def is_published(self):
