@@ -7,7 +7,7 @@ class CustomUserAdmin(UserAdmin):
     list_display = ('email', 'username', 'supabase_uid', 'registration_method', 'is_staff')
     list_filter = ('registration_method', 'is_staff', 'is_superuser')
     search_fields = ('email', 'username', 'supabase_uid')
-    
+
     fieldsets = UserAdmin.fieldsets + (
         ('Additional Info', {
             'fields': ('supabase_uid', 'registration_method'),

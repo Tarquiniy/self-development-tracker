@@ -22,6 +22,3 @@ class UserProfile(models.Model):
     subscription_active = models.BooleanField(default=False)
     subscription_expires = models.DateTimeField(null=True, blank=True)
     tables_limit = models.IntegerField(default=1)
-
-    def __str__(self):
-        return f"Profile of {self.user.email}"

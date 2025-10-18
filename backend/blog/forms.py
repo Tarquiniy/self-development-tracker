@@ -14,7 +14,7 @@ class PostAdminForm(forms.ModelForm):
         }),
         input_formats=['%Y-%m-%dT%H:%M']
     )
-    
+
     class Meta:
         model = Post
         fields = '__all__'
@@ -35,13 +35,13 @@ class PostAdminForm(forms.ModelForm):
             'class': 'post-slug-field',
             'placeholder': 'url-slug...'
         })
-        
+
         # Устанавливаем начальное значение для published_at
         if self.instance and self.instance.published_at:
             self.fields['published_at'].initial = self.instance.published_at.strftime('%Y-%m-%dT%H:%M')
         elif not self.instance.pk:  # Новый пост
             self.fields['published_at'].initial = timezone.now().strftime('%Y-%m-%dT%H:%M')
-        
+
     def clean(self):
         cleaned_data = super().clean()
         # Добавляем базовую валидацию

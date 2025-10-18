@@ -1,4 +1,4 @@
-# backend/blog/views.py
+backend/blog/views.py
 import os
 import json
 import logging
@@ -410,7 +410,7 @@ def media_upload(request):
 
             att.title = request.data.get('title') or f.name
             att.uploaded_by = request.user if request.user.is_authenticated else None
-            
+
             # Обрабатываем post_id если он передан
             post_id = request.data.get('post_id')
             if post_id:

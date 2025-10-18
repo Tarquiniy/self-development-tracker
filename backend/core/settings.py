@@ -182,7 +182,7 @@ MIDDLEWARE = [
 INSTALLED_APPS = [
     # Local apps - ДОЛЖНЫ БЫТЬ ПЕРВЫМИ
     "users.apps.UsersConfig",
-    "tables.apps.TablesConfig", 
+    "tables.apps.TablesConfig",
     "payments.apps.PaymentsConfig",
     "analytics.apps.AnalyticsConfig",
     "blog.apps.BlogConfig",
@@ -190,7 +190,7 @@ INSTALLED_APPS = [
     # Django core apps
     "django.contrib.auth",
     "django.contrib.admin",
-    "django.contrib.contenttypes", 
+    "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
