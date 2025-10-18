@@ -654,3 +654,8 @@ def cors_test(request):
         "message": "CORS headers are working correctly",
         "origin": request.META.get('HTTP_ORIGIN', 'Not provided')
     })
+
+def search_view(request):
+    q = request.GET.get('q','').strip()
+    results = Post.objects.filter(title__icontains=q) if q else Post.objects.none()
+    return render(request, 'search/results.html', {'query': q, 'results': results})

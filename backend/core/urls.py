@@ -25,6 +25,7 @@ _alias_urlpatterns = [
     _path('auth_user_changelist/', _alias_to_admin('admin:auth_user_changelist'), name='auth_user_changelist'),
     _path('auth_user_change/', _alias_to_admin('admin:auth_user_change'), name='auth_user_change'),
     _path('auth_group_changelist/', _alias_to_admin('admin:auth_group_changelist'), name='auth_group_changelist'),
+    _path('search/', _alias_to_admin('admin:index'), name='search'),
 ]
 # ---- end quick alias ----
 
@@ -37,6 +38,7 @@ from .admin import custom_admin_site
 from blog import views as blog_views
 from django.views.generic import TemplateView
 from django.views.generic import RedirectView
+from backend.core.views import search_view
 
 # Попытка импортировать админ-views из blog.admin (dashboard, stats, post update, media library)
 admin_dashboard_view = None
@@ -86,6 +88,7 @@ urlpatterns = _alias_urlpatterns + [
     #path('api/auth/profile/', ProfileView.as_view(), name='profile'),
     path('preview/<str:token>/', blog_views.preview_by_token, name='post-preview'),
     path('', RedirectView.as_view(url='/admin/')),
+    path('search/', search_view, name='search'),
 ]
 
 # Добавляем CKEditor 5 URLs
