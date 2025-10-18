@@ -1,5 +1,6 @@
 # backend/core/urls.py
 from django.conf import settings
+
 # ---- quick admin alias helpers (auto-added) ----
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -24,16 +25,13 @@ _alias_urlpatterns = [
     _path('auth_user_changelist/', _alias_to_admin('admin:auth_user_changelist'), name='auth_user_changelist'),
     _path('auth_user_change/', _alias_to_admin('admin:auth_user_change'), name='auth_user_change'),
     _path('auth_group_changelist/', _alias_to_admin('admin:auth_group_changelist'), name='auth_group_changelist'),
-    # Алиас 'search' — многие шаблоны/виды могут обращаться к нему без namespace.
-    # Перенаправляем на admin:index (безопасно). При желании можно изменить на 'admin:search'.
-    _path('search/', _alias_to_admin('admin:index'), name='search'),
 ]
 # ---- end quick alias ----
 
 
 from django.contrib import admin
 from django.urls import path, include
-#from users.views import RegisterView, LoginView, ProfileView
+# from users.views import RegisterView, LoginView, ProfileView
 from django.conf.urls.static import static
 from .admin import custom_admin_site
 from blog import views as blog_views
@@ -75,8 +73,11 @@ if admin_media_library_view is None:
 
 urlpatterns = _alias_urlpatterns + [
     path('grappelli/', include('grappelli.urls')),
-    # Регистрируем кастомную админку (только один раз)
-    path("admin/", custom_admin_site.urls),
+    # Подключаем стандартную админку (чтобы namespace 'admin' и пути вроде admin:auth_user_changelist были доступны)
+    path("admin/", admin.site.urls),
+    # Также оставляем кастомную админку отдельно, если нужна (доступна по /custom-admin/)
+    path("custom-admin/", custom_admin_site.urls),
+
     #path('api/auth/register/', RegisterView.as_view(), name='register'),
     #path('api/auth/login/', LoginView.as_view(), name='login'),
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),

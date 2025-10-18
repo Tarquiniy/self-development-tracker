@@ -7,7 +7,7 @@ from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
 from django.urls import reverse, path
 from django.shortcuts import render, redirect
-from django.http import JsonResponse, Http404
+from django.http import JsonResponse, Http404, HttpResponseNotAllowed
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_GET
 from django.core.files.storage import default_storage
@@ -18,7 +18,7 @@ from django.db.models.functions import TruncDate
 from django.db.models import Count
 from django.db import models
 from django.utils.safestring import mark_safe
-from django.utils.html import escape, format_html
+from django.utils.html import escape
 from django.template.loader import render_to_string
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ class PostAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Add CSS classes for styling; protect if fields absent
+        # Add CSS classes for styling if fields exist
         if 'title' in self.fields:
             self.fields['title'].widget.attrs.update({
                 'class': 'post-title-field',
@@ -77,6 +77,12 @@ class PostAdminForm(forms.ModelForm):
 class BasePostAdmin(VersionAdmin):
     form = PostAdminForm
     change_form_template = 'admin/blog/post/change_form_fixed.html'
+
+    class Media:
+        css = {
+            'all': ('blog/admin-post-form.css',)
+        }
+        js = ('blog/admin-post-form.js',)
 
     # Modern list display
     list_display = ("title", "status_badge", "author", "published_at", "reading_time_display", "actions_column")
@@ -112,6 +118,66 @@ class BasePostAdmin(VersionAdmin):
         }),
     )
 
+    # Additional admin URLs for preview and media list
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('preview-token/', self.admin_site.admin_view(self.preview_token_view), name='blog_preview_token'),
+            path('media-list/', self.admin_site.admin_view(self.media_list_view), name='blog_media_list'),
+        ]
+        return custom_urls + urls
+
+    def preview_token_view(self, request):
+        """
+        POST endpoint expected JSON body {title, content, excerpt}.
+        Returns signed token to be used by frontend preview endpoint.
+        """
+        if request.method != 'POST':
+            return HttpResponseNotAllowed(['POST'])
+        try:
+            payload = json.loads(request.body.decode('utf-8') or '{}')
+        except Exception:
+            return JsonResponse({'error': 'invalid json'}, status=400)
+
+        # Only allow staff users
+        if not request.user.is_active or not request.user.is_staff:
+            return JsonResponse({'error': 'permission denied'}, status=403)
+
+        try:
+            token = signing.dumps(payload, salt=PREVIEW_SALT)
+            return JsonResponse({'token': token})
+        except Exception as e:
+            logger.exception("Error creating preview token: %s", e)
+            return JsonResponse({'error': 'could not create token'}, status=500)
+
+    def media_list_view(self, request):
+        """
+        Returns a JSON list of recent media items for the media modal.
+        """
+        if request.method != 'GET':
+            return HttpResponseNotAllowed(['GET'])
+
+        # Only allow staff users
+        if not request.user.is_active or not request.user.is_staff:
+            return JsonResponse({'error': 'permission denied'}, status=403)
+
+        results = []
+        try:
+            if MediaLibrary is None:
+                return JsonResponse({'results': []})
+            qs = MediaLibrary.objects.all().order_by('-uploaded_at')[:200]
+            for i in qs:
+                url = ''
+                try:
+                    url = getattr(i.file, 'url', '') or ''
+                except Exception:
+                    url = ''
+                results.append({'id': i.pk, 'url': url, 'title': getattr(i, 'title', '')})
+            return JsonResponse({'results': results})
+        except Exception as e:
+            logger.exception("Error fetching media list: %s", e)
+            return JsonResponse({'results': [], 'error': 'internal error'}, status=500)
+
     def status_badge(self, obj):
         if not obj:
             return ""
@@ -120,71 +186,26 @@ class BasePostAdmin(VersionAdmin):
             'published': 'green',
             'archived': 'orange'
         }
-        color = status_colors.get(getattr(obj, "status", None), 'gray')
-        return format_html('<span class="status-badge status-{}">{}</span>', color, escape(getattr(obj, "get_status_display", lambda: "")()))
+        color = status_colors.get(obj.status, 'gray')
+        return mark_safe(f'<span class="status-badge status-{color}">{obj.get_status_display()}</span>')
     status_badge.short_description = "Статус"
     status_badge.admin_order_field = 'status'
 
     def reading_time_display(self, obj):
         if not obj:
             return "0 мин"
-        return f"{getattr(obj, 'reading_time', 0)} мин"
+        return f"{obj.reading_time} мин"
     reading_time_display.short_description = "Время чтения"
 
     def actions_column(self, obj):
-        """
-        Безопасная колонка действий:
-         - Показываем кнопку "Редактировать" (admin change) если можем получить URL
-         - Показываем кнопку "Просмотреть" только если у объекта есть валидный публичный URL
-        Всю работу с URL оборачиваем в try/except, чтобы исключения не ломали страницу.
-        """
         if not obj:
             return ""
-        try:
-            # Получаем public URL через get_absolute_url, только если slug присутствует
-            view_url = None
-            try:
-                slug = getattr(obj, "slug", None)
-                if slug:
-                    if hasattr(obj, "get_absolute_url") and callable(getattr(obj, "get_absolute_url")):
-                        try:
-                            u = obj.get_absolute_url()
-                            if u:
-                                view_url = u
-                        except Exception:
-                            view_url = None
-            except Exception:
-                view_url = None
-
-            # Получаем admin change URL
-            edit_url = None
-            try:
-                edit_url = reverse("admin:blog_post_change", args=[getattr(obj, "pk", None)])
-            except Exception:
-                edit_url = None
-
-            # Формируем кнопки
-            if view_url:
-                view_btn = format_html(
-                    '<a href="{}" target="_blank" class="button view-btn" title="Открыть на сайте">👁️</a>',
-                    view_url
-                )
-            else:
-                view_btn = format_html('<span class="button view-btn disabled" title="Нет публичного URL">👁️</span>')
-
-            if edit_url:
-                edit_btn = format_html(
-                    '<a href="{}" class="button edit-btn" title="Редактировать">✏️</a>',
-                    edit_url
-                )
-            else:
-                edit_btn = format_html('<span class="button edit-btn disabled" title="Недоступно">✏️</span>')
-
-            return format_html('<div class="action-buttons">{}&nbsp;{}</div>', view_btn, edit_btn)
-        except Exception:
-            # На случай неожиданных ошибок — не ломать listing
-            return ""
-
+        return mark_safe(f'''
+            <div class="action-buttons">
+                <a href="{reverse('admin:blog_post_change', args=[obj.id])}" class="button edit-btn">✏️</a>
+                <a href="{obj.get_absolute_url() if hasattr(obj, 'get_absolute_url') else '#'}" target="_blank" class="button view-btn">👁️</a>
+            </div>
+        ''')
     actions_column.short_description = "Действия"
 
     def make_published(self, request, queryset):
@@ -199,10 +220,10 @@ class BasePostAdmin(VersionAdmin):
 
     def duplicate_post(self, request, queryset):
         created = 0
-        for p in queryset:
+        for p in list(queryset):
             old_slug = getattr(p, "slug", "") or ""
             p.pk = None
-            p.slug = f"{old_slug}-copy" if old_slug else ""
+            p.slug = f"{old_slug}-copy"
             p.title = f"{getattr(p, 'title', '')} (копия)"
             p.status = "draft"
             try:
@@ -216,8 +237,8 @@ class BasePostAdmin(VersionAdmin):
     def update_seo_meta(self, request, queryset):
         updated = 0
         for post in queryset:
-            if not getattr(post, "meta_title", None):
-                post.meta_title = getattr(post, "title", "")
+            if not getattr(post, 'meta_title', None):
+                post.meta_title = getattr(post, 'title', '') or ''
                 try:
                     post.save()
                     updated += 1
@@ -236,7 +257,7 @@ class CategoryAdmin(admin.ModelAdmin):
         if not obj:
             return 0
         count = obj.posts.count() if hasattr(obj, 'posts') else 0
-        return format_html('<span class="badge">{}</span>', count)
+        return mark_safe(f'<span class="badge">{count}</span>')
     post_count.short_description = "Постов"
 
 
@@ -249,7 +270,7 @@ class TagAdmin(admin.ModelAdmin):
         if not obj:
             return 0
         count = obj.posts.count() if hasattr(obj, 'posts') else 0
-        return format_html('<span class="badge">{}</span>', count)
+        return mark_safe(f'<span class="badge">{count}</span>')
     post_count.short_description = "Постов"
 
 
@@ -262,21 +283,15 @@ class CommentAdmin(admin.ModelAdmin):
     def author_name(self, obj):
         if not obj:
             return "-"
-        # защитимся от отсутствия user атрибута
-        try:
-            if getattr(obj, "user", None):
-                return getattr(obj, "user").get_full_name() if getattr(obj.user, "get_full_name", None) else getattr(obj.user, "username", f"User #{getattr(obj, 'user_id', '')}")
-            return getattr(obj, "name", "") or "Anonymous"
-        except Exception:
-            return getattr(obj, "name", "") or "Anonymous"
+        return obj.name or (f"User #{obj.user_id}" if getattr(obj, 'user', None) else "Anonymous")
     author_name.short_description = "Автор"
 
     def post_link(self, obj):
         try:
-            if not obj or not getattr(obj, "post", None):
+            if not obj or not getattr(obj, 'post', None):
                 return "-"
             url = reverse('admin:blog_post_change', args=[obj.post.id])
-            return format_html('<a href="{}">{}</a>', url, escape(getattr(obj.post, "title", "—")))
+            return mark_safe(f'<a href="{url}">{escape(obj.post.title)}</a>')
         except Exception:
             return "-"
     post_link.short_description = "Пост"
@@ -284,29 +299,28 @@ class CommentAdmin(admin.ModelAdmin):
     def short_content(self, obj):
         if not obj:
             return ""
-        content = getattr(obj, "content", "") or ""
-        short = content[:100]
-        if len(content) > 100:
-            short += "..."
-        return short
+        content = (obj.content or "")[:100]
+        if getattr(obj, 'content', None) and len(obj.content) > 100:
+            content += "..."
+        return content
     short_content.short_description = "Комментарий"
 
     def status_badges(self, obj):
         if not obj:
             return ""
         badges = []
-        if getattr(obj, "is_public", False):
+        if getattr(obj, 'is_public', False):
             badges.append('<span class="badge badge-green">Public</span>')
         else:
             badges.append('<span class="badge badge-gray">Hidden</span>')
-        if getattr(obj, "is_moderated", False):
+        if getattr(obj, 'is_moderated', False):
             badges.append('<span class="badge badge-blue">Moderated</span>')
-        return format_html(" ".join(badges))
+        return mark_safe(" ".join(badges))
     status_badges.short_description = "Статус"
 
     def approve_comments(self, request, queryset):
         updated = queryset.update(is_public=True, is_moderated=True)
-        self.message_user(request, f"{updated} комментариев одобрено")
+        self.message_user(request, f"{updated} комментариев одобрено.")
     approve_comments.short_description = "✅ Одобрить выбранные"
 
     def reject_comments(self, request, queryset):
@@ -325,21 +339,22 @@ class MediaLibraryAdmin(admin.ModelAdmin):
     readonly_fields = ("file_size", "file_type", "uploaded_at_display")  # Убрали uploaded_at, добавили свойство
 
     def thumbnail(self, obj):
-        if not obj or not getattr(obj, "file", None):
+        if not obj or not getattr(obj, 'file', None):
             return "📄"
-        try:
-            if obj.file.name.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
+        name = getattr(obj.file, 'name', '') or ''
+        if name.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
+            try:
                 url = obj.file.url
-                return format_html('<img src="{}" style="width: 50px; height: 50px; object-fit: cover;" />', url)
-        except Exception:
-            return "🖼️"
+                return mark_safe(f'<img src="{url}" style="width: 50px; height: 50px; object-fit: cover;" />')
+            except Exception:
+                return "🖼️"
         return "📄"
     thumbnail.short_description = ""
 
     def file_type(self, obj):
-        if not obj or not getattr(obj, "file", None):
+        if not obj or not getattr(obj, 'file', None):
             return "📄"
-        ext = os.path.splitext(obj.file.name)[1].lower()
+        ext = os.path.splitext(getattr(obj.file, 'name', '') or '')[1].lower()
         type_icons = {
             '.jpg': '🖼️', '.jpeg': '🖼️', '.png': '🖼️', '.gif': '🖼️', '.webp': '🖼️',
             '.pdf': '📕', '.doc': '📘', '.docx': '📘',
@@ -350,7 +365,7 @@ class MediaLibraryAdmin(admin.ModelAdmin):
 
     def file_size(self, obj):
         try:
-            if not obj or not getattr(obj, "file", None):
+            if not obj or not getattr(obj, 'file', None):
                 return "N/A"
             size = obj.file.size
             for unit in ['B', 'KB', 'MB', 'GB']:
@@ -366,17 +381,17 @@ class MediaLibraryAdmin(admin.ModelAdmin):
         """Отображение uploaded_at для readonly_fields"""
         if not obj:
             return ""
-        return getattr(obj, "uploaded_at", "")
+        return getattr(obj, 'uploaded_at', '')
     uploaded_at_display.short_description = "Дата загрузки"
 
     def post_link(self, obj):
-        if obj and getattr(obj, "post", None):
+        if obj and getattr(obj, 'post', None):
             try:
                 url = reverse('admin:blog_post_change', args=[obj.post.id])
-                return format_html('<a href="{}">{}</a>', url, escape(getattr(obj.post, "title", "—")))
+                return mark_safe(f'<a href="{url}">{escape(obj.post.title)}</a>')
             except Exception:
-                return format_html('<span class="text-muted">Ошибка ссылки</span>')
-        return format_html('<span class="text-muted">Не прикреплен</span>')
+                return mark_safe('<span class="text-muted">Ошибка ссылки</span>')
+        return mark_safe('<span class="text-muted">Не прикреплен</span>')
     post_link.short_description = "Пост"
 
 
@@ -416,12 +431,9 @@ def register_admin_models(site_obj):
         if PostRevision is not None:
             site_obj.register(PostRevision, PostRevisionAdmin)
 
-        if PostAttachment is not None:
-            # Если PostAttachment представляет файлы — регистрируем MediaLibrary
-            try:
-                site_obj.register(MediaLibrary, MediaLibraryAdmin)
-            except AlreadyRegistered:
-                pass
+        # register MediaLibrary only if model exists
+        if MediaLibrary is not None:
+            site_obj.register(MediaLibrary, MediaLibraryAdmin)
 
     except Exception as e:
         logger.exception("Admin registration failed: %s", e)
