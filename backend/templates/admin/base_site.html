@@ -1,6 +1,7 @@
-{% load static i18n %}
 {% extends "admin/base.html" %}
+{% load static i18n %}
 
+{# base_site.html — кастомизация верхнего бара и подключение кастомного CSS #}
 {% block title %}Positive Theta — Панель управления{% endblock %}
 
 {% block extrastyle %}
@@ -24,9 +25,19 @@
     </div>
 
     <div class="pt-actions">
-      <a href="{% url 'admin:blog_post_add' %}" class="pt-btn primary">Создать пост</a>
-      <a href="{% url 'admin:auth_user_changelist' %}" class="pt-btn">Пользователи</a>
-      <a href="{% url 'admin:logout' %}" class="pt-btn outline">Выйти</a>
+      {# защищённый вызов admin:add — проверим, что имена существуют при рендере #}
+      {% if perms.blog.add_post %}
+        <a href="{% url 'admin:blog_post_add' %}" class="pt-btn primary">{% trans "Создать пост" %}</a>
+      {% else %}
+        <a class="pt-btn primary disabled" aria-disabled="true">{% trans "Создать пост" %}</a>
+      {% endif %}
+      {# Пользователи — только если есть доступ к auth.user change #}
+      {% if perms.auth.view_user %}
+        <a href="{% url 'admin:auth_user_changelist' %}" class="pt-btn">{% trans "Пользователи" %}</a>
+      {% else %}
+        <a class="pt-btn disabled" aria-disabled="true">{% trans "Пользователи" %}</a>
+      {% endif %}
+      <a href="{% url 'admin:logout' %}" class="pt-btn outline">{% trans "Выйти" %}</a>
     </div>
   </div>
 {% endblock %}
