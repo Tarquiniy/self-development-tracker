@@ -6,6 +6,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.http import HttpResponseNotFound
 from django.urls import path as _path
+from backend.core.views import search_view
 
 def _alias_to_admin(namespaced_name, fallback_to_index=True):
     def view(request, *args, **kwargs):
@@ -38,7 +39,6 @@ from .admin import custom_admin_site
 from blog import views as blog_views
 from django.views.generic import TemplateView
 from django.views.generic import RedirectView
-from backend.core.views import search_view
 
 # Попытка импортировать админ-views из blog.admin (dashboard, stats, post update, media library)
 admin_dashboard_view = None
