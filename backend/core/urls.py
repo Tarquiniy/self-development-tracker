@@ -6,8 +6,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.http import HttpResponseNotFound
 from django.urls import path as _path
-from django.views.generic import RedirectView
-from django.views.generic import TemplateView
+from django.views.generic import RedirectView, TemplateView
 # ---- end quick admin alias helpers ----
 
 def _alias_to_admin(namespaced_name, fallback_to_index=True):
@@ -24,23 +23,20 @@ def _alias_to_admin(namespaced_name, fallback_to_index=True):
             return HttpResponseNotFound("Not found")
     return view
 
-
-# Алиасы, которые гарантируют наличие знакомых имён URL (auth / group и т.д.)
+# Aliases (гарантируют наличие некоторых имён URL)
 _alias_urlpatterns = [
     _path('auth_user_changelist/', _alias_to_admin('admin:auth_user_changelist'), name='auth_user_changelist'),
     _path('auth_user_change/', _alias_to_admin('admin:auth_user_change'), name='auth_user_change'),
     _path('auth_group_changelist/', _alias_to_admin('admin:auth_group_changelist'), name='auth_group_changelist'),
 ]
 
-# Попытка безопасно импортировать реальный search_view (если он у вас реализован).
-# Если импорт не сработает, мы позже добавим fallback-путь, который перенаправляет на admin:index.
+# Попытка импортировать project-local search_view (если реализован)
 try:
-    from backend.core.views import search_view  # проектный search view
+    from backend.core.views import search_view  # ожидается: def search_view(request) в backend/core/views.py
     _HAS_SEARCH_VIEW = True
 except Exception:
     search_view = None
     _HAS_SEARCH_VIEW = False
-
 
 from django.contrib import admin
 from django.urls import path, include
@@ -83,6 +79,39 @@ if admin_media_library_view is None:
         admin_media_library_view = None
 
 
+# --- Добавляем 'search' внутри namespace 'admin' (patch к admin.site.get_urls)
+# Это важно, потому что шаблоны админа ищут сначала 'admin:search'.
+def _ensure_admin_search_on_adminsite(admin_site_obj, use_view):
+    """
+    Prepend a URL named 'search' into the provided AdminSite's URL list.
+    - admin_site_obj: admin.site or custom_admin_site
+    - use_view: callable view to use for search (if None, use RedirectView to admin:index)
+    """
+    try:
+        orig_get_urls = admin_site_obj.get_urls
+    except Exception:
+        return
+
+    def get_urls_wrapped():
+        # our search view or fallback
+        if use_view:
+            search_pattern = path("search/", use_view, name="search")
+        else:
+            search_pattern = path("search/", RedirectView.as_view(pattern_name="admin:index", permanent=False), name="search")
+        # Prepend to ensure admin:search exists before other admin URLs
+        return [search_pattern] + orig_get_urls()
+    admin_site_obj.get_urls = get_urls_wrapped
+
+
+# Apply the patch to the standard admin.site and to your custom_admin_site
+if _HAS_SEARCH_VIEW:
+    _ensure_admin_search_on_adminsite(admin.site, search_view)
+    _ensure_admin_search_on_adminsite(custom_admin_site, search_view)
+else:
+    _ensure_admin_search_on_adminsite(admin.site, None)
+    _ensure_admin_search_on_adminsite(custom_admin_site, None)
+
+
 # Основные urlpatterns — сначала алиасы, затем реальные пути
 urlpatterns = _alias_urlpatterns + [
     path('grappelli/', include('grappelli.urls')),
@@ -105,13 +134,11 @@ urlpatterns = _alias_urlpatterns + [
     path('', RedirectView.as_view(url='/admin/')),
 ]
 
-# Гарантируем наличие маршрута 'search' (name='search'):
+# Гарантируем наличие глобального маршрута 'search' (если нужен)
 if _HAS_SEARCH_VIEW:
     urlpatterns += [ path('search/', search_view, name='search') ]
 else:
-    # fallback: перенаправляет на admin:index — убирает NoReverseMatch при вызовах {% url 'search' %}
     urlpatterns += [ path('search/', RedirectView.as_view(pattern_name='admin:index', permanent=False), name='search') ]
-
 
 # Добавляем CKEditor 5 URLs (опционально)
 try:
