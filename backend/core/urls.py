@@ -6,7 +6,9 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.http import HttpResponseNotFound
 from django.urls import path as _path
-from backend.core.views import search_view
+from django.views.generic import RedirectView
+from django.views.generic import TemplateView
+# ---- end quick admin alias helpers ----
 
 def _alias_to_admin(namespaced_name, fallback_to_index=True):
     def view(request, *args, **kwargs):
@@ -22,13 +24,22 @@ def _alias_to_admin(namespaced_name, fallback_to_index=True):
             return HttpResponseNotFound("Not found")
     return view
 
+
+# Алиасы, которые гарантируют наличие знакомых имён URL (auth / group и т.д.)
 _alias_urlpatterns = [
     _path('auth_user_changelist/', _alias_to_admin('admin:auth_user_changelist'), name='auth_user_changelist'),
     _path('auth_user_change/', _alias_to_admin('admin:auth_user_change'), name='auth_user_change'),
     _path('auth_group_changelist/', _alias_to_admin('admin:auth_group_changelist'), name='auth_group_changelist'),
-    _path('search/', _alias_to_admin('admin:index'), name='search'),
 ]
-# ---- end quick alias ----
+
+# Попытка безопасно импортировать реальный search_view (если он у вас реализован).
+# Если импорт не сработает, мы позже добавим fallback-путь, который перенаправляет на admin:index.
+try:
+    from backend.core.views import search_view  # проектный search view
+    _HAS_SEARCH_VIEW = True
+except Exception:
+    search_view = None
+    _HAS_SEARCH_VIEW = False
 
 
 from django.contrib import admin
@@ -37,8 +48,6 @@ from django.urls import path, include
 from django.conf.urls.static import static
 from .admin import custom_admin_site
 from blog import views as blog_views
-from django.views.generic import TemplateView
-from django.views.generic import RedirectView
 
 # Попытка импортировать админ-views из blog.admin (dashboard, stats, post update, media library)
 admin_dashboard_view = None
@@ -73,10 +82,14 @@ if admin_media_library_view is None:
     except Exception:
         admin_media_library_view = None
 
+
+# Основные urlpatterns — сначала алиасы, затем реальные пути
 urlpatterns = _alias_urlpatterns + [
     path('grappelli/', include('grappelli.urls')),
+
     # Подключаем стандартную админку (чтобы namespace 'admin' и пути вроде admin:auth_user_changelist были доступны)
     path("admin/", admin.site.urls),
+
     # Также оставляем кастомную админку отдельно, если нужна (доступна по /custom-admin/)
     path("custom-admin/", custom_admin_site.urls),
 
@@ -87,11 +100,20 @@ urlpatterns = _alias_urlpatterns + [
     path('summernote/', include('django_summernote.urls')),
     #path('api/auth/profile/', ProfileView.as_view(), name='profile'),
     path('preview/<str:token>/', blog_views.preview_by_token, name='post-preview'),
+
+    # корневой редирект на админку
     path('', RedirectView.as_view(url='/admin/')),
-    path('search/', search_view, name='search'),
 ]
 
-# Добавляем CKEditor 5 URLs
+# Гарантируем наличие маршрута 'search' (name='search'):
+if _HAS_SEARCH_VIEW:
+    urlpatterns += [ path('search/', search_view, name='search') ]
+else:
+    # fallback: перенаправляет на admin:index — убирает NoReverseMatch при вызовах {% url 'search' %}
+    urlpatterns += [ path('search/', RedirectView.as_view(pattern_name='admin:index', permanent=False), name='search') ]
+
+
+# Добавляем CKEditor 5 URLs (опционально)
 try:
     urlpatterns += [
         path('ckeditor5/', include('django_ckeditor_5.urls')),
