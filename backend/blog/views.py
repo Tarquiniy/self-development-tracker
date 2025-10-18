@@ -1,4 +1,3 @@
-backend/blog/views.py
 import os
 import json
 import logging
