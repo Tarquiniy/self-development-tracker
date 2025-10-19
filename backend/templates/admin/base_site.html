@@ -1,43 +1,53 @@
 {% extends "admin/base.html" %}
 {% load static i18n %}
 
-{# base_site.html — кастомизация верхнего бара и подключение кастомного CSS #}
-{% block title %}Positive Theta — Панель управления{% endblock %}
+{# IMPORTANT: {% extends ... %} MUST be the very first tag in the file #}
 
-{% block extrastyle %}
+{% block title %}{{ site_title|default:_("Positive Theta Admin") }}{% endblock %}
+
+{% block extrahead %}
   {{ block.super }}
+  <!-- Tailwind CDN (rapid styling) + optional fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.0/dist/tailwind.min.css" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'admin/css/custom_admin.css' %}">
+  <script defer src="{% static 'admin/js/custom_admin.js' %}"></script>
 {% endblock %}
 
 {% block branding %}
-  <a class="pt-logo" href="{% url 'admin:index' %}">
-    <span class="pt-logo-mark">Θ</span>
-    <span class="pt-logo-text">Positive Theta</span>
+  <a href="{% url 'admin:index' %}" class="admin-brand flex items-center gap-3">
+    <img src="{% static 'admin/img/logo.svg' %}" alt="Positive Theta" class="logo" />
+    <div>
+      <div class="brand-title">Positive Theta</div>
+      <div class="brand-sub">Content & Growth Studio</div>
+    </div>
   </a>
 {% endblock %}
 
-{% block nav-global %}
-  <div class="pt-topbar">
-    <div class="pt-search">
-      <form action="{% url 'admin:search' %}" method="get">
-        <input name="q" placeholder="{% trans 'Поиск по админке…' %}" aria-label="search admin">
-      </form>
-    </div>
+{% block userlinks %}
+  {{ block.super }}
+  <div class="hidden sm:flex items-center gap-2 ml-3">
+    <a href="{% url 'admin:password_change' %}" class="btn-ghost">Пароль</a>
+    <a href="{% url 'admin:logout' %}" class="btn-ghost">Выйти</a>
+  </div>
+{% endblock %}
 
-    <div class="pt-actions">
-      {# защищённый вызов admin:add — проверим, что имена существуют при рендере #}
-      {% if perms.blog.add_post %}
-        <a href="{% url 'admin:blog_post_add' %}" class="pt-btn primary">{% trans "Создать пост" %}</a>
-      {% else %}
-        <a class="pt-btn primary disabled" aria-disabled="true">{% trans "Создать пост" %}</a>
-      {% endif %}
-      {# Пользователи — только если есть доступ к auth.user change #}
-      {% if perms.auth.view_user %}
-        <a href="{% url 'admin:auth_user_changelist' %}" class="pt-btn">{% trans "Пользователи" %}</a>
-      {% else %}
-        <a class="pt-btn disabled" aria-disabled="true">{% trans "Пользователи" %}</a>
-      {% endif %}
-      <a href="{% url 'admin:logout' %}" class="pt-btn outline">{% trans "Выйти" %}</a>
+{# Add a small topbar area for quick actions #}
+{% block nav-global %}
+  {{ block.super }}
+  <div id="pt-topbar" class="pt-topbar">
+    <div class="container flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <button id="pt-toggle-sidebar" class="pt-icon-btn" title="Toggle navigation">☰</button>
+        <form action="{% url 'search' %}" method="get" class="pt-search-form hidden md:flex">
+          <input name="q" placeholder="Поиск по заголовкам..." value="{{ request.GET.q|default_if_none:'' }}" />
+        </form>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <a href="{% url 'admin:index' %}" class="pt-btn">Dashboard</a>
+        <button id="pt-quick-create" class="pt-btn-primary">Quick create</button>
+      </div>
     </div>
   </div>
 {% endblock %}

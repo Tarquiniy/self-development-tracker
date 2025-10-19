@@ -1,96 +1,46 @@
-{% extends "admin/base_site.html" %}
+{% extends "admin/index.html" %}
 {% load i18n static %}
-
 {% block content %}
-  <div class="pt-dashboard">
-    <div class="pt-cards">
-      <div class="pt-card">
-        <div class="pt-card-title">Посты</div>
-        <div class="pt-card-value">{{ app_list|length }}</div>
-        <div class="pt-card-sub">Блог / Категории / Теги</div>
+  <div class="pt-dashboard container">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div class="card">
+        <div class="card-title">Посты</div>
+        <div class="card-value">{{ app_list|default_if_none:[]|length }}</div>
+        <div class="card-meta">Общее количество сущностей в приложении blog</div>
       </div>
 
-      <div class="pt-card">
-        <div class="pt-card-title">Последние изменения</div>
-        <div class="pt-card-value">
-          {% if recent_actions %}
-            {{ recent_actions|length }}
-          {% else %}
-            0
-          {% endif %}
-        </div>
-        <div class="pt-card-sub">Действия редакторов</div>
+      <div class="card">
+        <div class="card-title">Недавние просмотры</div>
+        <div class="card-value">—</div>
+        <div class="card-meta">Интеграция аналитики (placeholder)</div>
       </div>
 
-      <div class="pt-card">
-        <div class="pt-card-title">Черновики</div>
-        <div class="pt-card-value">
-          {% with drafts=app_list|default_if_none:None %}
-            {% comment %} Это декоративно: оставляем подсказку {% endcomment %}
-            —
-          {% endwith %}
+      <div class="card">
+        <div class="card-title">Быстрые действия</div>
+        <div class="card-actions">
+          <a class="pt-action" href="{% url 'admin:blog_post_add' %}">Новый пост</a>
+          <a class="pt-action" href="{% url 'admin:blog_category_add' %}">Новая категория</a>
         </div>
-        <div class="pt-card-sub">Проверить и опубликовать</div>
       </div>
     </div>
 
-    <div class="pt-main">
-      <section class="pt-section">
-        <h2>Быстрые действия</h2>
-        <div class="pt-quick-actions">
-          <a href="{% url 'admin:blog_post_add' %}" class="pt-action">
-            <div class="pt-action-icon">✏️</div>
-            <div class="pt-action-text">Новый пост</div>
-          </a>
-          <a href="{% url 'admin:blog_post_changelist' %}" class="pt-action">
-            <div class="pt-action-icon">📋</div>
-            <div class="pt-action-text">Управлять постами</div>
-          </a>
-          <a href="{% url 'admin:blog_category_changelist' %}" class="pt-action">
-            <div class="pt-action-icon">🏷️</div>
-            <div class="pt-action-text">Категории</div>
-          </a>
-          <a href="{% url 'admin:auth_user_changelist' %}" class="pt-action">
-            <div class="pt-action-icon">👥</div>
-            <div class="pt-action-text">Пользователи</div>
-          </a>
-        </div>
-      </section>
-
-      <section class="pt-section">
-        <h2>Последние записи</h2>
-        <div class="pt-table-wrap">
-          <table class="pt-table">
-            <thead>
-              <tr>
-                <th>Заголовок</th>
-                <th>Автор</th>
-                <th>Статус</th>
-                <th>Дата</th>
-                <th>Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for post in recent_posts %}
-                <tr>
-                  <td class="title-col">{{ post.title|default:"(без названия)" }}</td>
-                  <td>{{ post.author }}</td>
-                  <td><span class="badge badge-{{ post.status }}">{{ post.get_status_display }}</span></td>
-                  <td>{{ post.published_at|date:"Y-m-d H:i" }}</td>
-                  <td>
-                    <a class="link" href="{% url 'admin:blog_post_change' post.pk %}">Ред.</a>
-                    {% if post.get_absolute_url %}
-                      <a target="_blank" class="link" href="{{ post.get_absolute_url }}">Просмотр</a>
-                    {% endif %}
-                  </td>
-                </tr>
-              {% empty %}
-                <tr><td colspan="5" class="muted">Записей пока нет</td></tr>
+    <div class="panel">
+      <h3>Приложения</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        {% for app in app_list %}
+          <div class="app-card">
+            <div class="app-card-header">
+              <strong>{{ app.name }}</strong>
+              <span class="count">{{ app.models|length }}</span>
+            </div>
+            <ul class="app-models">
+              {% for model in app.models %}
+                <li><a href="{{ model.admin_url }}">{{ model.name }}</a></li>
               {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
+            </ul>
+          </div>
+        {% endfor %}
+      </div>
     </div>
   </div>
 {% endblock %}
