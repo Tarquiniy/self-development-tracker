@@ -290,12 +290,12 @@
   .edit-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .edit-header {
     flex-direction: column;
     gap: 16px;
   }
-  
+
   .header-actions {
     width: 100%;
     justify-content: flex-start;
@@ -306,11 +306,11 @@
   .post-edit-container {
     padding: 10px;
   }
-  
+
   .card-body {
     padding: 16px;
   }
-  
+
   .post-info {
     flex-direction: column;
     gap: 8px;

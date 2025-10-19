@@ -1,35 +1,42 @@
 {% extends "admin/base.html" %}
 {% load static i18n %}
 
+{# Подключаем наш CSS/JS и немного мета для мобильных #}
 {% block extrahead %}
   {{ block.super }}
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
   <script defer src="{% static 'admin/js/custom_admin.js' %}"></script>
 {% endblock %}
 
+{% block title %}{{ site_title|default:_("Positive Theta Admin") }}{% endblock %}
+
 {% block branding %}
-  <a href="{% url 'admin:index' %}" class="flex items-center gap-3">
-    <img src="{% static 'admin/img/logo.svg' %}" alt="PT" class="logo" />
-    <div>
-      <div class="text-lg font-semibold text-gray-900">Positive Theta</div>
-      <div class="text-sm text-gray-500">Content & Growth Studio</div>
+  <a href="{% url 'admin:index' %}" class="pt-brand">
+    <img src="{% static 'admin/img/logo.svg' %}" alt="PT" class="pt-brand__logo" />
+    <div class="pt-brand__text">
+      <div class="pt-brand__title">Positive Theta</div>
+      <div class="pt-brand__subtitle">Content & Growth Studio</div>
     </div>
   </a>
 {% endblock %}
 
+{# Топбар — поиск, быстрые кнопки #}
 {% block nav-global %}
   {{ block.super }}
-  <div class="pt-topbar">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14">
-      <div class="flex items-center gap-3">
-        <button id="pt-toggle-sidebar" class="p-2 rounded-md hover:bg-gray-100 md:hidden">☰</button>
-        <form action="{% url 'search' %}" method="get" class="hidden md:flex">
-          <input name="q" class="border rounded-md px-3 py-1 text-sm" placeholder="Поиск..." />
+  <div class="pt-topbar" aria-hidden="false">
+    <div class="pt-container">
+      <div class="pt-topbar__left">
+        <button id="pt-toggle-sidebar" class="pt-btn pt-btn--ghost" aria-label="Показать меню">☰</button>
+        <form action="{% url 'search' %}" method="get" class="pt-search" role="search">
+          <label for="pt-search-input" class="visually-hidden">Поиск</label>
+          <input id="pt-search-input" name="q" class="pt-search__input" placeholder="Поиск по админке..." />
+          <button type="submit" class="pt-btn pt-btn--icon" aria-label="Искать">🔎</button>
         </form>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="pt-topbar__right">
         <a href="{% url 'admin:index' %}" class="pt-btn">Dashboard</a>
-        <button id="pt-quick-create" class="pt-btn-primary">Quick create</button>
+        <a href="{% url 'admin:blog_post_add' %}" class="pt-btn pt-btn--primary">Новый пост</a>
       </div>
     </div>
   </div>
