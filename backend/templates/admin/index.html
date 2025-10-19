@@ -1,186 +1,106 @@
-{% extends "admin/base_site.html" %}
-{% load static %}
-
-{% block content %}
-<div class="dashboard">
-    <!-- Header -->
-    <div class="dashboard-header">
-        <h1>{% trans 'Dashboard' %}</h1>
-        <p class="dashboard-subtitle">{% trans 'Welcome to your admin dashboard. Here is an overview of your content.' %}</p>
+{# templates/admin/index.html #}
+{% load static i18n %}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>{{ site_title|default:"Admin" }}</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="{% static 'admin/css/custom_admin_dashboard.css' %}">
+  {# подключаем стандартные админ-стили, чтобы не ломать внешний вид #}
+  <link rel="stylesheet" href="{% static 'admin/css/admin.css' %}">
+</head>
+<body class="dashboard-body">
+  <header class="dashboard-header">
+    <div class="container">
+      <div class="left">
+        <h1 class="site-title">{{ site_header|default:site_title }}</h1>
+        <p class="site-sub">Управление сайтом — быстрый доступ к блогу и медиатеке</p>
+      </div>
+      <div class="right">
+        <div class="user-block">Добро пожаловать, {{ user.get_full_name|default:user.username }}</div>
+      </div>
     </div>
+  </header>
 
-    <!-- Stats Grid -->
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                        <path d="M9 12H15M9 16H15M9 8H15M5 21H19C20.1046 21 21 20.1046 21 19V5C21 3.89543 20.1046 3 19 3H5C3.89543 3 3 3.89543 3 5V19C3 20.1046 3.89543 21 5 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                </div>
-            </div>
-            <h3 class="stat-title">{% trans 'Total Posts' %}</h3>
-            <div class="stat-value">{{ posts_count|default:"0" }}</div>
-            <div class="stat-change positive">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 4L12 8M8 4L4 8M8 4V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                +12% from last month
-            </div>
-        </div>
+  <main class="dashboard-main container">
+    <section class="quick-actions">
+      <a href="{% url 'admin:blog_post_add' %}" class="btn btn-primary">Создать пост</a>
+      <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-outline">Все посты</a>
+      <a href="/admin/media-library/" class="btn btn-outline">Медиатека</a>
+      <a href="{% url 'admin:blog_comment_changelist' %}" class="btn btn-outline">Комментарии</a>
+      <a href="{% url 'admin:auth_user_changelist' %}" class="btn btn-outline">Пользователи</a>
+    </section>
 
-        <div class="stat-card success">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                        <path d="M9 12L11 14L15 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                </div>
-            </div>
-            <h3 class="stat-title">{% trans 'Published' %}</h3>
-            <div class="stat-value">{{ published_posts|default:"0" }}</div>
-            <div class="stat-change positive">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 4L12 8M8 4L4 8M8 4V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                +8% from last month
-            </div>
-        </div>
+    <section class="stats-grid" id="dashboard-stats">
+      <!-- карточки статистики будут заполнены JS -->
+      <div class="stat-card">
+        <div class="stat-title">Загрузка…</div>
+        <div class="stat-value">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">Загрузка…</div>
+        <div class="stat-value">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">Загрузка…</div>
+        <div class="stat-value">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">Загрузка…</div>
+        <div class="stat-value">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">Загрузка…</div>
+        <div class="stat-value">—</div>
+      </div>
+    </section>
 
-        <div class="stat-card warning">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                        <path d="M12 9V12M12 15H12.01M5 21H19C20.1046 21 21 20.1046 21 19V5C21 3.89543 20.1046 3 19 3H5C3.89543 3 3 3.89543 3 5V19C3 20.1046 3.89543 21 5 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                </div>
+    <section class="apps-and-recent">
+      <div class="apps">
+        <h3>Приложения</h3>
+        <div class="apps-grid">
+          {% for app in app_list %}
+            <div class="app">
+              <div class="app-title">{{ app.name }}</div>
+              <ul class="models">
+                {% for model in app.models %}
+                  <li><a href="{{ model.admin_url }}">{{ model.name }}</a></li>
+                {% endfor %}
+              </ul>
             </div>
-            <h3 class="stat-title">{% trans 'Drafts' %}</h3>
-            <div class="stat-value">{{ draft_posts|default:"0" }}</div>
-            <div class="stat-change negative">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 12L4 8M8 12L12 8M8 12V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                -3% from last month
-            </div>
+          {% endfor %}
         </div>
+      </div>
 
-        <div class="stat-card">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                        <path d="M17 8C17 5.23858 14.7614 3 12 3C9.23858 3 7 5.23858 7 8C7 10.7614 9.23858 13 12 13C14.7614 13 17 10.7614 17 8Z" stroke="currentColor" stroke-width="2"/>
-                        <path d="M3 21C3 16.0294 7.02944 12 12 12C16.9706 12 21 16.0294 21 21C21 21.5523 20.5523 22 20 22H4C3.44772 22 3 21.5523 3 21Z" stroke="currentColor" stroke-width="2"/>
-                    </svg>
-                </div>
-            </div>
-            <h3 class="stat-title">{% trans 'Comments' %}</h3>
-            <div class="stat-value">{{ comments_count|default:"0" }}</div>
-            <div class="stat-change positive">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 4L12 8M8 4L4 8M8 4V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                +24% from last month
-            </div>
+      <div class="recent">
+        <h3>Подсказки</h3>
+        <div class="panel">
+          <p>Быстрые операции:</p>
+          <ul>
+            <li>Нажмите «Создать пост», чтобы открыть форму создания нового поста.</li>
+            <li>Откройте медиатеку, чтобы загрузить изображения и прикрепить к постам.</li>
+            <li>Используйте автосохранение при редактировании поста.</li>
+          </ul>
         </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="dashboard-footer">
+    <div class="container">
+      <span>Positive Theta Admin — удобная панель управления</span>
+      <small>— версия интерфейса: 1</small>
     </div>
+  </footer>
 
-    <!-- Quick Actions -->
-    <div class="quick-actions">
-        <a href="/admin/blog/post/add/" class="action-card">
-            <div class="action-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 4V20M4 12H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-            </div>
-            <h3 class="action-title">{% trans 'Create Post' %}</h3>
-            <p class="action-description">{% trans 'Write and publish a new blog post' %}</p>
-        </a>
-
-        <a href="/admin/blog/medialibrary/add/" class="action-card">
-            <div class="action-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path d="M7 16V12M7 8V4M17 16V8M17 20V4M12 16V12M12 8V4M4 20H20C21.1046 20 22 19.1046 22 18V6C22 4.89543 21.1046 4 20 4H4C2.89543 4 2 4.89543 2 6V18C2 19.1046 2.89543 20 4 20Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-            </div>
-            <h3 class="action-title">{% trans 'Upload Media' %}</h3>
-            <p class="action-description">{% trans 'Add images and files to your library' %}</p>
-        </a>
-
-        <a href="/admin/blog/category/add/" class="action-card">
-            <div class="action-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path d="M19 11H5M19 11C20.1046 11 21 11.8954 21 13V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V13C3 11.8954 3.89543 11 5 11M19 11V9C19 7.89543 18.1046 7 17 7M5 11V9C5 7.89543 5.89543 7 7 7M7 7V5C7 3.89543 7.89543 3 9 3H15C16.1046 3 17 3.89543 17 5V7M7 7H17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-            </div>
-            <h3 class="action-title">{% trans 'Manage Categories' %}</h3>
-            <p class="action-description">{% trans 'Organize your content with categories' %}</p>
-        </a>
-    </div>
-
-    <!-- Analytics & Recent Activity -->
-    <div class="analytics-grid">
-        <!-- Traffic Chart -->
-        <div class="chart-card">
-            <div class="chart-header">
-                <h3>{% trans 'Traffic Overview' %}</h3>
-                <p class="chart-description">{% trans 'Page views and visitor statistics' %}</p>
-            </div>
-            <canvas id="trafficChart" height="300"></canvas>
-        </div>
-
-        <!-- Recent Activity -->
-        <div class="chart-card">
-            <div class="chart-header">
-                <h3>{% trans 'Recent Activity' %}</h3>
-                <p class="chart-description">{% trans 'Latest posts and comments' %}</p>
-            </div>
-            <canvas id="activityChart" height="300"></canvas>
-        </div>
-    </div>
-
-    <!-- Recent Posts -->
-    <div class="recent-activity">
-        <div class="activity-header">
-            <h2>{% trans 'Recent Posts' %}</h2>
-        </div>
-        <div class="activity-list">
-            {% for post in recent_posts|slice:":5" %}
-            <a href="/admin/blog/post/{{ post.id }}/change/" class="activity-item">
-                <div class="activity-avatar">
-                    {{ post.title|first|upper }}
-                </div>
-                <div class="activity-content">
-                    <div class="activity-title">{{ post.title|truncatechars:50 }}</div>
-                    <div class="activity-meta">
-                        <span class="status status-{{ post.status }}">{{ post.get_status_display }}</span>
-                        <span class="activity-time">{{ post.created_at|timesince }} ago</span>
-                    </div>
-                </div>
-            </a>
-            {% empty %}
-            <div class="activity-item">
-                <div class="activity-content">
-                    <div class="activity-title">{% trans 'No recent posts' %}</div>
-                    <div class="activity-meta">
-                        <span class="activity-time">{% trans 'Create your first post to get started' %}</span>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-
-<!-- Include Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<script>
-// Initialize dashboard when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-    if (window.admin) {
-        window.admin.initCharts();
-    }
-});
-</script>
-{% endblock %}
+  <script>
+    // перед подключением внешнего js — подгружаем базовый CSRF token
+    const ADMIN_CSRF = (function(){
+      function getCookie(name){let v=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');return v?v.pop():"";}
+      return { csrfToken: getCookie('csrftoken') };
+    })();
+  </script>
+  <script src="{% static 'admin/js/admin_dashboard.js' %}"></script>
+</body>
+</html>
