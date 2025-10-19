@@ -1,46 +1,59 @@
-{% extends "admin/index.html" %}
-{% load i18n static %}
+{% extends "admin/base_site.html" %}
+{% load static i18n %}
+
 {% block content %}
-  <div class="pt-dashboard container">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-      <div class="card">
-        <div class="card-title">Посты</div>
-        <div class="card-value">{{ app_list|default_if_none:[]|length }}</div>
-        <div class="card-meta">Общее количество сущностей в приложении blog</div>
-      </div>
+<div class="dashboard">
+    <div class="dashboard-header">
+        <h1>{% trans 'Dashboard' %}</h1>
+        <p>{% trans 'Welcome to your admin dashboard.' %}</p>
+    </div>
 
-      <div class="card">
-        <div class="card-title">Недавние просмотры</div>
-        <div class="card-value">—</div>
-        <div class="card-meta">Интеграция аналитики (placeholder)</div>
-      </div>
+    <div class="dashboard-actions">
+        <a href="{% url 'admin:blog_post_add' %}" class="btn btn-primary">{% trans 'Create Post' %}</a>
+        <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-secondary">{% trans 'View Posts' %}</a>
+        <a href="{% url 'admin:blog_medialibrary_changelist' %}" class="btn btn-secondary">{% trans 'Media Library' %}</a>
+    </div>
 
-      <div class="card">
-        <div class="card-title">Быстрые действия</div>
-        <div class="card-actions">
-          <a class="pt-action" href="{% url 'admin:blog_post_add' %}">Новый пост</a>
-          <a class="pt-action" href="{% url 'admin:blog_category_add' %}">Новая категория</a>
+    <div class="dashboard-stats">
+        <div class="stat-card">
+            <div class="stat-value">{{ posts_count|default:0 }}</div>
+            <div class="stat-label">{% trans 'Total Posts' %}</div>
         </div>
-      </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ published_posts|default:0 }}</div>
+            <div class="stat-label">{% trans 'Published Posts' %}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ comments_count|default:0 }}</div>
+            <div class="stat-label">{% trans 'Comments' %}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ users_count|default:0 }}</div>
+            <div class="stat-label">{% trans 'Users' %}</div>
+        </div>
     </div>
 
-    <div class="panel">
-      <h3>Приложения</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-        {% for app in app_list %}
-          <div class="app-card">
-            <div class="app-card-header">
-              <strong>{{ app.name }}</strong>
-              <span class="count">{{ app.models|length }}</span>
+    <div class="dashboard-content">
+        <div class="recent-activity">
+            <h2>{% trans 'Recent Activity' %}</h2>
+            {% if recent_posts %}
+            <div class="activity-list">
+                {% for post in recent_posts %}
+                <div class="activity-item">
+                    <div class="activity-title">
+                        <a href="{% url 'admin:blog_post_change' post.id %}">{{ post.title }}</a>
+                    </div>
+                    <div class="activity-meta">
+                        <span class="status status-{{ post.status }}">{{ post.get_status_display }}</span>
+                        <span class="date">{{ post.created_at|date:"M d, Y" }}</span>
+                    </div>
+                </div>
+                {% endfor %}
             </div>
-            <ul class="app-models">
-              {% for model in app.models %}
-                <li><a href="{{ model.admin_url }}">{{ model.name }}</a></li>
-              {% endfor %}
-            </ul>
-          </div>
-        {% endfor %}
-      </div>
+            {% else %}
+            <p>{% trans 'No recent activity.' %}</p>
+            {% endif %}
+        </div>
     </div>
-  </div>
+</div>
 {% endblock %}

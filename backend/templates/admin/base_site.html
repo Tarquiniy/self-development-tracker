@@ -1,4 +1,3 @@
-{# backend/templates/admin/base_site.html #}
 {% load static i18n %}
 <!doctype html>
 <html lang="{{ LANGUAGE_CODE }}">
@@ -8,11 +7,8 @@
     <title>{% block title %}{{ site_title|default:_('Positive Theta Admin') }}{% endblock %}</title>
 
     {% block extrahead %}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
-    <script src="{% static 'admin/js/admin-modern.js' %}" defer></script>
+    <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'admin/css/admin-modern.css' %}">
     {% endblock %}
     
     {% block extrastyle %}{% endblock %}
@@ -23,19 +19,14 @@
             <div class="brand">
                 <a href="/admin/" class="brand-link">
                     <div class="brand-logo">PT</div>
-                    <span class="brand-title">{{ site_header|default:site_title|default:_('Positive Theta') }}</span>
+                    <span class="brand-title">{% trans 'Positive Theta Admin' %}</span>
                 </a>
             </div>
 
             <div class="top-actions">
-                <form action="/admin/" method="get" class="search-form">
-                    <input name="q" placeholder="{% trans 'Search admin...' %}" class="top-search" />
-                </form>
-
                 <nav class="top-links">
-                    <a href="/admin/media-library/" class="top-link">🗂️ Медиатека</a>
-                    <a href="/admin/dashboard/" class="top-link">📊 Дашборд</a>
-                    <a href="/admin/logout/" class="top-link">🚪 Выйти</a>
+                    <a href="/admin/media-library/">{% trans 'Media Library' %}</a>
+                    <a href="/admin/logout/">{% trans 'Log out' %}</a>
                 </nav>
             </div>
         </div>
@@ -44,33 +35,23 @@
     <div class="admin-container">
         <aside class="admin-sidebar">
             <div class="sidebar-section">
-                <h4 class="sidebar-heading">Управление контентом</h4>
+                <h4 class="sidebar-heading">{% trans 'Content Management' %}</h4>
                 <ul class="sidebar-list">
-                    <li><a href="/admin/">🏠 Главная</a></li>
-                    <li><a href="/admin/blog/post/">📝 Посты</a></li>
-                    <li><a href="/admin/blog/category/">📂 Категории</a></li>
-                    <li><a href="/admin/blog/tag/">🏷️ Теги</a></li>
-                    <li><a href="/admin/blog/comment/">💬 Комментарии</a></li>
-                    <li><a href="/admin/media-library/">🖼️ Медиатека</a></li>
+                    <li><a href="/admin/">{% trans 'Home' %}</a></li>
+                    <li><a href="/admin/blog/post/">{% trans 'Posts' %}</a></li>
+                    <li><a href="/admin/blog/category/">{% trans 'Categories' %}</a></li>
+                    <li><a href="/admin/blog/tag/">{% trans 'Tags' %}</a></li>
+                    <li><a href="/admin/blog/comment/">{% trans 'Comments' %}</a></li>
+                    <li><a href="/admin/blog/medialibrary/">{% trans 'Media Library' %}</a></li>
                 </ul>
             </div>
 
             <div class="sidebar-section">
-                <h4 class="sidebar-heading">Быстрые действия</h4>
+                <h4 class="sidebar-heading">{% trans 'Quick Actions' %}</h4>
                 <ul class="sidebar-list">
-                    <li><a href="/admin/blog/post/add/">✏️ Создать пост</a></li>
-                    <li><a href="/admin/blog/medialibrary/add/">📤 Загрузить файл</a></li>
-                    <li><a href="/admin/auth/user/">👥 Пользователи</a></li>
-                    <li><a href="/admin/dashboard/">📈 Статистика</a></li>
-                </ul>
-            </div>
-
-            <div class="sidebar-section">
-                <h4 class="sidebar-heading">Система</h4>
-                <ul class="sidebar-list">
-                    <li><a href="/admin/auth/group/">🔐 Группы</a></li>
-                    <li><a href="/admin/authtoken/token/">🔑 Токены</a></li>
-                    <li><a href="/admin/logs/">📋 Логи</a></li>
+                    <li><a href="/admin/blog/post/add/">{% trans 'Create Post' %}</a></li>
+                    <li><a href="/admin/blog/medialibrary/add/">{% trans 'Upload File' %}</a></li>
+                    <li><a href="/admin/auth/user/">{% trans 'Users' %}</a></li>
                 </ul>
             </div>
         </aside>
@@ -78,32 +59,34 @@
         <main class="admin-main">
             <div class="admin-breadcrumbs">
                 {% block breadcrumbs %}
-                <nav aria-label="breadcrumb">
-                    {% if title %}{{ title }}{% endif %}
-                </nav>
+                <div class="breadcrumbs">
+                    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+                    {% if title %} &rsaquo; {{ title }}{% endif %}
+                </div>
                 {% endblock %}
             </div>
 
+            {% block messages %}
+            {% if messages %}
+            <ul class="messagelist">
+                {% for message in messages %}
+                <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {% endblock %}
+
             <div class="admin-content">
-                {% block content %}{% endblock %}
+                {% block content %}
+                {% endblock %}
             </div>
         </main>
     </div>
 
     <footer class="admin-footer">
         <div class="footer-content">
-            <span>© {{ now|date:"Y" }} Positive Theta — Modern Admin Interface</span>
-            <small>Версия 2.0 • 2025</small>
+            <span>{% trans 'Positive Theta Admin' %} &copy; {% now "Y" %}</span>
         </div>
     </footer>
-
-    {% block footer_extra %}
-        <script>
-            // Инициализация современных функций
-            if (window.modernAdmin) {
-                window.modernAdmin.init();
-            }
-        </script>
-    {% endblock %}
 </body>
 </html>
