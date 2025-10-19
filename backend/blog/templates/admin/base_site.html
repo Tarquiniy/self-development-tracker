@@ -1,0 +1,36 @@
+{% extends "admin/base.html" %}
+{% load static i18n %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
+  <script defer src="{% static 'admin/js/custom_admin.js' %}"></script>
+{% endblock %}
+
+{% block branding %}
+  <a href="{% url 'admin:index' %}" class="flex items-center gap-3">
+    <img src="{% static 'admin/img/logo.svg' %}" alt="PT" class="logo" />
+    <div>
+      <div class="text-lg font-semibold text-gray-900">Positive Theta</div>
+      <div class="text-sm text-gray-500">Content & Growth Studio</div>
+    </div>
+  </a>
+{% endblock %}
+
+{% block nav-global %}
+  {{ block.super }}
+  <div class="pt-topbar">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14">
+      <div class="flex items-center gap-3">
+        <button id="pt-toggle-sidebar" class="p-2 rounded-md hover:bg-gray-100 md:hidden">☰</button>
+        <form action="{% url 'search' %}" method="get" class="hidden md:flex">
+          <input name="q" class="border rounded-md px-3 py-1 text-sm" placeholder="Поиск..." />
+        </form>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="{% url 'admin:index' %}" class="pt-btn">Dashboard</a>
+        <button id="pt-quick-create" class="pt-btn-primary">Quick create</button>
+      </div>
+    </div>
+  </div>
+{% endblock %}
