@@ -1,9 +1,0 @@
-{% extends "admin/change_list.html" %}
-{% load i18n %}
-
-{# Ничего ломать не будем — только добавим обертку для адаптивной таблицы #}
-{% block result_list %}
-  <div class="pt-table-wrap">
-    {{ block.super }}
-  </div>
-{% endblock %}
