@@ -1,36 +1,109 @@
-{% extends "admin/base.html" %}
+{# backend/templates/admin/base_site.html #}
 {% load static i18n %}
+<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>{% block title %}{{ site_title|default:_('Positive Theta Admin') }}{% endblock %}</title>
 
-{% block extrahead %}
-  {{ block.super }}
-  <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
-  <script defer src="{% static 'admin/js/custom_admin.js' %}"></script>
-{% endblock %}
+    {% block extrahead %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
+    <script src="{% static 'admin/js/admin-modern.js' %}" defer></script>
+    {% endblock %}
+    
+    {% block extrastyle %}{% endblock %}
+</head>
+<body class="admin-theme">
+    <header class="admin-topbar">
+        <div class="admin-topbar-inner">
+            <div class="brand">
+                <a href="/admin/" class="brand-link">
+                    <div class="brand-logo">PT</div>
+                    <span class="brand-title">{{ site_header|default:site_title|default:_('Positive Theta') }}</span>
+                </a>
+            </div>
 
-{% block branding %}
-  <a href="{% url 'admin:index' %}" class="flex items-center gap-3">
-    <img src="{% static 'admin/img/logo.svg' %}" alt="PT" class="logo" />
-    <div>
-      <div class="text-lg font-semibold text-gray-900">Positive Theta</div>
-      <div class="text-sm text-gray-500">Content & Growth Studio</div>
+            <div class="top-actions">
+                <form action="/admin/" method="get" class="search-form">
+                    <input name="q" placeholder="{% trans 'Search admin...' %}" class="top-search" />
+                </form>
+
+                <nav class="top-links">
+                    <a href="/admin/media-library/" class="top-link">🗂️ Медиатека</a>
+                    <a href="/admin/dashboard/" class="top-link">📊 Дашборд</a>
+                    <a href="/admin/logout/" class="top-link">🚪 Выйти</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <div class="admin-container">
+        <aside class="admin-sidebar">
+            <div class="sidebar-section">
+                <h4 class="sidebar-heading">Управление контентом</h4>
+                <ul class="sidebar-list">
+                    <li><a href="/admin/">🏠 Главная</a></li>
+                    <li><a href="/admin/blog/post/">📝 Посты</a></li>
+                    <li><a href="/admin/blog/category/">📂 Категории</a></li>
+                    <li><a href="/admin/blog/tag/">🏷️ Теги</a></li>
+                    <li><a href="/admin/blog/comment/">💬 Комментарии</a></li>
+                    <li><a href="/admin/media-library/">🖼️ Медиатека</a></li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <h4 class="sidebar-heading">Быстрые действия</h4>
+                <ul class="sidebar-list">
+                    <li><a href="/admin/blog/post/add/">✏️ Создать пост</a></li>
+                    <li><a href="/admin/blog/medialibrary/add/">📤 Загрузить файл</a></li>
+                    <li><a href="/admin/auth/user/">👥 Пользователи</a></li>
+                    <li><a href="/admin/dashboard/">📈 Статистика</a></li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <h4 class="sidebar-heading">Система</h4>
+                <ul class="sidebar-list">
+                    <li><a href="/admin/auth/group/">🔐 Группы</a></li>
+                    <li><a href="/admin/authtoken/token/">🔑 Токены</a></li>
+                    <li><a href="/admin/logs/">📋 Логи</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <main class="admin-main">
+            <div class="admin-breadcrumbs">
+                {% block breadcrumbs %}
+                <nav aria-label="breadcrumb">
+                    {% if title %}{{ title }}{% endif %}
+                </nav>
+                {% endblock %}
+            </div>
+
+            <div class="admin-content">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
     </div>
-  </a>
-{% endblock %}
 
-{% block nav-global %}
-  {{ block.super }}
-  <div class="pt-topbar">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14">
-      <div class="flex items-center gap-3">
-        <button id="pt-toggle-sidebar" class="p-2 rounded-md hover:bg-gray-100 md:hidden">☰</button>
-        <form action="{% url 'search' %}" method="get" class="hidden md:flex">
-          <input name="q" class="border rounded-md px-3 py-1 text-sm" placeholder="Поиск..." />
-        </form>
-      </div>
-      <div class="flex items-center gap-2">
-        <a href="{% url 'admin:index' %}" class="pt-btn">Dashboard</a>
-        <button id="pt-quick-create" class="pt-btn-primary">Quick create</button>
-      </div>
-    </div>
-  </div>
-{% endblock %}
+    <footer class="admin-footer">
+        <div class="footer-content">
+            <span>© {{ now|date:"Y" }} Positive Theta — Modern Admin Interface</span>
+            <small>Версия 2.0 • 2025</small>
+        </div>
+    </footer>
+
+    {% block footer_extra %}
+        <script>
+            // Инициализация современных функций
+            if (window.modernAdmin) {
+                window.modernAdmin.init();
+            }
+        </script>
+    {% endblock %}
+</body>
+</html>
