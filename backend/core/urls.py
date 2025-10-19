@@ -1,146 +1,22 @@
 # backend/core/urls.py
 from django.conf import settings
-
-# ---- quick admin alias helpers (auto-added) ----
-from django.shortcuts import redirect
-from django.urls import reverse
-from django.http import HttpResponseNotFound
-from django.urls import path as _path
-from django.views.generic import RedirectView, TemplateView
-# ---- end quick admin alias helpers ----
-
-def _alias_to_admin(namespaced_name, fallback_to_index=True):
-    def view(request, *args, **kwargs):
-        try:
-            target = reverse(namespaced_name)
-            return redirect(target)
-        except Exception:
-            if fallback_to_index:
-                try:
-                    return redirect(reverse("admin:index"))
-                except Exception:
-                    return HttpResponseNotFound("Admin URL not available")
-            return HttpResponseNotFound("Not found")
-    return view
-
-# Aliases (гарантируют наличие некоторых имён URL)
-_alias_urlpatterns = [
-    _path('auth_user_changelist/', _alias_to_admin('admin:auth_user_changelist'), name='auth_user_changelist'),
-    _path('auth_user_change/', _alias_to_admin('admin:auth_user_change'), name='auth_user_change'),
-    _path('auth_group_changelist/', _alias_to_admin('admin:auth_group_changelist'), name='auth_group_changelist'),
-]
-
-# Попытка импортировать project-local search_view (если реализован)
-try:
-    from backend.core.views import search_view  # ожидается: def search_view(request) в backend/core/views.py
-    _HAS_SEARCH_VIEW = True
-except Exception:
-    search_view = None
-    _HAS_SEARCH_VIEW = False
-
 from django.contrib import admin
 from django.urls import path, include
-# from users.views import RegisterView, LoginView, ProfileView
-from django.conf.urls.static import static
-from .admin import custom_admin_site
-from blog import views as blog_views
+from django.http import HttpResponse, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 
-# Попытка импортировать админ-views из blog.admin (dashboard, stats, post update, media library)
-admin_dashboard_view = None
-admin_stats_api = None
-admin_post_update_view = None
-admin_media_library_view = None
-admin_autosave_view = None
-admin_preview_token_view = None
+@csrf_exempt
+def health_check(request):
+    return JsonResponse({"status": "ok", "message": "Django backend is running"})
 
-try:
-    from blog.admin import (
-        admin_media_library_view,
-        admin_dashboard_view,
-        admin_post_update_view,
-        admin_stats_api,
-        admin_autosave_view,
-        admin_preview_token_view,
-    )
-except Exception:
-    admin_media_library_view = None
-    admin_dashboard_view = None
-    admin_post_update_view = None
-    admin_stats_api = None
-    admin_autosave_view = None
-    admin_preview_token_view = None
-
-# Если admin_media_library_view не предоставлен из blog.admin, попробуем взять MediaLibraryView из blog.views
-if admin_media_library_view is None:
-    try:
-        from blog.views import MediaLibraryView
-        admin_media_library_view = MediaLibraryView.as_view()
-    except Exception:
-        admin_media_library_view = None
-
-
-# --- Добавляем 'search' внутри namespace 'admin' (patch к admin.site.get_urls)
-# Это важно, потому что шаблоны админа ищут сначала 'admin:search'.
-def _ensure_admin_search_on_adminsite(admin_site_obj, use_view):
-    """
-    Prepend a URL named 'search' into the provided AdminSite's URL list.
-    - admin_site_obj: admin.site or custom_admin_site
-    - use_view: callable view to use for search (if None, use RedirectView to admin:index)
-    """
-    try:
-        orig_get_urls = admin_site_obj.get_urls
-    except Exception:
-        return
-
-    def get_urls_wrapped():
-        # our search view or fallback
-        if use_view:
-            search_pattern = path("search/", use_view, name="search")
-        else:
-            search_pattern = path("search/", RedirectView.as_view(pattern_name="admin:index", permanent=False), name="search")
-        # Prepend to ensure admin:search exists before other admin URLs
-        return [search_pattern] + orig_get_urls()
-    admin_site_obj.get_urls = get_urls_wrapped
-
-
-# Apply the patch to the standard admin.site and to your custom_admin_site
-if _HAS_SEARCH_VIEW:
-    _ensure_admin_search_on_adminsite(admin.site, search_view)
-    _ensure_admin_search_on_adminsite(custom_admin_site, search_view)
-else:
-    _ensure_admin_search_on_adminsite(admin.site, None)
-    _ensure_admin_search_on_adminsite(custom_admin_site, None)
-
-
-# Основные urlpatterns — сначала алиасы, затем реальные пути
-urlpatterns = _alias_urlpatterns + [
-    path('grappelli/', include('grappelli.urls')),
-
-    # Подключаем стандартную админку (чтобы namespace 'admin' и пути вроде admin:auth_user_changelist были доступны)
-    path("admin/", admin.site.urls),
-
-    # Также оставляем кастомную админку отдельно, если нужна (доступна по /custom-admin/)
-    path("custom-admin/", custom_admin_site.urls),
-
-    #path('api/auth/register/', RegisterView.as_view(), name='register'),
-    #path('api/auth/login/', LoginView.as_view(), name='login'),
+urlpatterns = [
+    path('admin/', admin.site.urls),
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
-    #path('api/tables/', include(('tables.urls', 'tables'), namespace='tables')),
     path('summernote/', include('django_summernote.urls')),
-    #path('api/auth/profile/', ProfileView.as_view(), name='profile'),
-    path('preview/<str:token>/', blog_views.preview_by_token, name='post-preview'),
-
-    # корневой редирект на админку
-    path('', RedirectView.as_view(url='/admin/')),
+    path('health/', health_check, name='health-check'),
 ]
 
-# Гарантируем наличие глобального маршрута 'search' (если нужен)
-if _HAS_SEARCH_VIEW:
-    urlpatterns += [ path('search/', search_view, name='search') ]
-else:
-    urlpatterns += [ path('search/', RedirectView.as_view(pattern_name='admin:index', permanent=False), name='search') ]
-
-# Добавляем CKEditor 5 URLs (опционально)
+# Добавляем CKEditor 5 URLs
 try:
     urlpatterns += [
         path('ckeditor5/', include('django_ckeditor_5.urls')),
@@ -148,29 +24,22 @@ try:
 except Exception:
     pass
 
-# Регистрируем /admin/media-library/ ДО admin.urls, чтобы не перехватывался
-if admin_media_library_view:
-    urlpatterns = [
+# Media library view
+try:
+    from blog.views import admin_media_library_view
+    urlpatterns += [
         path('admin/media-library/', admin_media_library_view, name='admin-media-library'),
-    ] + urlpatterns
-else:
-    urlpatterns = [
-        path('admin/media-library/', TemplateView.as_view(template_name='admin/media_library_unavailable.html'), name='admin-media-library'),
-    ] + urlpatterns
-
-# Дополнительные админ-views (если доступны)
-if admin_dashboard_view:
-    urlpatterns += [ path('admin/dashboard/', admin_dashboard_view, name='admin-dashboard'), ]
-if admin_stats_api:
-    urlpatterns += [ path('admin/dashboard/stats-data/', admin_stats_api, name='admin-dashboard-stats'), ]
-if admin_post_update_view:
-    urlpatterns += [ path('admin/posts/update/', admin_post_update_view, name='admin-post-update'), ]
-if admin_autosave_view:
-    urlpatterns += [ path('admin/posts/autosave/', admin_autosave_view, name='admin-autosave'), ]
-if admin_preview_token_view:
-    urlpatterns += [ path('admin/posts/preview-token/', admin_preview_token_view, name='admin-preview-token'), ]
+    ]
+except Exception:
+    pass
 
 # В режиме разработки отдаём media/static
 if settings.DEBUG:
+    from django.conf.urls.static import static
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+# Обработчик для favicon.ico (избегаем ошибок 404)
+urlpatterns += [
+    path('favicon.ico', lambda request: HttpResponse(status=204)),
+]

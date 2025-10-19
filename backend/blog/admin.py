@@ -2,6 +2,7 @@
 import os
 import json
 import logging
+from pyexpat.errors import messages
 from django import forms
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
@@ -53,60 +54,59 @@ class PostAdminForm(forms.ModelForm):
         model = Post
         fields = '__all__'
         widgets = {
-            'excerpt': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Краткое описание поста...'}),
-            'meta_description': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Мета-описание для SEO...'}),
+            'excerpt': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Краткое описание поста...', 'class': 'form-control'}),
+            'meta_description': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Мета-описание для SEO...', 'class': 'form-control'}),
+            'title': forms.TextInput(attrs={'class': 'form-control form-control-lg', 'placeholder': 'Введите заголовок поста...'}),
+            'slug': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'url-slug...'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Add CSS classes for styling
-        self.fields['title'].widget.attrs.update({
-            'class': 'post-title-field',
-            'placeholder': 'Введите заголовок поста...'
-        })
-        self.fields['slug'].widget.attrs.update({
-            'class': 'post-slug-field',
-            'placeholder': 'url-slug...'
-        })
+        # Add help texts
+        self.fields['slug'].help_text = 'URL-адрес для поста. Оставьте пустым для автоматического создания.'
+        self.fields['meta_title'].help_text = 'Заголовок для SEO. Если не указан, будет использован заголовок поста.'
+        self.fields['meta_description'].help_text = 'Описание для SEO. Рекомендуется 150-160 символов.'
 
 # -----------------------
 # Enhanced Admin Classes
 # -----------------------
-class BasePostAdmin(VersionAdmin):
+@admin.register(Post)
+class PostAdmin(VersionAdmin):
     form = PostAdminForm
-    change_form_template = 'admin/blog/post/change_form_modern.html'
-
+    change_form_template = 'admin/blog/post/change_form.html'
+    
     # Modern list display
-    list_display = ("title", "status_badge", "author", "published_at", "reading_time_display", "actions_column")
-    list_filter = ("status", "published_at", "categories", "tags") if Post is not None else ()
+    list_display = ("title", "status_badge", "author", "published_at", "reading_time_display", "created_at")
+    list_filter = ("status", "published_at", "categories", "tags", "created_at")
     search_fields = ("title", "excerpt", "content", "meta_description")
-    prepopulated_fields = {"slug": ("title",)} if Post is not None else {}
+    prepopulated_fields = {"slug": ("title",)}
     date_hierarchy = "published_at"
     ordering = ("-published_at",)
-    filter_horizontal = ("categories", "tags") if Post is not None else ()
+    filter_horizontal = ("categories", "tags")
     actions = ["make_published", "make_draft", "duplicate_post", "update_seo_meta"]
+    list_per_page = 25
 
     # Enhanced fieldsets with better grouping
     fieldsets = (
         ("Основное содержание", {
             'fields': ('title', 'slug', 'content', 'excerpt'),
-            'classes': ('main-content',)
+            'classes': ('wide',)
         }),
         ("Визуальные элементы", {
             'fields': ('featured_image', 'og_image'),
-            'classes': ('visual-elements', 'collapse')
+            'classes': ('collapse',)
         }),
         ("Классификация", {
             'fields': ('categories', 'tags'),
-            'classes': ('classification',)
+            'classes': ('wide',)
         }),
         ("Настройки публикации", {
             'fields': ('author', 'status', 'published_at'),
-            'classes': ('publication-settings',)
+            'classes': ('wide',)
         }),
         ("SEO оптимизация", {
             'fields': ('meta_title', 'meta_description'),
-            'classes': ('seo-settings', 'collapse')
+            'classes': ('collapse',)
         }),
     )
 
@@ -114,12 +114,12 @@ class BasePostAdmin(VersionAdmin):
         if not obj:
             return ""
         status_colors = {
-            'draft': 'gray',
-            'published': 'green',
-            'archived': 'orange'
+            'draft': 'warning',
+            'published': 'success',
+            'archived': 'secondary'
         }
-        color = status_colors.get(obj.status, 'gray')
-        return mark_safe(f'<span class="status-badge status-{color}">{obj.get_status_display()}</span>')
+        color = status_colors.get(obj.status, 'secondary')
+        return mark_safe(f'<span class="badge badge-{color}">{obj.get_status_display()}</span>')
     status_badge.short_description = "Статус"
     status_badge.admin_order_field = 'status'
 
@@ -129,25 +129,14 @@ class BasePostAdmin(VersionAdmin):
         return f"{obj.reading_time} мин"
     reading_time_display.short_description = "Время чтения"
 
-    def actions_column(self, obj):
-        if not obj:
-            return ""
-        return mark_safe(f'''
-            <div class="action-buttons">
-                <a href="{reverse('admin:blog_post_change', args=[obj.id])}" class="button edit-btn">✏️</a>
-                <a href="{obj.get_absolute_url() if hasattr(obj, 'get_absolute_url') else '#'}" target="_blank" class="button view-btn">👁️</a>
-            </div>
-        ''')
-    actions_column.short_description = "Действия"
-
     def make_published(self, request, queryset):
         updated = queryset.update(status="published", published_at=timezone.now())
-        self.message_user(request, f"{updated} постов опубликовано.")
+        self.message_user(request, f"{updated} постов опубликовано.", messages.SUCCESS)
     make_published.short_description = "📢 Опубликовать выбранные"
 
     def make_draft(self, request, queryset):
         updated = queryset.update(status="draft")
-        self.message_user(request, f"{updated} постов переведено в черновики.")
+        self.message_user(request, f"{updated} постов переведено в черновики.", messages.SUCCESS)
     make_draft.short_description = "📝 Перевести в черновики"
 
     def duplicate_post(self, request, queryset):
@@ -163,7 +152,7 @@ class BasePostAdmin(VersionAdmin):
                 created += 1
             except Exception as e:
                 logger.error("Error duplicating post: %s", e)
-        self.message_user(request, f"Создано {created} копий.")
+        self.message_user(request, f"Создано {created} копий.", messages.SUCCESS)
     duplicate_post.short_description = "🔁 Создать копии"
 
     def update_seo_meta(self, request, queryset):
@@ -176,41 +165,44 @@ class BasePostAdmin(VersionAdmin):
                     updated += 1
                 except Exception as e:
                     logger.error("Error updating SEO meta: %s", e)
-        self.message_user(request, f"SEO мета-заголовки обновлены для {updated} постов")
+        self.message_user(request, f"SEO мета-заголовки обновлены для {updated} постов", messages.SUCCESS)
     update_seo_meta.short_description = "🔍 Обновить SEO мета-данные"
 
-
+@admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ("title", "slug", "post_count", "created_at")
     prepopulated_fields = {"slug": ("title",)}
     search_fields = ("title", "description")
+    list_per_page = 25
 
     def post_count(self, obj):
         if not obj:
             return 0
         count = obj.posts.count() if hasattr(obj, 'posts') else 0
-        return mark_safe(f'<span class="badge">{count}</span>')
+        return mark_safe(f'<span class="badge badge-info">{count}</span>')
     post_count.short_description = "Постов"
 
-
+@admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):
     list_display = ("title", "slug", "post_count")
     prepopulated_fields = {"slug": ("title",)}
     search_fields = ("title",)
+    list_per_page = 25
 
     def post_count(self, obj):
         if not obj:
             return 0
         count = obj.posts.count() if hasattr(obj, 'posts') else 0
-        return mark_safe(f'<span class="badge">{count}</span>')
+        return mark_safe(f'<span class="badge badge-info">{count}</span>')
     post_count.short_description = "Постов"
 
-
+@admin.register(Comment)
 class CommentAdmin(admin.ModelAdmin):
     list_display = ("author_name", "post_link", "short_content", "status_badges", "created_at")
     list_filter = ("is_public", "is_moderated", "created_at")
     search_fields = ("name", "email", "content")
     actions = ["approve_comments", "reject_comments"]
+    list_per_page = 25
 
     def author_name(self, obj):
         if not obj:
@@ -242,33 +234,34 @@ class CommentAdmin(admin.ModelAdmin):
             return ""
         badges = []
         if obj.is_public:
-            badges.append('<span class="badge badge-green">Public</span>')
+            badges.append('<span class="badge badge-success">Public</span>')
         else:
-            badges.append('<span class="badge badge-gray">Hidden</span>')
+            badges.append('<span class="badge badge-secondary">Hidden</span>')
         if obj.is_moderated:
-            badges.append('<span class="badge badge-blue">Moderated</span>')
+            badges.append('<span class="badge badge-info">Moderated</span>')
         return mark_safe(" ".join(badges))
     status_badges.short_description = "Статус"
 
     def approve_comments(self, request, queryset):
         updated = queryset.update(is_public=True, is_moderated=True)
-        self.message_user(request, f"{updated} комментариев одобрено.")
+        self.message_user(request, f"{updated} комментариев одобрено.", messages.SUCCESS)
     approve_comments.short_description = "✅ Одобрить выбранные"
 
     def reject_comments(self, request, queryset):
         updated = queryset.update(is_public=False)
-        self.message_user(request, f"{updated} комментариев скрыто.")
+        self.message_user(request, f"{updated} комментариев скрыто.", messages.SUCCESS)
     reject_comments.short_description = "❌ Скрыть выбранные"
-
 
 # -----------------------
 # Media Library Enhancements
 # -----------------------
+@admin.register(MediaLibrary)
 class MediaLibraryAdmin(admin.ModelAdmin):
     list_display = ("thumbnail", "title", "file_type", "uploaded_by", "uploaded_at_display", "post_link", "file_size")
-    list_filter = ("uploaded", "uploaded_by")  # Используем реальное поле 'uploaded'
+    list_filter = ("uploaded", "uploaded_by")
     search_fields = ("title", "file")
-    readonly_fields = ("file_size", "file_type", "uploaded_at_display")  # Убрали uploaded_at, добавили свойство
+    readonly_fields = ("file_size", "file_type", "uploaded_at_display")
+    list_per_page = 25
 
     def thumbnail(self, obj):
         if not obj or not obj.file:
@@ -309,7 +302,6 @@ class MediaLibraryAdmin(admin.ModelAdmin):
     file_size.short_description = "Размер"
 
     def uploaded_at_display(self, obj):
-        """Отображение uploaded_at для readonly_fields"""
         if not obj:
             return ""
         return obj.uploaded_at
@@ -325,12 +317,13 @@ class MediaLibraryAdmin(admin.ModelAdmin):
         return mark_safe('<span class="text-muted">Не прикреплен</span>')
     post_link.short_description = "Пост"
 
-
+@admin.register(PostRevision)
 class PostRevisionAdmin(admin.ModelAdmin):
     list_display = ("post", "author", "created_at", "autosave")
     list_filter = ("created_at", "autosave")
     search_fields = ("post__title", "title", "content")
     readonly_fields = ("created_at",)
+    list_per_page = 25
 
     def has_add_permission(self, request):
         return False
@@ -338,54 +331,6 @@ class PostRevisionAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
-
-# -----------------------
-# Registration
-# -----------------------
-def register_admin_models(site_obj):
-    """
-    Register all admin models into provided admin site.
-    """
-    try:
-        if Post is not None:
-            site_obj.register(Post, BasePostAdmin)
-        if Category is not None:
-            site_obj.register(Category, CategoryAdmin)
-        if Tag is not None:
-            site_obj.register(Tag, TagAdmin)
-        if Comment is not None:
-            site_obj.register(Comment, CommentAdmin)
-        if PostReaction is not None:
-            site_obj.register(PostReaction)
-        if PostView is not None:
-            site_obj.register(PostView)
-        if PostRevision is not None:
-            site_obj.register(PostRevision, PostRevisionAdmin)
-
-        if PostAttachment is not None:
-            site_obj.register(MediaLibrary, MediaLibraryAdmin)
-
-    except Exception as e:
-        logger.exception("Admin registration failed: %s", e)
-
-    return True
-
-
-# Auto-register with default admin site
-try:
-    if Post is not None:
-        admin.site.register(Post, BasePostAdmin)
-    if Category is not None:
-        admin.site.register(Category, CategoryAdmin)
-    if Tag is not None:
-        admin.site.register(Tag, TagAdmin)
-    if Comment is not None:
-        admin.site.register(Comment, CommentAdmin)
-    if MediaLibrary is not None:
-        admin.site.register(MediaLibrary, MediaLibraryAdmin)
-    if PostRevision is not None:
-        admin.site.register(PostRevision, PostRevisionAdmin)
-except AlreadyRegistered:
-    pass
-except Exception as e:
-    logger.exception("Default admin registration failed: %s", e)
+# Регистрация остальных моделей
+admin.site.register(PostReaction)
+admin.site.register(PostView)

@@ -1,79 +1,109 @@
-{# backend/templates/admin/base_site.html (REPLACE ENTIRE FILE) #}
-{% load static i18n %}
-<!doctype html>
-<html lang="{{ LANGUAGE_CODE }}">
+{% load static i18n jazzmin %}
+<!DOCTYPE html>
+<html lang="ru">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>{% block title %}{{ site_title|default:_('Django site admin') }}{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}</title>
 
-    {% block extrahead %}
-    <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
-    <script>document.documentElement.classList.add('admin-modern');</script>
-    {% endblock %}
+    <!-- Bootstrap CSS -->
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link href="{% static 'vendor/fontawesome-free/css/all.min.css' %}" rel="stylesheet" type="text/css">
+    
+    <!-- Jazzmin CSS -->
+    <link href="{% static 'admin/css/base.css' %}" rel="stylesheet">
+    
+    <!-- Custom CSS -->
+    <link href="{% static 'admin/css/jazzmin-custom.css' %}" rel="stylesheet">
+    
+    {% block dark-mode-vars %}{% endblock %}
     {% block extrastyle %}{% endblock %}
+    {% block extrahead %}{% endblock %}
 </head>
-<body class="admin-theme">
-    <header class="admin-topbar">
-        <div class="admin-topbar-inner" style="max-width:1300px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 18px;">
-            <div class="brand" style="display:flex;align-items:center;gap:12px;">
-                <a href="/admin/" class="brand-link" style="display:flex;align-items:center;text-decoration:none;color:inherit">
-                    <img src="{% static 'admin/logo.png' %}" alt="logo" class="brand-logo" style="width:36px;height:36px;border-radius:8px;background:#fff" />
-                    <span class="brand-title">{{ site_header|default:site_title|default:_('Site administration') }}</span>
-                </a>
-            </div>
+<body class="{% if is_popup %}popup {% endif %}{% block bodyclass %}{% endblock %}" data-admin-utc-offset="{% now 'Z' %}">
 
-            <div style="margin-left:auto;display:flex;gap:12px;align-items:center;">
-                <form action="/admin/" method="get" style="margin:0;">
-                    <input name="q" placeholder="{% trans 'Search admin...' %}" class="top-search" style="padding:8px;border-radius:8px;border:1px solid #e6eef6"/>
-                </form>
-
-                <nav class="top-links" style="display:flex;gap:8px;align-items:center;">
-                    <a href="/admin/media-library/" class="top-link">Медиа</a>
-                    <a href="/admin/dashboard/" class="top-link">Dashboard</a>
-                    <a href="/admin/logout/" class="top-link">Выйти</a>
-                </nav>
+<!-- Container -->
+<div id="container">
+    {% if not is_popup %}
+        <!-- Header -->
+        {% block header %}
+        <div id="header">
+            <div id="branding">
+                {% block branding %}{% endblock %}
             </div>
+            {% block usertools %}
+            {% if has_permission %}
+            <div id="user-tools">
+                {% block welcome-msg %}
+                    <strong>{% firstof user.get_short_name user.get_username %}</strong>
+                {% endblock %}
+                {% block userlinks %}
+                    {% if site_url %}
+                        <a href="{{ site_url }}">{% trans 'View site' %}</a> /
+                    {% endif %}
+                    {% if user.is_active and user.is_staff %}
+                        {% url 'django-admindocs-docroot' as docsroot %}
+                        {% if docsroot %}
+                            <a href="{{ docsroot }}">{% trans 'Documentation' %}</a> /
+                        {% endif %}
+                    {% endif %}
+                    {% if user.has_usable_password %}
+                    <a href="{% url 'admin:password_change' %}">{% trans 'Change password' %}</a> /
+                    {% endif %}
+                    <a href="{% url 'admin:logout' %}">{% trans 'Log out' %}</a>
+                {% endblock %}
+            </div>
+            {% endif %}
+            {% endblock %}
+            {% block nav-global %}{% endblock %}
         </div>
-    </header>
+        {% endblock %}
+        <!-- END Header -->
+        
+        <!-- Breadcrumbs -->
+        {% block breadcrumbs %}
+        <div class="breadcrumbs">
+            <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+            {% if title %} &rsaquo; {{ title }}{% endif %}
+        </div>
+        {% endblock %}
+        <!-- END Breadcrumbs -->
+    {% endif %}
 
-    <div class="admin-container" style="max-width:1300px;margin:20px auto;display:flex;gap:20px;padding:0 18px;">
-        <aside class="admin-sidebar" style="width:220px;">
-            <div class="sidebar-section">
-                <h4 class="sidebar-heading">Управление</h4>
-                <ul class="sidebar-list" style="list-style:none;padding:0;margin:0;">
-                    <li><a href="/admin/">Главная</a></li>
-                    <li><a href="/admin/blog/post/">Посты</a></li>
-                    <li><a href="/admin/blog/category/">Категории</a></li>
-                    <li><a href="/admin/blog/tag/">Теги</a></li>
-                    <li><a href="/admin/blog/comment/">Комментарии</a></li>
-                    <li><a href="/admin/media-library/">Медиа библиотека</a></li>
-                </ul>
-            </div>
-
-            <div class="sidebar-section" style="margin-top:14px;">
-                <h4 class="sidebar-heading">Инструменты</h4>
-                <ul class="sidebar-list" style="list-style:none;padding:0;margin:0;">
-                    <li><a href="/admin/blog/post/add/">Создать пост</a></li>
-                    <li><a href="/admin/blog/">Blog App</a></li>
-                    <li><a href="/admin/auth/user/">Пользователи</a></li>
-                </ul>
-            </div>
-        </aside>
-
-        <main class="admin-main" style="flex:1;">
-            <div class="admin-breadcrumbs">{% block breadcrumbs %}{% endblock %}</div>
-
-            <div class="admin-content">{% block content %}{% endblock %}</div>
-        </main>
+    <!-- Content -->
+    <div id="content" class="{% block coltype %}colM{% endblock %}">
+        {% block messages %}
+            {% if messages %}
+                <ul class="messagelist">{% for message in messages %}
+                    <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message|capfirst }}</li>
+                {% endfor %}</ul>
+            {% endif %}
+        {% endblock messages %}
+        
+        {% block content_title %}{% if title %}<h1>{{ title }}</h1>{% endif %}{% endblock %}
+        
+        {% block content %}
+            {% block object-tools %}{% endblock %}
+            {{ content }}
+        {% endblock %}
+        
+        {% block sidebar %}{% endblock %}
     </div>
+    <!-- END Content -->
 
-    <footer class="admin-footer" style="text-align:center;padding:18px 0;color:#6b7280;">
-        <div>© {{ now|date:"Y" }} — Твоя админка · Powered by Django</div>
-    </footer>
+    {% block footer %}<div id="footer"></div>{% endblock %}
+</div>
+<!-- END Container -->
 
-    {% block footer_extra %}
-        <script src="{% static 'admin/admin-core.js' %}"></script>
-    {% endblock %}
+<!-- JavaScript -->
+<script src="{% static 'vendor/jquery/jquery.min.js' %}"></script>
+<script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'admin/js/base.js' %}"></script>
+
+{% block extra_js %}{% endblock %}
+
 </body>
 </html>
