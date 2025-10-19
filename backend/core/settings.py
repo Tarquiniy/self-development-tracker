@@ -95,6 +95,8 @@ DATABASES = {
     )
 }
 
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://positive-theta.vercel.app')
+
 # ========== MIDDLEWARE ==========
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",

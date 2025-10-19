@@ -1,221 +1,372 @@
-{% extends "admin/change_form.html" %}."
-".{% load static %}
-
-
+{% extends "admin/change_form.html" %}
 {% load static i18n %}
 
 {% block extrahead %}
-  {{ block.super }}
-  <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
-<script src="{% static 'admin/vendor/tiptap/tiptap-umd.js' %}"></script>
-<script src="{% static 'admin/js/sdr_tiptap_admin_extra.js' %}"></script>
-<link rel="stylesheet" href="{% static 'admin/css/sdr_tiptap_admin.css' %}">
-
-  <script src="{% static 'admin/vendor/tiptap/tiptap-umd.js' %}"></script>
-<script src="{% static 'admin/js/sdr_tiptap_admin_extra.js' %}"></script>
-<link rel="stylesheet" href="{% static 'admin/css/sdr_tiptap_admin.css' %}">
-
-  <style>
-    .tiptap-editor-container { border: 1px solid #e6edf3; border-radius: 6px; padding: 12px; min-height: 240px; background: #fff; }
-    .tiptap-toolbar { margin-bottom: 8px; }
-    .admin-media-btn { margin-left: .5rem; }
-    textarea[name="content"] { min-height: 220px; }
-  </style>
-{% endblock %}
-
-{% block submit_buttons_top %}
-  {{ block.super }}
-  <a href="{% url 'admin-media-library' %}" class="button admin-media-btn" onclick="openMediaLibrary(event)">
-    {% trans "Медиа библиотека" %}
-  </a>
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/post-edit-modern.css' %}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 {% endblock %}
 
 {% block content %}
-  {{ block.super }}
+<div class="post-edit-modern">
+    <!-- Хедер -->
+    <header class="post-edit-header">
+        <div class="header-content">
+            <h1>
+                {% if original %}
+                    ✏️ Редактирование поста: {{ original.title }}
+                {% else %}
+                    📝 Создание нового поста
+                {% endif %}
+            </h1>
+            <div class="header-actions">
+                {% if original %}
+                <a href="{{ original.get_absolute_url }}" target="_blank" class="btn btn-outline">
+                    👁️ Предпросмотр
+                </a>
+                {% endif %}
+                <button type="submit" class="btn btn-primary" name="_save">
+                    💾 Сохранить
+                </button>
+                <button type="submit" class="btn btn-secondary" name="_continue">
+                    📋 Сохранить и продолжить
+                </button>
+            </div>
+        </div>
+        
+        <!-- Статус бар -->
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="label">Статус:</span>
+                <span class="value status-{{ original.status|default:'draft' }}">
+                    {{ original.get_status_display|default:"Черновик" }}
+                </span>
+            </div>
+            <div class="status-item">
+                <span class="label">Автор:</span>
+                <span class="value">{{ user.get_full_name|default:user.username }}</span>
+            </div>
+            {% if original %}
+            <div class="status-item">
+                <span class="label">Создан:</span>
+                <span class="value">{{ original.created_at|date:"d.m.Y H:i" }}</span>
+            </div>
+            <div class="status-item">
+                <span class="label">Обновлен:</span>
+                <span class="value">{{ original.updated_at|date:"d.m.Y H:i" }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </header>
 
-  <script>
-  (function () {
-    function qs(sel, root) { root = root || document; return root.querySelector(sel); }
+    <!-- Основной контент -->
+    <div class="post-edit-layout">
+        <!-- Левая колонка - Основной контент -->
+        <div class="main-content">
+            <!-- Заголовок и SLUG -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>📌 Основная информация</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <label for="id_title">Заголовок поста</label>
+                        {{ adminform.form.title }}
+                        <div class="char-counter" id="title-counter">0/255</div>
+                    </div>
+                    <div class="form-row">
+                        <label for="id_slug">URL-адрес (SLUG)</label>
+                        {{ adminform.form.slug }}
+                        <div class="help-text">Автоматически генерируется из заголовка</div>
+                    </div>
+                </div>
+            </div>
 
-    window.openMediaLibrary = function (e) {
-      try {
-        if (e && e.preventDefault) e.preventDefault();
-        var url = "{% url 'admin-media-library' %}";
-        window.open(url, "media_library", "width=1000,height=700,scrollbars=yes");
-      } catch (err) {
-        console.error('openMediaLibrary error', err);
-        alert("{% trans 'Не удалось открыть медиа библиотеку' %}");
-      }
-      return false;
-    };
+            <!-- Контент -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>📝 Содержание поста</h3>
+                    <div class="content-stats">
+                        <span id="word-count">0 слов</span>
+                        <span id="read-time">~0 мин чтения</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <label for="id_excerpt">Краткое описание</label>
+                        {{ adminform.form.excerpt }}
+                        <div class="char-counter" id="excerpt-counter">0 символов</div>
+                    </div>
+                    <div class="form-row">
+                        <label for="id_content">Основной контент</label>
+                        {{ adminform.form.content }}
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    window.__insertMediaToEditor = function (url) {
-      try {
-        var feat = qs('input[name="featured_image"]');
-        if (feat) { feat.value = url; }
-        var container = qs('.tiptap-editor-container');
-        if (container && container._tiptap_editor) {
-          try {
-            var editor = container._tiptap_editor;
-            if (editor && editor.chain) {
-              editor.chain().focus().setImage({ src: url }).run();
-              return true;
-            }
-          } catch (e) { }
-        }
-        var ta = qs('textarea[name="content"]');
-        if (ta) {
-          ta.value = (ta.value || '') + "\n<img src='" + url + "' alt='' />\n";
-          return true;
-        }
-        return false;
-      } catch (err) {
-        console.error('insertMediaToEditor error', err);
-        return false;
-      }
-    };
+        <!-- Правая колонка - Настройки -->
+        <div class="sidebar">
+            <!-- Публикация -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>🚀 Публикация</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <label for="id_status">Статус</label>
+                        {{ adminform.form.status }}
+                    </div>
+                    <div class="form-row">
+                        <label for="id_published_at">Дата публикации</label>
+                        {{ adminform.form.published_at }}
+                    </div>
+                    <div class="form-row">
+                        <label for="id_author">Автор</label>
+                        {{ adminform.form.author }}
+                    </div>
+                    <div class="quick-actions">
+                        <button type="submit" class="btn-action btn-publish" name="_publish">
+                            Опубликовать сейчас
+                        </button>
+                        <button type="submit" class="btn-action btn-draft" name="_draft">
+                            Сохранить черновик
+                        </button>
+                    </div>
+                </div>
+            </div>
 
-    window.initAdminTipTap = function () {
-      try {
-        var textarea = qs('textarea[name="content"]');
-        if (!textarea) return;
-        if (textarea.dataset.tiptapInitialized) return;
-        textarea.dataset.tiptapInitialized = '1';
-        textarea.style.display = 'none';
-        var wrapper = document.createElement('div');
-        wrapper.className = 'tiptap-editor-wrapper';
-        var toolbar = document.createElement('div');
-        toolbar.className = 'tiptap-toolbar';
-        var editorContainer = document.createElement('div');
-        editorContainer.className = 'tiptap-editor-container';
-        wrapper.appendChild(toolbar);
-        wrapper.appendChild(editorContainer);
-        textarea.parentNode.insertBefore(wrapper, textarea.nextSibling);
+            <!-- Изображения -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>🖼️ Изображения</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <label for="id_featured_image">Главное изображение</label>
+                        {{ adminform.form.featured_image }}
+                        <div class="image-preview" id="featured-image-preview"></div>
+                    </div>
+                    <div class="form-row">
+                        <label for="id_og_image">OG изображение</label>
+                        {{ adminform.form.og_image }}
+                        <div class="image-preview" id="og-image-preview"></div>
+                    </div>
+                </div>
+            </div>
 
-        var contentJson = qs('input[name="content_json"]');
-        if (!contentJson) {
-          contentJson = document.createElement('input');
-          contentJson.type = 'hidden';
-          contentJson.name = 'content_json';
-          textarea.parentNode.insertBefore(contentJson, wrapper.nextSibling);
-        }
+            <!-- Категории и теги -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>🏷️ Классификация</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <label for="id_categories">Категории</label>
+                        {{ adminform.form.categories }}
+                    </div>
+                    <div class="form-row">
+                        <label for="id_tags">Теги</label>
+                        {{ adminform.form.tags }}
+                    </div>
+                </div>
+            </div>
 
-        var TipTapCore = window['@tiptap/core'] || window.tiptapCore || window.tiptap || null;
-        var StarterKit = window['@tiptap/starter-kit'] || window.tiptapStarterKit || null;
-        var Editor = null, Starter = null;
-        try {
-          if (TipTapCore && (TipTapCore.Editor || (TipTapCore.default && TipTapCore.default.Editor))) {
-            Editor = TipTapCore.Editor || (TipTapCore.default && TipTapCore.default.Editor);
-          }
-          if (StarterKit && (StarterKit.StarterKit || StarterKit.default || typeof StarterKit === 'function')) {
-            Starter = StarterKit.StarterKit || StarterKit.default || StarterKit;
-          }
-        } catch (e) {}
+            <!-- SEO -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>🔍 SEO оптимизация</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <label for="id_meta_title">Мета-заголовок</label>
+                        {{ adminform.form.meta_title }}
+                        <div class="char-counter" id="meta-title-counter">0/60</div>
+                    </div>
+                    <div class="form-row">
+                        <label for="id_meta_description">Мета-описание</label>
+                        {{ adminform.form.meta_description }}
+                        <div class="char-counter" id="meta-description-counter">0/160</div>
+                    </div>
+                </div>
+            </div>
 
-        if (!Editor || !Starter) {
-          console.warn('TipTap not available — falling back to simple contentEditable');
-          textarea.style.display = '';
-          try {
-            var fallback = document.createElement('div');
-            fallback.className = 'tiptap-fallback';
-            fallback.contentEditable = true;
-            fallback.innerHTML = textarea.value || '';
-            fallback.addEventListener('input', function () { textarea.value = fallback.innerHTML; });
-            editorContainer.appendChild(fallback);
-          } catch (err) { console.error('fallback editor init failed', err); }
-          return;
-        }
+            <!-- Статистика -->
+            {% if original %}
+            <div class="card">
+                <div class="card-header">
+                    <h3>📊 Статистика</h3>
+                </div>
+                <div class="card-body">
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-value">{{ original.views.count }}</div>
+                            <div class="stat-label">Просмотров</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">
+                                {% with reactions=original.reactions.first %}
+                                    {{ reactions.likes_count|default:0 }}
+                                {% endwith %}
+                            </div>
+                            <div class="stat-label">Лайков</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">{{ original.comments.count }}</div>
+                            <div class="stat-label">Комментариев</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
 
-        var extensions = [];
-        try {
-          var ImgExt = window['@tiptap/extension-image'] || window.tiptapImage || null;
-          if (ImgExt && (ImgExt.Image || ImgExt.default || typeof ImgExt === 'function')) {
-            extensions.push(ImgExt.Image || ImgExt.default || ImgExt);
-          }
-        } catch (e) {}
-        try {
-          var LinkExt = window['@tiptap/extension-link'] || window.tiptapLink || null;
-          if (LinkExt && (LinkExt.Link || LinkExt.default || typeof LinkExt === 'function')) {
-            extensions.push(LinkExt.Link || LinkExt.default || LinkExt);
-          }
-        } catch (e) {}
+    <!-- Скрытые поля формы -->
+    {% for fieldset in adminform %}
+        {% for line in fieldset %}
+            {% for field in line %}
+                {% if field.is_hidden %}
+                    {{ field.field }}
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+    {% endfor %}
+    
+    {% block inline_field_sets %}
+    {% for inline_admin_formset in inline_admin_formsets %}
+        {% include inline_admin_formset.opts.template %}
+    {% endfor %}
+    {% endblock %}
 
-        var editor = null;
-        try {
-          editor = new Editor({
-            element: editorContainer,
-            extensions: [ (Starter.configure ? Starter.configure() : Starter) ].concat(extensions),
-            content: textarea.value || '',
-            onUpdate: function (props) {
-              try {
-                if (props && props.editor && typeof props.editor.getHTML === 'function') {
-                  editorContainer._current_html = props.editor.getHTML();
+    {% block after_related_objects %}{% endblock %}
+
+    {% block submit_buttons_bottom %}
+    <div class="submit-row">
+        <div class="submit-actions">
+            <button type="submit" class="btn btn-primary" name="_save">
+                💾 Сохранить
+            </button>
+            <button type="submit" class="btn btn-secondary" name="_continue">
+                📋 Сохранить и продолжить
+            </button>
+            <button type="submit" class="btn btn-outline" name="_addanother">
+                ➕ Сохранить и добавить новый
+            </button>
+            {% if original %}
+            <a href="{% url 'admin:blog_post_delete' original.pk %}" class="btn btn-danger">
+                🗑️ Удалить
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endblock %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Счетчики символов
+    function setupCharCounter(textareaId, counterId, maxLength) {
+        const textarea = document.getElementById(textareaId);
+        const counter = document.getElementById(counterId);
+        
+        if (textarea && counter) {
+            function updateCounter() {
+                const length = textarea.value.length;
+                counter.textContent = `${length}/${maxLength}`;
+                
+                if (length > maxLength * 0.9) {
+                    counter.style.color = '#dc3545';
+                } else if (length > maxLength * 0.7) {
+                    counter.style.color = '#ffc107';
+                } else {
+                    counter.style.color = '#6c757d';
                 }
-              } catch (e) { }
             }
-          });
-          editorContainer._tiptap_editor = editor;
-        } catch (err) {
-          console.error('Failed to instantiate TipTap editor', err);
-          textarea.style.display = '';
-          return;
+            
+            textarea.addEventListener('input', updateCounter);
+            updateCounter();
         }
-
-        function makeBtn(label, onClick) {
-          var b = document.createElement('button');
-          b.type = 'button';
-          b.className = 'button';
-          b.style.marginRight = '6px';
-          b.textContent = label;
-          b.addEventListener('click', onClick);
-          toolbar.appendChild(b);
-          return b;
+    }
+    
+    // Настройка счетчиков
+    setupCharCounter('id_title', 'title-counter', 255);
+    setupCharCounter('id_excerpt', 'excerpt-counter', 500);
+    setupCharCounter('id_meta_title', 'meta-title-counter', 60);
+    setupCharCounter('id_meta_description', 'meta-description-counter', 160);
+    
+    // Подсчет слов и времени чтения
+    const contentField = document.getElementById('id_content');
+    const wordCount = document.getElementById('word-count');
+    const readTime = document.getElementById('read-time');
+    
+    if (contentField && wordCount && readTime) {
+        function updateContentStats() {
+            const text = contentField.value;
+            const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+            const readingTime = Math.ceil(words / 200);
+            
+            wordCount.textContent = `${words} слов`;
+            readTime.textContent = `~${readingTime} мин чтения`;
         }
-
-        makeBtn('B', function () { try { editor.chain().focus().toggleBold().run(); } catch (e) {} });
-        makeBtn('I', function () { try { editor.chain().focus().toggleItalic().run(); } catch (e) {} });
-        makeBtn('H2', function () { try { editor.chain().focus().toggleHeading({ level: 2 }).run(); } catch (e) {} });
-        makeBtn('{code}', function () { try { editor.chain().focus().toggleCodeBlock().run(); } catch (e) {} });
-        makeBtn('Image', function () { openMediaLibrary(); });
-        makeBtn('Preview', function () {
-          try {
-            var w = window.open('', '_blank');
-            if (w) {
-              w.document.write('<!doctype html><meta charset="utf-8"><title>Preview</title>');
-              w.document.body.innerHTML = editor.getHTML();
-              w.document.close();
-            } else { alert('{% trans "Пожалуйста, разрешите всплывающие окна для предпросмотра" %}'); }
-          } catch (e) { console.error(e); }
+        
+        contentField.addEventListener('input', updateContentStats);
+        updateContentStats();
+    }
+    
+    // Предпросмотр изображений
+    function setupImagePreview(inputId, previewId) {
+        const input = document.getElementById(inputId);
+        const preview = document.getElementById(previewId);
+        
+        if (input && preview) {
+            function updatePreview() {
+                const url = input.value;
+                if (url) {
+                    preview.innerHTML = `<img src="${url}" alt="Preview" style="max-width: 100%; border-radius: 8px; margin-top: 8px;">`;
+                } else {
+                    preview.innerHTML = '';
+                }
+            }
+            
+            input.addEventListener('input', updatePreview);
+            updatePreview();
+        }
+    }
+    
+    setupImagePreview('id_featured_image', 'featured-image-preview');
+    setupImagePreview('id_og_image', 'og-image-preview');
+    
+    // Быстрые действия
+    const publishBtn = document.querySelector('.btn-publish');
+    const draftBtn = document.querySelector('.btn-draft');
+    
+    if (publishBtn) {
+        publishBtn.addEventListener('click', function(e) {
+            document.getElementById('id_status').value = 'published';
         });
-
-        var form = textarea.closest('form');
-        if (form) {
-          form.addEventListener('submit', function () {
-            try {
-              var html = (editor && typeof editor.getHTML === 'function') ? editor.getHTML() : (editorContainer._current_html || '');
-              var json = (editor && typeof editor.getJSON === 'function') ? editor.getJSON() : null;
-              textarea.value = html || textarea.value;
-              try { contentJson.value = JSON.stringify(json || {}); } catch (e) { contentJson.value = ''; }
-            } catch (e) { console.error('Sync on submit failed', e); }
-          }, { passive: true });
-        }
-
-      } catch (err) {
-        console.error('initAdminTipTap error', err);
-        try { var ta = qs('textarea[name="content"]'); if (ta) ta.style.display = ''; } catch (_) {}
-      }
-    };
-
-    document.addEventListener('DOMContentLoaded', function () {
-      try {
-        if (typeof window.initAdminTipTap === 'function') {
-          window.initAdminTipTap();
-        } else {
-          if (window.initAdminTipTap) try { window.initAdminTipTap(); } catch (e) { console.error(e); }
-        }
-      } catch (e) { console.error(e); }
-    });
-
-  })();
-  </script>
+    }
+    
+    if (draftBtn) {
+        draftBtn.addEventListener('click', function(e) {
+            document.getElementById('id_status').value = 'draft';
+        });
+    }
+    
+    // Автоматическое заполнение meta title
+    const titleField = document.getElementById('id_title');
+    const metaTitleField = document.getElementById('id_meta_title');
+    
+    if (titleField && metaTitleField) {
+        titleField.addEventListener('blur', function() {
+            if (!metaTitleField.value) {
+                metaTitleField.value = titleField.value;
+                // Обновляем счетчик
+                const event = new Event('input');
+                metaTitleField.dispatchEvent(event);
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

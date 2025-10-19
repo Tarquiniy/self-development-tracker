@@ -54,18 +54,52 @@ class PostAdminForm(forms.ModelForm):
         model = Post
         fields = '__all__'
         widgets = {
-            'excerpt': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Краткое описание поста...', 'class': 'form-control'}),
-            'meta_description': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Мета-описание для SEO...', 'class': 'form-control'}),
-            'title': forms.TextInput(attrs={'class': 'form-control form-control-lg', 'placeholder': 'Введите заголовок поста...'}),
-            'slug': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'url-slug...'}),
+            'excerpt': forms.Textarea(attrs={
+                'rows': 4, 
+                'placeholder': 'Краткое описание поста, которое будет отображаться в списках и превью...',
+                'class': 'modern-textarea'
+            }),
+            'meta_description': forms.Textarea(attrs={
+                'rows': 3,
+                'placeholder': 'Описание для поисковых систем. Рекомендуется 150-160 символов...',
+                'class': 'modern-textarea'
+            }),
+            'title': forms.TextInput(attrs={
+                'class': 'modern-input',
+                'placeholder': 'Введите заголовок поста...'
+            }),
+            'slug': forms.TextInput(attrs={
+                'class': 'modern-input slug-field',
+                'placeholder': 'url-slug...'
+            }),
+            'featured_image': forms.URLInput(attrs={
+                'class': 'modern-input',
+                'placeholder': 'https://example.com/image.jpg'
+            }),
+            'og_image': forms.URLInput(attrs={
+                'class': 'modern-input',
+                'placeholder': 'https://example.com/og-image.jpg'
+            }),
+            'meta_title': forms.TextInput(attrs={
+                'class': 'modern-input',
+                'placeholder': 'Мета-заголовок для SEO...'
+            }),
+            'status': forms.Select(attrs={'class': 'modern-select'}),
+            'author': forms.Select(attrs={'class': 'modern-select'}),
+            'published_at': forms.DateTimeInput(attrs={
+                'type': 'datetime-local',
+                'class': 'modern-datetime'
+            }),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Add help texts
-        self.fields['slug'].help_text = 'URL-адрес для поста. Оставьте пустым для автоматического создания.'
-        self.fields['meta_title'].help_text = 'Заголовок для SEO. Если не указан, будет использован заголовок поста.'
-        self.fields['meta_description'].help_text = 'Описание для SEO. Рекомендуется 150-160 символов.'
+        # Добавляем помощь для полей
+        self.fields['excerpt'].help_text = 'Краткое описание, отображаемое в превью поста'
+        self.fields['meta_description'].help_text = 'Для лучшего SEO старайтесь уложиться в 150-160 символов'
+        self.fields['slug'].help_text = 'Человеко-понятный URL. Оставьте пустым для автоматического создания'
+        self.fields['featured_image'].help_text = 'URL главного изображения поста'
+        self.fields['og_image'].help_text = 'URL изображения для социальных сетей'
 
 # -----------------------
 # Enhanced Admin Classes
@@ -83,30 +117,30 @@ class PostAdmin(VersionAdmin):
     date_hierarchy = "published_at"
     ordering = ("-published_at",)
     filter_horizontal = ("categories", "tags")
-    actions = ["make_published", "make_draft", "duplicate_post", "update_seo_meta"]
+    actions = ["make_published", "make_draft", "update_seo_meta"]
     list_per_page = 25
 
     # Enhanced fieldsets with better grouping
     fieldsets = (
         ("Основное содержание", {
             'fields': ('title', 'slug', 'content', 'excerpt'),
-            'classes': ('wide',)
+            'classes': ('wide', 'main-content')
         }),
         ("Визуальные элементы", {
             'fields': ('featured_image', 'og_image'),
-            'classes': ('collapse',)
+            'classes': ('collapse', 'visual-elements')
         }),
         ("Классификация", {
             'fields': ('categories', 'tags'),
-            'classes': ('wide',)
+            'classes': ('wide', 'classification')
         }),
         ("Настройки публикации", {
             'fields': ('author', 'status', 'published_at'),
-            'classes': ('wide',)
+            'classes': ('wide', 'publication-settings')
         }),
         ("SEO оптимизация", {
             'fields': ('meta_title', 'meta_description'),
-            'classes': ('collapse',)
+            'classes': ('collapse', 'seo-settings')
         }),
     )
 
@@ -114,12 +148,12 @@ class PostAdmin(VersionAdmin):
         if not obj:
             return ""
         status_colors = {
-            'draft': 'warning',
-            'published': 'success',
-            'archived': 'secondary'
+            'draft': 'draft',
+            'published': 'published',
+            'archived': 'archived'
         }
-        color = status_colors.get(obj.status, 'secondary')
-        return mark_safe(f'<span class="badge badge-{color}">{obj.get_status_display()}</span>')
+        color = status_colors.get(obj.status, 'draft')
+        return mark_safe(f'<span class="status-badge status-{color}">{obj.get_status_display()}</span>')
     status_badge.short_description = "Статус"
     status_badge.admin_order_field = 'status'
 
@@ -131,12 +165,12 @@ class PostAdmin(VersionAdmin):
 
     def make_published(self, request, queryset):
         updated = queryset.update(status="published", published_at=timezone.now())
-        self.message_user(request, f"{updated} постов опубликовано.", messages.SUCCESS)
+        self.message_user(request, f"{updated} постов опубликовано.")
     make_published.short_description = "📢 Опубликовать выбранные"
 
     def make_draft(self, request, queryset):
         updated = queryset.update(status="draft")
-        self.message_user(request, f"{updated} постов переведено в черновики.", messages.SUCCESS)
+        self.message_user(request, f"{updated} постов переведено в черновики.")
     make_draft.short_description = "📝 Перевести в черновики"
 
     def duplicate_post(self, request, queryset):
@@ -165,8 +199,13 @@ class PostAdmin(VersionAdmin):
                     updated += 1
                 except Exception as e:
                     logger.error("Error updating SEO meta: %s", e)
-        self.message_user(request, f"SEO мета-заголовки обновлены для {updated} постов", messages.SUCCESS)
+        self.message_user(request, f"SEO мета-заголовки обновлены для {updated} постов")
     update_seo_meta.short_description = "🔍 Обновить SEO мета-данные"
+
+    def change_view(self, request, object_id=None, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['show_preview'] = True
+        return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):

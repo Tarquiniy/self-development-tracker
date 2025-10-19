@@ -58,7 +58,9 @@ class Category(models.Model):
         return self.title
 
     def get_absolute_url(self):
-        return reverse('blog:category-detail', kwargs={'slug': self.slug})
+        from django.conf import settings
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'https://positive-theta.vercel.app')
+        return f"{frontend_url}/blog/{self.slug}"
 
 
 class Tag(models.Model):
