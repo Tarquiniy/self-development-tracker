@@ -40,9 +40,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 # ========== GRAPPELLI ==========
 GRAPPELLI_ADMIN_TITLE = 'Positive Theta Admin'
-GRAPPELLI_SWITCH_USER = True
 GRAPPELLI_CLEAN_INPUT_TYPES = True
-GRAPPELLI_SWITCH_USER_ORIGINAL = True
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'резервный-секретный-ключ-для-разработки')
 DEBUG = os.getenv("DEBUG", "False") == "True"
