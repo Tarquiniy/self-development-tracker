@@ -38,76 +38,11 @@ else:
 
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
-# ========== ADMIN ==========
-JAZZMIN_SETTINGS = {
-    "site_title": "Positive Theta Admin",
-    "site_header": "Positive Theta",
-    "site_brand": "Positive Theta",
-    "welcome_sign": "Добро пожаловать в панель управления Positive Theta",
-    "copyright": "Positive Theta © 2025",
-    "search_model": ["blog.Post", "auth.User"],
-    "topmenu_links": [
-        {"name": "Главная", "url": "admin:index", "permissions": ["auth.view_user"]},
-        {"name": "Сайт", "url": "/", "new_window": True},
-        {"model": "auth.User"},
-        {"app": "blog"},
-    ],
-    "usermenu_links": [
-        {"name": "Сайт", "url": "/", "new_window": True},
-        {"model": "auth.user"}
-    ],
-    "show_sidebar": True,
-    "navigation_expanded": True,
-    "hide_apps": [],
-    "hide_models": [],
-    "icons": {
-        "auth": "fas fa-users-cog",
-        "auth.user": "fas fa-user",
-        "auth.Group": "fas fa-users",
-        "blog.Post": "fas fa-newspaper",
-        "blog.Category": "fas fa-folder",
-        "blog.Tag": "fas fa-tags",
-        "blog.Comment": "fas fa-comments",
-        "blog.MediaLibrary": "fas fa-images",
-    },
-    "default_icon_parents": "fas fa-chevron-circle-right",
-    "default_icon_children": "fas fa-circle",
-    "related_modal_active": False,
-    "custom_css": "admin/css/jazzmin-custom.css",
-    "custom_js": None,
-}
-
-JAZZMIN_UI_TWEAKS = {
-    "navbar_small_text": False,
-    "footer_small_text": False,
-    "body_small_text": False,
-    "brand_small_text": False,
-    "brand_colour": "navbar-navy",
-    "accent": "accent-primary",
-    "navbar": "navbar-navy navbar-dark",
-    "no_navbar_border": False,
-    "navbar_fixed": True,
-    "layout_boxed": False,
-    "footer_fixed": False,
-    "sidebar_fixed": True,
-    "sidebar": "sidebar-dark-navy",
-    "sidebar_nav_small_text": False,
-    "sidebar_disable_expand": False,
-    "sidebar_nav_child_indent": False,
-    "sidebar_nav_compact_style": False,
-    "sidebar_nav_legacy_style": True,
-    "sidebar_nav_flat_style": False,
-    "theme": "default",
-    "dark_mode_theme": None,
-    "button_classes": {
-        "primary": "btn-primary",
-        "secondary": "btn-secondary",
-        "info": "btn-info",
-        "warning": "btn-warning",
-        "danger": "btn-danger",
-        "success": "btn-success"
-    }
-}
+# ========== GRAPPELLI ==========
+GRAPPELLI_ADMIN_TITLE = 'Positive Theta Admin'
+GRAPPELLI_SWITCH_USER = True
+GRAPPELLI_CLEAN_INPUT_TYPES = True
+GRAPPELLI_SWITCH_USER_ORIGINAL = True
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'резервный-секретный-ключ-для-разработки')
 DEBUG = os.getenv("DEBUG", "False") == "True"
@@ -177,15 +112,8 @@ MIDDLEWARE = [
 
 # ========== APPS ==========
 INSTALLED_APPS = [
-    "jazzmin",
+    "grappelli",
     
-    # Local apps
-    "users.apps.UsersConfig",
-    "tables.apps.TablesConfig",
-    "payments.apps.PaymentsConfig",
-    "analytics.apps.AnalyticsConfig",
-    "blog.apps.BlogConfig",
-
     # Django core apps
     "django.contrib.auth",
     "django.contrib.admin",
@@ -193,6 +121,13 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+
+    # Local apps
+    "users.apps.UsersConfig",
+    "tables.apps.TablesConfig",
+    "payments.apps.PaymentsConfig",
+    "analytics.apps.AnalyticsConfig",
+    "blog.apps.BlogConfig",
 
     # Third-party apps
     'django_ckeditor_5',
@@ -262,6 +197,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "django.template.context_processors.request",
             ],
         },
     },

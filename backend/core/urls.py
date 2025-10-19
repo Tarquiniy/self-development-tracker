@@ -2,7 +2,7 @@
 from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 @csrf_exempt
@@ -10,6 +10,7 @@ def health_check(request):
     return JsonResponse({"status": "ok", "message": "Django backend is running"})
 
 urlpatterns = [
+    path('grappelli/', include('grappelli.urls')),
     path('admin/', admin.site.urls),
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
     path('summernote/', include('django_summernote.urls')),
@@ -43,3 +44,8 @@ if settings.DEBUG:
 urlpatterns += [
     path('favicon.ico', lambda request: HttpResponse(status=204)),
 ]
+
+# Кастомная админка
+admin.site.site_header = 'Positive Theta Admin'
+admin.site.site_title = 'Positive Theta'
+admin.site.index_title = 'Панель управления'

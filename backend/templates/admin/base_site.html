@@ -1,109 +1,124 @@
-{% load static i18n jazzmin %}
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="robots" content="noindex, nofollow">
-    <title>{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}</title>
+{% extends "admin/base.html" %}
+{% load static %}
 
-    <!-- Bootstrap CSS -->
-    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block branding %}
+<h1 id="site-name">
+    <a href="{% url 'admin:index' %}">
+        <img src="{% static 'admin/img/logo.png' %}" alt="Positive Theta" height="40" style="margin-right: 10px;">
+        Positive Theta Admin
+    </a>
+</h1>
+{% endblock %}
+
+{% block nav-global %}
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/css/grappelli-custom.css' %}">
+<style>
+    /* Дополнительные кастомные стили для Grappelli */
+    .grp-module h2 {
+        background: #2c3e50;
+        color: white;
+    }
     
-    <!-- Font Awesome -->
-    <link href="{% static 'vendor/fontawesome-free/css/all.min.css' %}" rel="stylesheet" type="text/css">
+    .status-badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
     
-    <!-- Jazzmin CSS -->
-    <link href="{% static 'admin/css/base.css' %}" rel="stylesheet">
+    .status-published {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
     
-    <!-- Custom CSS -->
-    <link href="{% static 'admin/css/jazzmin-custom.css' %}" rel="stylesheet">
+    .status-draft {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeaa7;
+    }
     
-    {% block dark-mode-vars %}{% endblock %}
-    {% block extrastyle %}{% endblock %}
-    {% block extrahead %}{% endblock %}
-</head>
-<body class="{% if is_popup %}popup {% endif %}{% block bodyclass %}{% endblock %}" data-admin-utc-offset="{% now 'Z' %}">
+    .status-archived {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+    
+    /* Улучшения для CKEditor */
+    .ck-editor__editable {
+        min-height: 400px;
+        font-size: 16px;
+        line-height: 1.6;
+    }
+    
+    .ck.ck-editor {
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 1rem;
+    }
+    
+    /* Карточки для медиа библиотеки */
+    .media-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .media-item {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+        background: white;
+        transition: transform 0.2s;
+    }
+    
+    .media-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .media-thumbnail {
+        max-width: 100%;
+        height: 150px;
+        object-fit: cover;
+        border-radius: 4px;
+    }
+    
+    /* Адаптивность */
+    @media (max-width: 768px) {
+        .media-grid {
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        }
+    }
+</style>
+{% endblock %}
 
-<!-- Container -->
-<div id="container">
-    {% if not is_popup %}
-        <!-- Header -->
-        {% block header %}
-        <div id="header">
-            <div id="branding">
-                {% block branding %}{% endblock %}
-            </div>
-            {% block usertools %}
-            {% if has_permission %}
-            <div id="user-tools">
-                {% block welcome-msg %}
-                    <strong>{% firstof user.get_short_name user.get_username %}</strong>
-                {% endblock %}
-                {% block userlinks %}
-                    {% if site_url %}
-                        <a href="{{ site_url }}">{% trans 'View site' %}</a> /
-                    {% endif %}
-                    {% if user.is_active and user.is_staff %}
-                        {% url 'django-admindocs-docroot' as docsroot %}
-                        {% if docsroot %}
-                            <a href="{{ docsroot }}">{% trans 'Documentation' %}</a> /
-                        {% endif %}
-                    {% endif %}
-                    {% if user.has_usable_password %}
-                    <a href="{% url 'admin:password_change' %}">{% trans 'Change password' %}</a> /
-                    {% endif %}
-                    <a href="{% url 'admin:logout' %}">{% trans 'Log out' %}</a>
-                {% endblock %}
-            </div>
-            {% endif %}
-            {% endblock %}
-            {% block nav-global %}{% endblock %}
-        </div>
-        {% endblock %}
-        <!-- END Header -->
-        
-        <!-- Breadcrumbs -->
-        {% block breadcrumbs %}
-        <div class="breadcrumbs">
-            <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
-            {% if title %} &rsaquo; {{ title }}{% endif %}
-        </div>
-        {% endblock %}
-        <!-- END Breadcrumbs -->
-    {% endif %}
-
-    <!-- Content -->
-    <div id="content" class="{% block coltype %}colM{% endblock %}">
-        {% block messages %}
-            {% if messages %}
-                <ul class="messagelist">{% for message in messages %}
-                    <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message|capfirst }}</li>
-                {% endfor %}</ul>
-            {% endif %}
-        {% endblock messages %}
-        
-        {% block content_title %}{% if title %}<h1>{{ title }}</h1>{% endif %}{% endblock %}
-        
-        {% block content %}
-            {% block object-tools %}{% endblock %}
-            {{ content }}
-        {% endblock %}
-        
-        {% block sidebar %}{% endblock %}
-    </div>
-    <!-- END Content -->
-
-    {% block footer %}<div id="footer"></div>{% endblock %}
-</div>
-<!-- END Container -->
-
-<!-- JavaScript -->
-<script src="{% static 'vendor/jquery/jquery.min.js' %}"></script>
-<script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
-<script src="{% static 'admin/js/base.js' %}"></script>
-
-{% block extra_js %}{% endblock %}
-
-</body>
-</html>
+{% block extrahead %}
+{{ block.super }}
+<script src="{% static 'admin/js/grappelli-custom.js' %}"></script>
+<script>
+// Глобальные JavaScript утилиты
+document.addEventListener('DOMContentLoaded', function() {
+    // Добавляем обработчики для статус-бейджей
+    const statusBadges = document.querySelectorAll('.status-badge');
+    statusBadges.forEach(badge => {
+        badge.style.margin = '2px 0';
+    });
+    
+    // Улучшаем таблицы
+    const tables = document.querySelectorAll('table.grp-table');
+    tables.forEach(table => {
+        table.classList.add('grp-table-striped');
+    });
+});
+</script>
+{% endblock %}
