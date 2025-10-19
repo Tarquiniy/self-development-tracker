@@ -2,7 +2,7 @@
 from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 @csrf_exempt
