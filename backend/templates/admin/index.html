@@ -1,59 +1,186 @@
 {% extends "admin/base_site.html" %}
-{% load static i18n %}
+{% load static %}
 
 {% block content %}
 <div class="dashboard">
+    <!-- Header -->
     <div class="dashboard-header">
         <h1>{% trans 'Dashboard' %}</h1>
-        <p>{% trans 'Welcome to your admin dashboard.' %}</p>
+        <p class="dashboard-subtitle">{% trans 'Welcome to your admin dashboard. Here is an overview of your content.' %}</p>
     </div>
 
-    <div class="dashboard-actions">
-        <a href="{% url 'admin:blog_post_add' %}" class="btn btn-primary">{% trans 'Create Post' %}</a>
-        <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-secondary">{% trans 'View Posts' %}</a>
-        <a href="{% url 'admin:blog_medialibrary_changelist' %}" class="btn btn-secondary">{% trans 'Media Library' %}</a>
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M9 12H15M9 16H15M9 8H15M5 21H19C20.1046 21 21 20.1046 21 19V5C21 3.89543 20.1046 3 19 3H5C3.89543 3 3 3.89543 3 5V19C3 20.1046 3.89543 21 5 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+            </div>
+            <h3 class="stat-title">{% trans 'Total Posts' %}</h3>
+            <div class="stat-value">{{ posts_count|default:"0" }}</div>
+            <div class="stat-change positive">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 4L12 8M8 4L4 8M8 4V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                +12% from last month
+            </div>
+        </div>
+
+        <div class="stat-card success">
+            <div class="stat-header">
+                <div class="stat-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M9 12L11 14L15 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+            </div>
+            <h3 class="stat-title">{% trans 'Published' %}</h3>
+            <div class="stat-value">{{ published_posts|default:"0" }}</div>
+            <div class="stat-change positive">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 4L12 8M8 4L4 8M8 4V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                +8% from last month
+            </div>
+        </div>
+
+        <div class="stat-card warning">
+            <div class="stat-header">
+                <div class="stat-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 9V12M12 15H12.01M5 21H19C20.1046 21 21 20.1046 21 19V5C21 3.89543 20.1046 3 19 3H5C3.89543 3 3 3.89543 3 5V19C3 20.1046 3.89543 21 5 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+            </div>
+            <h3 class="stat-title">{% trans 'Drafts' %}</h3>
+            <div class="stat-value">{{ draft_posts|default:"0" }}</div>
+            <div class="stat-change negative">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 12L4 8M8 12L12 8M8 12V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                -3% from last month
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M17 8C17 5.23858 14.7614 3 12 3C9.23858 3 7 5.23858 7 8C7 10.7614 9.23858 13 12 13C14.7614 13 17 10.7614 17 8Z" stroke="currentColor" stroke-width="2"/>
+                        <path d="M3 21C3 16.0294 7.02944 12 12 12C16.9706 12 21 16.0294 21 21C21 21.5523 20.5523 22 20 22H4C3.44772 22 3 21.5523 3 21Z" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                </div>
+            </div>
+            <h3 class="stat-title">{% trans 'Comments' %}</h3>
+            <div class="stat-value">{{ comments_count|default:"0" }}</div>
+            <div class="stat-change positive">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 4L12 8M8 4L4 8M8 4V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                +24% from last month
+            </div>
+        </div>
     </div>
 
-    <div class="dashboard-stats">
-        <div class="stat-card">
-            <div class="stat-value">{{ posts_count|default:0 }}</div>
-            <div class="stat-label">{% trans 'Total Posts' %}</div>
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <a href="/admin/blog/post/add/" class="action-card">
+            <div class="action-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 4V20M4 12H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3 class="action-title">{% trans 'Create Post' %}</h3>
+            <p class="action-description">{% trans 'Write and publish a new blog post' %}</p>
+        </a>
+
+        <a href="/admin/blog/medialibrary/add/" class="action-card">
+            <div class="action-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M7 16V12M7 8V4M17 16V8M17 20V4M12 16V12M12 8V4M4 20H20C21.1046 20 22 19.1046 22 18V6C22 4.89543 21.1046 4 20 4H4C2.89543 4 2 4.89543 2 6V18C2 19.1046 2.89543 20 4 20Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3 class="action-title">{% trans 'Upload Media' %}</h3>
+            <p class="action-description">{% trans 'Add images and files to your library' %}</p>
+        </a>
+
+        <a href="/admin/blog/category/add/" class="action-card">
+            <div class="action-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M19 11H5M19 11C20.1046 11 21 11.8954 21 13V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V13C3 11.8954 3.89543 11 5 11M19 11V9C19 7.89543 18.1046 7 17 7M5 11V9C5 7.89543 5.89543 7 7 7M7 7V5C7 3.89543 7.89543 3 9 3H15C16.1046 3 17 3.89543 17 5V7M7 7H17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3 class="action-title">{% trans 'Manage Categories' %}</h3>
+            <p class="action-description">{% trans 'Organize your content with categories' %}</p>
+        </a>
+    </div>
+
+    <!-- Analytics & Recent Activity -->
+    <div class="analytics-grid">
+        <!-- Traffic Chart -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <h3>{% trans 'Traffic Overview' %}</h3>
+                <p class="chart-description">{% trans 'Page views and visitor statistics' %}</p>
+            </div>
+            <canvas id="trafficChart" height="300"></canvas>
         </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ published_posts|default:0 }}</div>
-            <div class="stat-label">{% trans 'Published Posts' %}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ comments_count|default:0 }}</div>
-            <div class="stat-label">{% trans 'Comments' %}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ users_count|default:0 }}</div>
-            <div class="stat-label">{% trans 'Users' %}</div>
+
+        <!-- Recent Activity -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <h3>{% trans 'Recent Activity' %}</h3>
+                <p class="chart-description">{% trans 'Latest posts and comments' %}</p>
+            </div>
+            <canvas id="activityChart" height="300"></canvas>
         </div>
     </div>
 
-    <div class="dashboard-content">
-        <div class="recent-activity">
-            <h2>{% trans 'Recent Activity' %}</h2>
-            {% if recent_posts %}
-            <div class="activity-list">
-                {% for post in recent_posts %}
-                <div class="activity-item">
-                    <div class="activity-title">
-                        <a href="{% url 'admin:blog_post_change' post.id %}">{{ post.title }}</a>
-                    </div>
+    <!-- Recent Posts -->
+    <div class="recent-activity">
+        <div class="activity-header">
+            <h2>{% trans 'Recent Posts' %}</h2>
+        </div>
+        <div class="activity-list">
+            {% for post in recent_posts|slice:":5" %}
+            <a href="/admin/blog/post/{{ post.id }}/change/" class="activity-item">
+                <div class="activity-avatar">
+                    {{ post.title|first|upper }}
+                </div>
+                <div class="activity-content">
+                    <div class="activity-title">{{ post.title|truncatechars:50 }}</div>
                     <div class="activity-meta">
                         <span class="status status-{{ post.status }}">{{ post.get_status_display }}</span>
-                        <span class="date">{{ post.created_at|date:"M d, Y" }}</span>
+                        <span class="activity-time">{{ post.created_at|timesince }} ago</span>
                     </div>
                 </div>
-                {% endfor %}
+            </a>
+            {% empty %}
+            <div class="activity-item">
+                <div class="activity-content">
+                    <div class="activity-title">{% trans 'No recent posts' %}</div>
+                    <div class="activity-meta">
+                        <span class="activity-time">{% trans 'Create your first post to get started' %}</span>
+                    </div>
+                </div>
             </div>
-            {% else %}
-            <p>{% trans 'No recent activity.' %}</p>
-            {% endif %}
+            {% endfor %}
         </div>
     </div>
 </div>
+
+<!-- Include Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// Initialize dashboard when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.admin) {
+        window.admin.initCharts();
+    }
+});
+</script>
 {% endblock %}

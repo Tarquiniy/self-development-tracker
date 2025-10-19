@@ -1,5 +1,5 @@
 // backend/blog/static/admin/js/admin-modern.js
-// Modern Admin JavaScript - 2025 Edition
+// Modern Admin Dashboard - Interactive Features
 
 class ModernAdmin {
     constructor() {
@@ -8,113 +8,263 @@ class ModernAdmin {
 
     init() {
         this.initSidebar();
-        this.initCards();
-        this.initForms();
-        this.initNotifications();
+        this.initSearch();
+        this.initUserMenu();
+        this.initStats();
         this.initQuickActions();
+        this.initCharts();
         this.initResponsive();
+        this.initNotifications();
     }
 
     initSidebar() {
-        // Активное состояние меню
+        // Active state management
         const currentPath = window.location.pathname;
-        document.querySelectorAll('.sidebar-list a').forEach(link => {
-            if (link.getAttribute('href') === currentPath) {
-                link.classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(item => {
+            if (item.getAttribute('href') === currentPath) {
+                item.classList.add('active');
             }
         });
 
-        // Плавная прокрутка
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
+        // Mobile sidebar toggle
+        const sidebarToggle = document.createElement('button');
+        sidebarToggle.className = 'sidebar-toggle';
+        sidebarToggle.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M3 5H17M3 10H17M3 15H17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+        `;
+        
+        sidebarToggle.addEventListener('click', () => {
+            document.querySelector('.admin-sidebar').classList.toggle('mobile-open');
+        });
+
+        // Add toggle button on mobile
+        if (window.innerWidth < 1024) {
+            document.querySelector('.nav-container').prepend(sidebarToggle);
+        }
+    }
+
+    initSearch() {
+        const searchInput = document.querySelector('.search-input');
+        if (!searchInput) return;
+
+        let searchTimeout;
+        
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                this.performSearch(e.target.value);
+            }, 300);
+        });
+
+        // Quick search shortcuts
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                 e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
-                    target.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start'
-                    });
-                }
-            });
+                searchInput.focus();
+            }
         });
     }
 
-    initCards() {
-        // Анимация карточек при появлении
+    async performSearch(query) {
+        if (query.length < 2) return;
+
+        try {
+            // Show loading state
+            this.showNotification('Searching...', 'info');
+            
+            // In a real implementation, this would be an API call
+            console.log('Searching for:', query);
+            
+            // Simulate search results
+            setTimeout(() => {
+                this.showNotification(`Found results for "${query}"`, 'success');
+            }, 500);
+            
+        } catch (error) {
+            this.showNotification('Search failed', 'error');
+        }
+    }
+
+    initUserMenu() {
+        // Close user menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.user-dropdown')) {
+                document.querySelector('.user-menu').style.opacity = '0';
+                document.querySelector('.user-menu').style.visibility = 'hidden';
+            }
+        });
+
+        // User menu keyboard navigation
+        const userMenu = document.querySelector('.user-menu');
+        if (userMenu) {
+            userMenu.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    userMenu.style.opacity = '0';
+                    userMenu.style.visibility = 'hidden';
+                }
+            });
+        }
+    }
+
+    initStats() {
+        // Animate stat counters
+        const statValues = document.querySelectorAll('.stat-value');
+        
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
-                    entry.target.style.animation = 'fadeIn 0.6s ease-out';
+                    this.animateValue(entry.target);
+                    observer.unobserve(entry.target);
                 }
             });
         });
 
-        document.querySelectorAll('.card').forEach(card => {
-            observer.observe(card);
+        statValues.forEach(stat => observer.observe(stat));
+    }
+
+    animateValue(element) {
+        const target = parseInt(element.textContent);
+        const duration = 1500;
+        const step = target / (duration / 16);
+        let current = 0;
+
+        const timer = setInterval(() => {
+            current += step;
+            if (current >= target) {
+                element.textContent = target.toLocaleString();
+                clearInterval(timer);
+            } else {
+                element.textContent = Math.floor(current).toLocaleString();
+            }
+        }, 16);
+    }
+
+    initQuickActions() {
+        // Add hover effects to action cards
+        document.querySelectorAll('.action-card').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.transform = 'translateY(-4px) scale(1.02)';
+            });
+            
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0) scale(1)';
+            });
         });
     }
 
-    initForms() {
-        // Улучшенная валидация форм
-        document.querySelectorAll('form').forEach(form => {
-            form.addEventListener('submit', (e) => {
-                const requiredFields = form.querySelectorAll('[required]');
-                let isValid = true;
+    initCharts() {
+        // Initialize charts if Chart.js is available
+        if (typeof Chart !== 'undefined') {
+            this.initTrafficChart();
+            this.initActivityChart();
+        }
+    }
 
-                requiredFields.forEach(field => {
-                    if (!field.value.trim()) {
-                        this.showError(field, 'Это поле обязательно для заполнения');
-                        isValid = false;
-                    } else {
-                        this.clearError(field);
+    initTrafficChart() {
+        const ctx = document.getElementById('trafficChart');
+        if (!ctx) return;
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                datasets: [{
+                    label: 'Page Views',
+                    data: [65, 78, 90, 81, 86, 95],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
                     }
-                });
-
-                if (!isValid) {
-                    e.preventDefault();
-                    this.showNotification('Пожалуйста, заполните все обязательные поля', 'error');
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
                 }
-            });
-        });
-
-        // Динамические счетчики символов
-        document.querySelectorAll('textarea, input[type="text"]').forEach(field => {
-            const counter = field.parentNode.querySelector('.char-counter');
-            if (counter) {
-                field.addEventListener('input', () => {
-                    const length = field.value.length;
-                    const maxLength = field.maxLength || Infinity;
-                    
-                    counter.textContent = `${length} / ${maxLength}`;
-                    
-                    if (length > maxLength * 0.9) {
-                        counter.classList.add('warning');
-                    } else {
-                        counter.classList.remove('warning');
-                    }
-                    
-                    if (length > maxLength) {
-                        counter.classList.add('error');
-                    } else {
-                        counter.classList.remove('error');
-                    }
-                });
             }
         });
     }
 
+    initActivityChart() {
+        const ctx = document.getElementById('activityChart');
+        if (!ctx) return;
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [{
+                    label: 'Posts',
+                    data: [12, 19, 8, 15, 12, 5, 3],
+                    backgroundColor: '#10b981'
+                }, {
+                    label: 'Comments',
+                    data: [8, 12, 6, 10, 7, 8, 4],
+                    backgroundColor: '#3b82f6'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        stacked: true
+                    },
+                    y: {
+                        stacked: true
+                    }
+                }
+            }
+        });
+    }
+
+    initResponsive() {
+        // Handle window resize
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                this.handleResize();
+            }, 250);
+        });
+
+        // Initial check
+        this.handleResize();
+    }
+
+    handleResize() {
+        const sidebar = document.querySelector('.admin-sidebar');
+        const isMobile = window.innerWidth < 1024;
+
+        if (isMobile) {
+            sidebar.classList.remove('mobile-open');
+        } else {
+            sidebar.classList.remove('mobile-open');
+        }
+    }
+
     initNotifications() {
-        // Система уведомлений
+        // Notification system
         this.notificationContainer = document.createElement('div');
         this.notificationContainer.className = 'notification-container';
         this.notificationContainer.style.cssText = `
             position: fixed;
-            top: 20px;
+            top: 80px;
             right: 20px;
             z-index: 10000;
             display: flex;
             flex-direction: column;
             gap: 10px;
+            max-width: 400px;
         `;
         document.body.appendChild(this.notificationContainer);
     }
@@ -123,108 +273,73 @@ class ModernAdmin {
         const notification = document.createElement('div');
         notification.className = `notification notification-${type}`;
         notification.style.cssText = `
-            background: var(--card);
-            color: var(--text);
+            background: white;
+            color: var(--gray-700);
             padding: 16px 20px;
-            border-radius: 8px;
-            box-shadow: var(--shadow-lg);
-            border-left: 4px solid var(--${type});
+            border-radius: 12px;
+            box-shadow: var(--shadow-xl);
+            border-left: 4px solid var(--${type}-500);
             animation: slideInRight 0.3s ease-out;
-            max-width: 300px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         `;
-        
+
+        const icons = {
+            info: 'ℹ️',
+            success: '✅',
+            warning: '⚠️',
+            error: '❌'
+        };
+
         notification.innerHTML = `
-            <div style="font-weight: 600; margin-bottom: 4px;">${this.getNotificationTitle(type)}</div>
-            <div style="font-size: 14px;">${message}</div>
+            <span style="font-size: 18px;">${icons[type]}</span>
+            <span>${message}</span>
         `;
 
         this.notificationContainer.appendChild(notification);
 
+        // Auto remove
         setTimeout(() => {
             notification.style.animation = 'slideOutRight 0.3s ease-in';
-            setTimeout(() => notification.remove(), 300);
-        }, duration);
-    }
-
-    getNotificationTitle(type) {
-        const titles = {
-            info: 'ℹ️ Информация',
-            success: '✅ Успех',
-            warning: '⚠️ Внимание',
-            error: '❌ Ошибка'
-        };
-        return titles[type] || titles.info;
-    }
-
-    showError(field, message) {
-        this.clearError(field);
-        
-        field.style.borderColor = 'var(--danger)';
-        
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'field-error';
-        errorDiv.style.cssText = `
-            color: var(--danger);
-            font-size: 12px;
-            margin-top: 4px;
-        `;
-        errorDiv.textContent = message;
-        
-        field.parentNode.appendChild(errorDiv);
-    }
-
-    clearError(field) {
-        field.style.borderColor = '';
-        const existingError = field.parentNode.querySelector('.field-error');
-        if (existingError) {
-            existingError.remove();
-        }
-    }
-
-    initQuickActions() {
-        // Быстрые действия для карточек
-        document.querySelectorAll('.card').forEach(card => {
-            card.addEventListener('click', (e) => {
-                if (e.target.classList.contains('quick-action')) {
-                    e.preventDefault();
-                    this.handleQuickAction(e.target.dataset.action, card);
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
                 }
-            });
+            }, 300);
+        }, duration);
+
+        // Manual dismiss
+        notification.addEventListener('click', () => {
+            notification.style.animation = 'slideOutRight 0.3s ease-in';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
         });
     }
 
-    handleQuickAction(action, element) {
-        switch (action) {
-            case 'preview':
-                this.showNotification('Функция предпросмотра в разработке', 'info');
-                break;
-            case 'edit':
-                window.location.href = element.querySelector('a').href;
-                break;
-            case 'delete':
-                if (confirm('Вы уверены, что хотите удалить этот элемент?')) {
-                    this.showNotification('Элемент удален', 'success');
-                }
-                break;
+    // Utility methods
+    formatNumber(num) {
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1) + 'M';
         }
+        if (num >= 1000) {
+            return (num / 1000).toFixed(1) + 'K';
+        }
+        return num.toString();
     }
 
-    initResponsive() {
-        // Адаптивное поведение
-        const updateLayout = () => {
-            const width = window.innerWidth;
-            if (width < 768) {
-                document.body.classList.add('mobile-view');
-            } else {
-                document.body.classList.remove('mobile-view');
-            }
-        };
-
-        window.addEventListener('resize', updateLayout);
-        updateLayout();
+    formatDate(date) {
+        return new Date(date).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
     }
 
-    // Утилиты
     debounce(func, wait) {
         let timeout;
         return function executedFunction(...args) {
@@ -236,32 +351,14 @@ class ModernAdmin {
             timeout = setTimeout(later, wait);
         };
     }
-
-    formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    formatDate(dateString) {
-        return new Date(dateString).toLocaleDateString('ru-RU', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    }
 }
 
-// Инициализация при загрузке DOM
+// Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    window.modernAdmin = new ModernAdmin();
+    window.admin = new ModernAdmin();
 });
 
-// CSS анимации для уведомлений
+// Add CSS animations
 const style = document.createElement('style');
 style.textContent = `
     @keyframes slideInRight {
@@ -286,17 +383,53 @@ style.textContent = `
         }
     }
     
-    .mobile-view .admin-sidebar {
-        position: fixed;
-        top: 0;
-        left: -100%;
-        height: 100vh;
-        z-index: 1000;
-        transition: left 0.3s ease;
+    .sidebar-toggle {
+        display: none;
+        background: none;
+        border: none;
+        color: var(--gray-600);
+        padding: 8px;
+        border-radius: 6px;
+        cursor: pointer;
     }
     
-    .mobile-view .admin-sidebar.active {
-        left: 0;
+    @media (max-width: 1024px) {
+        .sidebar-toggle {
+            display: block;
+        }
+        
+        .admin-sidebar {
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+        }
+        
+        .admin-sidebar.mobile-open {
+            transform: translateX(0);
+        }
+    }
+    
+    .loading {
+        opacity: 0.7;
+        pointer-events: none;
+        position: relative;
+    }
+    
+    .loading::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 20px;
+        height: 20px;
+        border: 2px solid var(--gray-300);
+        border-top: 2px solid var(--primary-500);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: translate(-50%, -50%) rotate(0deg); }
+        100% { transform: translate(-50%, -50%) rotate(360deg); }
     }
 `;
 document.head.appendChild(style);
