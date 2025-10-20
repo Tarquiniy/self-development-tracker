@@ -1,5 +1,5 @@
-/* Полный файл с приоритетными базовыми стилями для админки.
-   Обновлён для устранения белого текста на белом фоне и обрезания кнопок. */
+/* Полный файл стилей для админки. Замените существующий admin-modern.css этим файлом. */
+/* Умышленно простой, без конфликтующих селекторов и с приоритетной сеткой. */
 
 :root{
   --bg:#f6f8fb;
@@ -10,42 +10,44 @@
   --text:#0b1220;
   --radius:10px;
   --shadow: 0 8px 20px rgba(11,17,32,0.06);
+  --maxw:1200px;
+  --gap:18px;
   font-family: Inter, "Helvetica Neue", Arial, sans-serif;
 }
 
 html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-size:14px}
-.container{max-width:1200px;margin:0 auto;padding:18px}
+.post-editor-modern{max-width:var(--maxw);margin:12px auto;padding:0 16px;box-sizing:border-box}
 
-/* Основные карточки и контейнеры */
-.post-editor-modern { max-width:1200px; margin: 12px auto; padding: 6px; box-sizing:border-box; }
-.editor-header { margin-bottom: 12px; }
-.editor-main { display:grid; grid-template-columns: 1fr 360px; gap:18px; align-items:start; }
-@media (max-width:1000px) { .editor-main { grid-template-columns:1fr; } }
+/* Header */
+.editor-header{margin-bottom:16px}
+.header-content{display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box}
+.header-title{flex:1 1 auto;min-width:0}
+.header-actions{flex:0 0 auto;display:flex;gap:10px;align-items:center;justify-content:flex-end;white-space:nowrap;flex-wrap:wrap}
 
-/* Карточки */
-.editor-card { background:var(--surface); border-radius:var(--radius); padding:12px; box-shadow:var(--shadow); border:1px solid rgba(11,17,32,0.03); }
+/* Grid */
+.editor-main{display:grid;grid-template-columns:1fr 360px;gap:var(--gap);align-items:start;width:100%;box-sizing:border-box}
+@media (max-width:1024px){ .editor-main{grid-template-columns:1fr} }
 
-/* Поля */
-.form-input, .form-textarea, .form-select, textarea, input[type="text"], input[type="datetime-local"] {
-  width:100%; padding:10px; border-radius:8px; border:1px solid rgba(11,17,32,0.06); box-sizing:border-box; background:#fff; color:var(--text);
-}
+/* Card */
+.editor-card{background:var(--surface);border-radius:var(--radius);padding:12px;box-shadow:var(--shadow);border:1px solid rgba(11,17,32,0.03);box-sizing:border-box}
 
-/* Кнопки: дефолт и primary */
-.btn, .button, .submit-row .default, input[type="submit"] {
-  display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:8px;
-  background:#fff; color:var(--text); border:1px solid rgba(11,17,32,0.06); cursor:pointer; font-weight:600;
-}
-.btn-primary, .submit-row .default.button-primary, input[type="submit"].primary {
-  background:var(--accent); color:#fff; border-color:var(--accent-dark);
-  box-shadow: 0 6px 18px rgba(11,85,255,0.12);
-}
+/* Form fields */
+input, textarea, select { background:#fff; color:var(--text); border-radius:8px; border:1px solid rgba(11,17,32,0.06); padding:10px; box-sizing:border-box; width:100%; }
+textarea{min-height:140px; resize:vertical;}
 
-/* Утилиты */
-.help-text { color:var(--muted); font-size:12px; margin-top:6px; }
-.char-counter { text-align:right; font-size:12px; color:var(--muted); margin-top:6px; }
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;background:#fff;color:var(--text);border:1px solid rgba(11,17,32,0.06);cursor:pointer;font-weight:600;text-decoration:none;box-sizing:border-box}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent-dark);box-shadow:0 6px 18px rgba(11,85,255,0.12)}
 
-/* Обновления для виджетов редактора */
-.cke, .tox, iframe { width:100% !important; max-width:100% !important; }
+/* Helpers */
+.help-text{color:var(--muted);font-size:12px;margin-top:6px}
+.char-counter{text-align:right;font-size:12px;color:var(--muted);margin-top:6px}
 
-/* Минимальные исправления визуальных багов */
-* { box-sizing: border-box; }
+/* Editor widgets */
+.cke, .tox, iframe { width:100% !important; max-width:100% !important; box-sizing:border-box !important; }
+
+/* Safety: не даём элементам визуально выходить за контейнер */
+.post-editor-modern *, .post-editor-modern img, .post-editor-modern iframe { max-width:100%; }
+
+/* Minimal reset for problematic inherited styles */
+.post-editor-modern * { background-blend-mode: normal !important; filter: none !important; }
