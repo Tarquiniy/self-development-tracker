@@ -1,0 +1,67 @@
+{% load static i18n %}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}{{ site_title|default:_('Админка') }}{% endblock %}</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/custom.css' %}">
+  {% block extrahead %}{% endblock %}
+</head>
+<body class="modern-admin">
+  <header class="admin-topbar" role="banner">
+    <div class="admin-topbar-inner container">
+      <a class="brand" href="{% url 'admin:index' %}">
+        <img class="brand-logo" src="{% static 'admin/logo-small.svg' %}" alt="logo" />
+        <span class="brand-title">Positive Theta</span>
+      </a>
+
+      <nav class="top-actions" aria-label="Верхние действия">
+        <a href="{% url 'admin:index' %}" class="top-link">{% trans "Дашборд" %}</a>
+        <a href="/" target="_blank" class="top-link">{% trans "Сайт" %}</a>
+        {% if user.is_authenticated %}
+          <div class="user-block">
+            <span class="user-name">{{ user.get_full_name|default:user.get_username }}</span>
+            <a href="{% url 'admin:logout' %}" class="btn-logout">{% trans "Выйти" %}</a>
+          </div>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  <div class="admin-shell">
+    <aside class="admin-sidebar" role="navigation">
+      <div class="sidebar-inner">
+        <div class="sidebar-top">
+          <h3 class="sidebar-brand">Управление</h3>
+        </div>
+        <ul class="sidebar-menu">
+          <li><a href="{% url 'admin:index' %}">{% trans "Главная" %}</a></li>
+          <li><a href="{% url 'admin:blog_post_changelist' %}">{% trans "Посты" %}</a></li>
+          <li><a href="{% url 'admin:blog_medialibrary_changelist' %}">{% trans "Медиа" %}</a></li>
+          <li><a href="{% url 'admin:auth_user_changelist' %}">{% trans "Пользователи" %}</a></li>
+        </ul>
+        <div class="sidebar-footer">
+          <small>Версия интерфейса: 1</small>
+        </div>
+      </div>
+    </aside>
+
+    <main class="admin-content" role="main">
+      <div class="container">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+
+  <footer class="admin-footer">
+    <div class="container">
+      <span>© {% now "Y" %} Positive Theta</span>
+    </div>
+  </footer>
+
+  <script src="{% static 'admin/js/admin_dashboard.js' %}"></script>
+  {% block extrafooter %}{% endblock %}
+</body>
+</html>
