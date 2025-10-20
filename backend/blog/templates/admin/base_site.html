@@ -1,12 +1,12 @@
 {% extends "admin/base.html" %}
-{% load static i18n %}
+{% load static i18n admin_compat %}
 
 {% block extrahead %}
   {{ block.super }}
   <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
-  <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}"> {# добавлено: унифицированные стили #}
+  <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
   <script defer src="{% static 'admin/js/custom_admin.js' %}"></script>
-  <script defer src="{% static 'admin/js/admin_dashboard.js' %}"></script> {# добавлено: скрипт дашборда (безопасный) #}
+  <script defer src="{% static 'admin/js/admin_dashboard.js' %}"></script>
 {% endblock %}
 
 {% block branding %}
@@ -31,9 +31,7 @@
       </div>
       <div class="flex items-center gap-2">
         <a href="{% url 'admin:index' %}" class="pt-btn">Dashboard</a>
-        {# Безопасная быстрая ссылка: открывает страницу приложения blog в админке.
-           Это не вызывает NoReverseMatch, даже если конкретные модели не зарегистрированы. #}
-        <a href="{% url 'admin:app_list' 'blog' %}" class="pt-btn-primary">Quick create / Blog</a>
+        <a href="{% admin_changelist_or_app_list 'blog' 'post' %}" class="pt-btn-primary">Quick create / Blog</a>
       </div>
     </div>
   </div>
@@ -49,7 +47,6 @@
           });
         }
       } catch (e) {
-        /* fail silently */
         if (window.console) console.error('[pt-topbar] init error', e);
       }
     });
