@@ -5,6 +5,7 @@ import logging
 from django import forms
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
+from django.contrib.admin.views.decorators import staff_member_required
 from django.urls import reverse, path
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, Http404
