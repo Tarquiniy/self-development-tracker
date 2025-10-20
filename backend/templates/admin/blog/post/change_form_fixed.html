@@ -1,26 +1,32 @@
-{# admin/blog/post/change_form_fixed.html
-   Полноценный change_form для модели Post с улучшенным UI:
-   - единый layout (совместим с admin/base_site.html)
-   - рендер стандартного adminform + инлайнов
-   - сайдбар с Publish / Status / Metadata
-   - JS: autosave -> localStorage, preview, slugify, image preview
+{# backend/templates/admin/blog/post/change_form_fixed.html
+   Полноценный change_form для модели Post, адаптированный под структуру БД:
+   - рендерит adminform (основная форма)
+   - поддержка inline formsets
+   - боковая панель: статус, slug, изображение, автор, даты, быстрые метрики (attachments, revisions, views, comments, reactions)
+   - JS: автосохранение в localStorage, подсказка slug, предварительный просмотр (POST в новое окно), preview кнопки
+   Основа взята из общего админ-layout'а (admin/base_site.html).
 #}
 
 {% extends "admin/base_site.html" %}
 {% load i18n admin_urls static widget_tweaks %}
 
-{% block title %}{% if original %}{% blocktrans with title=original %}Change: {{ title }}{% endblocktrans %}{% else %}{% trans "Add post" %}{% endif %}{% endblock %}
+{% block title %}
+  {% if original %}
+    {{ original }} — {% trans "Редактирование записи" %}
+  {% else %}
+    {% trans "Добавить пост" %}
+  {% endif %}
+{% endblock %}
 
 {% block extrahead %}
   {{ block.super }}
-  {# Optionally include editor init scripts if you have them in static #}
   <script src="{% static 'admin/js/ckeditor-init.js' %}"></script>
   <script src="{% static 'admin/js/tiptap-init.js' %}"></script>
 
   <style>
-    /* Local adjustments specific to change form to match admin-modern.css */
-    .post-edit-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
-    .meta-panel { position: sticky; top: 86px; }
+    /* Локальные стили формы, согласованы с admin-modern.css */
+    .post-edit-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items:start; }
+    .meta-panel { position: sticky; top:86px; }
     .field-label { font-weight:700; margin-bottom:6px; color: #0f172a; }
     .help-text { color: #6b7280; font-size:0.92rem; margin-top:6px; }
     .preview-image { max-width:100%; border-radius:8px; border:1px solid #e8eef8; margin-top:8px; }
@@ -29,6 +35,10 @@
     .actions-row { display:flex; gap:10px; align-items:center; }
     .save-primary { background:var(--primary-2); color:#fff; padding:8px 12px; border-radius:8px; border:none; font-weight:700; }
     .save-secondary { background:#f3f4f6; padding:8px 12px; border-radius:8px; border:1px solid #e6eef6; }
+    .metrics-list { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+    .metric { display:flex; justify-content:space-between; align-items:center; padding:8px; background:#fff; border-radius:8px; box-shadow:0 6px 14px rgba(2,6,23,0.04); }
+    .metric .m-label { color:#475569; font-weight:600; }
+    .metric .m-value { font-size:1rem; font-weight:800; color:#0f172a; }
   </style>
 {% endblock %}
 
@@ -37,24 +47,24 @@
     <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
       <div>
         <h1 style="margin:0;">
-          {% if original %}
-            {{ original }} <small style="color:var(--muted);font-weight:600;">— Редактирование</small>
-          {% else %}
-            <span>{% trans "Создать новый пост" %}</span>
-          {% endif %}
+          {% if original %}{{ original }}{% else %}{% trans "Новый пост" %}{% endif %}
         </h1>
-        <div style="margin-top:6px;color:var(--muted);">ID: {% if original %}{{ original.pk }}{% else %}{% trans "не сохранено" %}{% endif %}</div>
+        <div style="margin-top:6px;color:var(--muted);">
+          {% if original %}{% trans "ID" %}: {{ original.pk }}{% else %}{% trans "Ещё не сохранено" %}{% endif %}
+        </div>
       </div>
 
       <div class="actions-row">
-        {# Standard admin save buttons (use submit_row rendered block) #}
         {% if has_delete_permission and original %}
-          <a href="{% url opts|admin_urlname:'delete' original.pk %}{% if preserved_filters %}?{{ preserved_filters }}{% endif %}" class="save-secondary">{% trans "Удалить" %}</a>
+          <a href="{% url opts|admin_urlname:'delete' original.pk %}{% if preserved_filters %}?{{ preserved_filters }}{% endif %}" class="save-secondary">
+            {% trans "Удалить" %}
+          </a>
         {% endif %}
 
         <button type="submit" form="post-form" class="save-primary" id="btn-save">{% trans "Сохранить" %}</button>
 
         <button type="button" class="save-secondary" id="btn-preview">{% trans "Предпросмотр" %}</button>
+
         <span class="autosave-indicator" id="autosave-info">{% trans "Последний автосейв:" %} <span id="autosave-time">—</span></span>
       </div>
     </div>
@@ -63,34 +73,29 @@
       <form id="post-form" method="post" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
         <div class="post-edit-grid">
+          <!-- MAIN COLUMN -->
           <section>
-            {# Render non-field errors #}
             {% if adminform.non_field_errors %}
               <div class="errors">{{ adminform.non_field_errors }}</div>
             {% endif %}
 
-            {# Main form fields (we render them grouped as in default admin: fieldsets) #}
+            {# Рендерим fieldsets через adminform (гарантирует корректность с ModelAdmin) #}
             {% for fieldset in adminform %}
-              <fieldset class="module aligned">
+              <fieldset class="module aligned" style="margin-bottom:16px;">
                 {% if fieldset.name %}
                   <h2 style="margin:0 0 8px 0;font-size:16px;">{{ fieldset.name }}</h2>
                 {% endif %}
+
                 <div class="form-row">
                   {% for field in fieldset %}
-                    <div class="form-row item" style="margin-bottom:14px;">
+                    <div style="margin-bottom:14px;">
                       {% if field.is_hidden %}
                         {{ field }}
                       {% else %}
-                        <div class="field-label">{{ field.label }}</div>
-                        <div class="field widget-wrap">
-                          {{ field|add_class:"w-full" }}
-                          {% if field.errors %}
-                            <div class="errors">{{ field.errors }}</div>
-                          {% endif %}
-                          {% if field.help_text %}
-                            <div class="help-text">{{ field.help_text|safe }}</div>
-                          {% endif %}
-                        </div>
+                        <div class="field-label">{{ field.label|safe }}</div>
+                        <div class="field widget-wrap">{{ field|add_class:"w-full" }}</div>
+                        {% if field.errors %}<div class="errors">{{ field.errors }}</div>{% endif %}
+                        {% if field.help_text %}<div class="help-text">{{ field.help_text|safe }}</div>{% endif %}
                       {% endif %}
                     </div>
                   {% endfor %}
@@ -98,13 +103,14 @@
               </fieldset>
             {% endfor %}
 
-            {# Inline formsets (comments, attachments, etc.) #}
+            {# Inlines (attachments, comments, etc.) #}
             {% for inline_admin_formset in inline_admin_formsets %}
               <div class="inline-group card" style="margin-top:18px; padding:14px;">
                 <h3 style="margin:0 0 12px 0;">{{ inline_admin_formset.opts.verbose_name_plural }}</h3>
-                {% for frm in inline_admin_formset %}
+
+                {% for formset_form in inline_admin_formset %}
                   <div class="inline-related" style="margin-bottom:12px;">
-                    {% for field in frm %}
+                    {% for field in formset_form %}
                       <div style="margin-bottom:8px;">
                         {% if field.is_hidden %}
                           {{ field }}
@@ -114,107 +120,151 @@
                         {% endif %}
                       </div>
                     {% endfor %}
-                    {% if frm.original %}
-                      <div class="help-text">ID: {{ frm.original.pk }}</div>
+                    {% if formset_form.original %}
+                      <div class="help-text">ID: {{ formset_form.original.pk }}</div>
                     {% endif %}
                   </div>
                 {% endfor %}
+
                 {% if inline_admin_formset.has_add_permission %}
-                  <p><a class="add-related" href="#">{% trans "Добавить ещё" %} {{ inline_admin_formset.opts.verbose_name }}</a></p>
+                  <p><a class="add-related" href="#">{% trans "Добавить" %} {{ inline_admin_formset.opts.verbose_name }}</a></p>
                 {% endif %}
               </div>
             {% endfor %}
 
-            {# Submit buttons at bottom too for convenience #}
             <div style="margin-top:18px;display:flex;gap:8px;">
               <button type="submit" class="save-primary">{% trans "Сохранить" %}</button>
               <a href="{% url 'admin:index' %}" class="save-secondary">{% trans "Отмена" %}</a>
             </div>
           </section>
 
+          <!-- SIDEBAR -->
           <aside class="meta-panel card" aria-label="Post metadata">
             <div class="card-body">
-              <h3 style="margin-top:0;">{% trans "Статус" %}</h3>
+              <h3 style="margin-top:0;">{% trans "Статус и публикация" %}</h3>
 
-              <div style="display:flex;flex-direction:column;gap:8px;">
-                {# Published checkbox or status field #}
-                {% if adminform.form.publish %}
-                  <label class="field-label">{{ adminform.form.publish.label_tag }}</label>
+              {# Try to render publish/status fields from adminform.form if they exist #}
+              {% if adminform.form.publish %}
+                <div style="margin-bottom:8px;">
+                  <div class="field-label">{{ adminform.form.publish.label }}</div>
                   <div>{{ adminform.form.publish }}</div>
-                {% else %}
-                  {# fallback to status/status_display fields #}
-                  {% if original and original.get_status_display %}
-                    <div class="status-badge status-green">{{ original.get_status_display }}</div>
+                </div>
+              {% endif %}
+
+              {% if adminform.form.status %}
+                <div style="margin-bottom:8px;">
+                  <div class="field-label">{{ adminform.form.status.label }}</div>
+                  <div>{{ adminform.form.status }}</div>
+                </div>
+              {% endif %}
+
+              {% if adminform.form.published_at %}
+                <div style="margin-bottom:8px;">
+                  <div class="field-label">{{ adminform.form.published_at.label }}</div>
+                  <div>{{ adminform.form.published_at }}</div>
+                </div>
+              {% endif %}
+
+              <hr style="margin:12px 0;" />
+
+              {# Slug field + suggestion #}
+              {% if adminform.form.slug %}
+                <div style="margin-bottom:10px;">
+                  <div class="field-label">{{ adminform.form.slug.label }}</div>
+                  <div>{{ adminform.form.slug }}</div>
+                  <span class="slug-auto" id="slug-suggestion">{% trans "Подсказка slug" %}</span>
+                </div>
+              {% endif %}
+
+              <hr style="margin:12px 0;" />
+
+              {# Featured image #}
+              {% if adminform.form.featured_image %}
+                <div style="margin-bottom:10px;">
+                  <div class="field-label">{{ adminform.form.featured_image.label }}</div>
+                  <div>{{ adminform.form.featured_image }}</div>
+                  {% if original and original.featured_image %}
+                    <img src="{{ original.featured_image.url }}" alt="preview" class="preview-image" id="existing-image-preview" />
+                  {% else %}
+                    <img src="" alt="" class="preview-image" id="new-image-preview" style="display:none;" />
                   {% endif %}
-                {% endif %}
+                </div>
+              {% endif %}
 
-                {# Published date/time #}
-                {% if adminform.form.published_at %}
-                  <div>
-                    <div class="field-label">{{ adminform.form.published_at.label }}</div>
-                    <div>{{ adminform.form.published_at }}</div>
-                  </div>
-                {% endif %}
+              <hr style="margin:12px 0;" />
 
-                {# Slug helper #}
-                {% if adminform.form.slug %}
-                  <div>
-                    <div class="field-label">{{ adminform.form.slug.label }}</div>
-                    <div>{{ adminform.form.slug }}</div>
-                    <span class="slug-auto" id="slug-suggestion">{% trans "Подсказка slug будет здесь" %}</span>
-                  </div>
-                {% endif %}
+              {# Author / created info #}
+              <div style="margin-bottom:8px;">
+                <div class="field-label">{% trans "Автор" %}</div>
+                <div style="color:var(--muted);">{% if original %}{{ original.author }}{% else %}{% trans "Не указан" %}{% endif %}</div>
+              </div>
 
-                {# Featured image preview (if present in form) #}
-                {% if adminform.form.featured_image %}
-                  <div>
-                    <div class="field-label">{{ adminform.form.featured_image.label }}</div>
-                    <div>{{ adminform.form.featured_image }}</div>
-                    {% if original and original.featured_image %}
-                      <img src="{{ original.featured_image.url }}" alt="preview" class="preview-image" id="existing-image-preview" />
-                    {% else %}
-                      <img src="" alt="" class="preview-image" id="new-image-preview" style="display:none;" />
-                    {% endif %}
-                  </div>
-                {% endif %}
+              <div style="margin-bottom:8px;">
+                <div class="field-label">{% trans "Создано" %}</div>
+                <div style="color:var(--muted);">{% if original and original.created_at %}{{ original.created_at|date:"SHORT_DATETIME_FORMAT" }}{% else %}—{% endif %}</div>
+              </div>
 
-                {# Author / Created info #}
-                <div style="margin-top:12px;">
-                  <div class="field-label">{% trans "Автор" %}</div>
-                  <div style="color:var(--muted);">
-                    {% if original %}{{ original.author }}{% else %}{% trans "Не указано" %}{% endif %}
-                  </div>
+              <div style="margin-bottom:8px;">
+                <div class="field-label">{% trans "Последнее изменение" %}</div>
+                <div style="color:var(--muted);">{% if original and original.updated_at %}{{ original.updated_at|date:"SHORT_DATETIME_FORMAT" }}{% else %}—{% endif %}</div>
+              </div>
 
-                  <div class="field-label" style="margin-top:8px;">{% trans "Создано" %}</div>
-                  <div style="color:var(--muted);">
-                    {% if original and original.created_at %}{{ original.created_at|date:"SHORT_DATETIME_FORMAT" }}{% else %}—{% endif %}
-                  </div>
+              <hr style="margin:12px 0;" />
+
+              {# Quick metrics (attachments, revisions, views, comments, reactions) #}
+              <h4 style="margin:0 0 8px 0;">{% trans "Метрики" %}</h4>
+              <div class="metrics-list">
+                <div class="metric">
+                  <div class="m-label">{% trans "Вложения" %}</div>
+                  <div class="m-value">{% if original %}{{ original.blog_postattachment_set.count }}{% else %}0{% endif %}</div>
                 </div>
 
-                {# Preview link (will POST current draft to preview if possible) #}
-                <div style="margin-top:12px;">
-                  <button type="button" id="btn-preview-sidebar" class="save-secondary">{% trans "Открыть предпросмотр" %}</button>
+                <div class="metric">
+                  <div class="m-label">{% trans "Ревизии" %}</div>
+                  <div class="m-value">{% if original %}{{ original.blog_postrevision_set.count }}{% else %}0{% endif %}</div>
+                </div>
+
+                <div class="metric">
+                  <div class="m-label">{% trans "Просмотры" %}</div>
+                  <div class="m-value">{% if original %}{{ original.blog_postview_set.count }}{% else %}0{% endif %}</div>
+                </div>
+
+                <div class="metric">
+                  <div class="m-label">{% trans "Комментарии" %}</div>
+                  <div class="m-value">{% if original %}{{ original.blog_comment_set.count }}{% else %}0{% endif %}</div>
+                </div>
+
+                <div class="metric">
+                  <div class="m-label">{% trans "Реакции" %}</div>
+                  <div class="m-value">{% if original %}{{ original.blog_postreaction_set.count }}{% else %}0{% endif %}</div>
                 </div>
               </div>
 
               <hr style="margin:12px 0;" />
 
-              <div>
-                <h4 style="margin:0 0 8px 0;">{% trans "Дополнительно" %}</h4>
-                <div style="font-size:0.95rem;color:var(--muted);">
-                  {% if original and original.pk %}
-                    <div>{% trans "URL:" %} <br /><a href="{{ original.get_absolute_url }}" target="_blank">{{ original.get_absolute_url }}</a></div>
-                    <div style="margin-top:8px;">ID: {{ original.pk }}</div>
-                  {% else %}
-                    <div>{% trans "Запись ещё не сохранена" %}</div>
+              {# Links: open public URL, open revisions in admin if exists #}
+              <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
+                {% if original and original.get_absolute_url %}
+                  <a href="{{ original.get_absolute_url }}" target="_blank" class="save-secondary">{% trans "Открыть на сайте" %}</a>
+                {% endif %}
+
+                {% if original %}
+                  <a href="{% url 'admin:blog_blogpostchange' original.pk %}" class="save-secondary">{% trans "Редактировать в админке (полная страница)" %}</a>
+                {% endif %}
+
+                {% comment %} предоставить быстрый переход к ревизиям (если используются reversion) {% endcomment %}
+                {% if original %}
+                  {% if original.reversion_set %}
+                    <a href="{% url 'admin:reversion_revision_changelist' %}?id={{ original.pk }}" class="save-secondary">{% trans "Ревизии (reversion)" %}</a>
                   {% endif %}
-                </div>
+                {% endif %}
               </div>
+
             </div>
           </aside>
         </div>
 
-        {# Render hidden fields Django admin needs (prepopulated fields etc.) #}
+        {# Hidden fields (сюда попадают prepopulated, next, и т.п.) #}
         {% for hidden in adminform.form.hidden_fields %}
           {{ hidden }}
         {% endfor %}
@@ -227,12 +277,11 @@
   {{ block.super }}
   <script>
     (function () {
-      // Basic helpers
       function qs(sel, ctx) { return (ctx || document).querySelector(sel); }
       function qsa(sel, ctx) { return Array.from((ctx || document).querySelectorAll(sel)); }
       function nowFmt(){ return new Date().toLocaleString(); }
 
-      // CSRF token setup for AJAX if needed
+      // CSRF token
       function getCookie(name) {
         const value = `; ${document.cookie}`;
         const parts = value.split(`; ${name}=`);
@@ -240,19 +289,16 @@
       }
       const csrftoken = getCookie('csrftoken');
 
-      // autosave to localStorage (safe, no server calls). Keyed by admin model & pk (or "new")
+      // Autosave key uses app_label & model_name from template context
       const modelKey = "{{ opts.app_label }}_{{ opts.model_name }}";
       const pk = "{% if original %}{{ original.pk }}{% else %}new{% endif %}";
       const autosaveKey = "autosave:" + modelKey + ":" + pk;
 
       const form = qs('#post-form');
-      const autosaveInfo = qs('#autosave-info');
       const autosaveTime = qs('#autosave-time');
-      const btnSave = qs('#btn-save');
       const btnPreview = qs('#btn-preview');
-      const btnPreviewSidebar = qs('#btn-preview-sidebar');
 
-      // Load autosaved data (if any) into inputs
+      // Load autosaved data (text fields only)
       try {
         const saved = localStorage.getItem(autosaveKey);
         if (saved) {
@@ -271,12 +317,12 @@
         }
       } catch(e){ console.warn('autosave load failed', e); }
 
-      // Collect form fields to save
+      // Collect fields for autosave
       function collectFormData() {
         const data = {};
         Array.from(form.elements).forEach(function(el){
           if (!el.name) return;
-          if (el.type === 'file') return; // skip files for localStorage
+          if (el.type === 'file') return; // skip files
           if (el.type === 'checkbox') data[el.name] = el.checked;
           else if (el.tagName === 'SELECT' && el.multiple) data[el.name] = Array.from(el.selectedOptions).map(o=>o.value);
           else data[el.name] = el.value;
@@ -285,16 +331,16 @@
         return data;
       }
 
-      // Autosave interval
+      // Autosave every 30s
       let autosaveTimer = setInterval(function(){
         try {
           const data = collectFormData();
           localStorage.setItem(autosaveKey, JSON.stringify(data));
           autosaveTime.textContent = new Date(data._autosave_time).toLocaleString();
         } catch(e){ console.warn('autosave failed', e); }
-      }, 30000); // every 30s
+      }, 30000);
 
-      // Slug suggestion: from title
+      // Slug suggestion from title-like fields
       const titleInput = form.querySelector('[name="title"]') || form.querySelector('[name="name"]');
       const slugInput = form.querySelector('[name="slug"]');
       const slugSuggestion = qs('#slug-suggestion');
@@ -310,14 +356,14 @@
       if (titleInput && slugInput && slugSuggestion) {
         const updateSlugHint = () => {
           const hint = slugify(titleInput.value);
-          slugSuggestion.textContent = hint ? ('Подсказка: ' + hint) : '{% trans "Подсказка slug будет здесь" %}';
+          slugSuggestion.textContent = hint ? ('Подсказка: ' + hint) : '{% trans "Подсказка slug" %}';
         };
         titleInput.addEventListener('input', updateSlugHint);
         updateSlugHint();
       }
 
-      // Image preview for file inputs named like featured_image
-      const imageInput = form.querySelector('input[type=file][name="featured_image"]') || form.querySelector('input[type=file].featured_image');
+      // Image preview for file input named "featured_image"
+      const imageInput = form.querySelector('input[type=file][name="featured_image"]');
       const newImagePreview = qs('#new-image-preview');
       if (imageInput && newImagePreview) {
         imageInput.addEventListener('change', function(ev){
@@ -329,28 +375,24 @@
         });
       }
 
-      // Preview: we create a temporary form and POST it to a new window (to use server-side preview if route exists)
+      // Preview: create temporary form and submit via POST to preview URL if exists (uses get_absolute_url preview endpoint fallback)
       function openPreview(){
-        // try to find preview url on model: preview_url or original.get_absolute_url? fallback to opening a new blank window with form content.
         const previewWindow = window.open('', '_blank');
-        if (!previewWindow) { alert('{% trans "Поп-ап блокируется. Разрешите всплывающие окна для этого сайта." %}'); return; }
+        if (!previewWindow) { alert('{% trans "Поп-ап блокируется. Разрешите всплывающие окна." %}'); return; }
 
-        // create a form, clone inputs (except files) and post to preview endpoint if provided; otherwise show raw title/content.
         const tempForm = document.createElement('form');
         tempForm.method = 'post';
         tempForm.target = previewWindow.name;
         tempForm.style.display = 'none';
 
-        // use preview endpoint if defined in DOM via data attribute
+        // preview URL priority: original.get_preview_url (if template context provides), else /preview/ relative, else model absolute url
         const previewUrl = "{{ original.get_preview_url|default:'' }}";
-        tempForm.action = previewUrl || window.location.pathname.replace(/\/change\/?$/, '/preview/') || window.location.pathname;
+        tempForm.action = previewUrl || window.location.pathname.replace(/\/(change|add)\/?$/, '/preview/') || window.location.pathname;
 
-        // csrf
         const csrfInput = document.createElement('input');
         csrfInput.type = 'hidden'; csrfInput.name = 'csrfmiddlewaretoken'; csrfInput.value = csrftoken;
         tempForm.appendChild(csrfInput);
 
-        // append textual fields only
         Array.from(form.elements).forEach(function(el){
           if (!el.name) return;
           if (el.type === 'file') return;
@@ -373,34 +415,21 @@
         tempForm.remove();
       }
 
-      // Bind preview buttons
       if (btnPreview) btnPreview.addEventListener('click', openPreview);
-      if (btnPreviewSidebar) btnPreviewSidebar.addEventListener('click', openPreview);
 
-      // If TipTap or CKEditor initialization script exists, try to initialize editors in page
+      // Init editors if available
       function initEditors(){
         try {
-          if (window.tiptap && typeof window.initTipTapEditors === 'function') {
-            window.initTipTapEditors(); // your static admin js may provide this
-          }
-          if (window.CKEDITOR && typeof window.initCkeditors === 'function') {
-            window.initCkeditors();
-          }
-        } catch(e){
-          // ignore
-        }
+          if (window.tiptap && typeof window.initTipTapEditors === 'function') window.initTipTapEditors();
+          if (window.CKEDITOR && typeof window.initCkeditors === 'function') window.initCkeditors();
+        } catch(e){ console.warn('editor init failed', e); }
       }
       document.addEventListener('DOMContentLoaded', initEditors);
 
-      // Clean up autosave on real save (when form successfully submits server-side, user will be redirected; but to be safe we remove key on submit)
+      // Remove local autosave when user submits the form (to avoid stale draft)
       form.addEventListener('submit', function(){
         try { localStorage.removeItem(autosaveKey); } catch(e) {}
       });
-
-      // Show autosave timestamp initially
-      if (!autosaveTime.textContent || autosaveTime.textContent === '—') {
-        autosaveTime.textContent = '—';
-      }
 
     })();
   </script>
