@@ -31,7 +31,9 @@
       </div>
       <div class="flex items-center gap-2">
         <a href="{% url 'admin:index' %}" class="pt-btn">Dashboard</a>
-        <button id="pt-quick-create" class="pt-btn-primary">Quick create</button>
+        {# Безопасная быстрая ссылка: открывает страницу приложения blog в админке.
+           Это не вызывает NoReverseMatch, даже если конкретные модели не зарегистрированы. #}
+        <a href="{% url 'admin:app_list' 'blog' %}" class="pt-btn-primary">Quick create / Blog</a>
       </div>
     </div>
   </div>
@@ -44,13 +46,6 @@
         if (toggle) {
           toggle.addEventListener('click', function () {
             document.body.classList.toggle('pt-sidebar-collapsed');
-          });
-        }
-        var quick = document.getElementById('pt-quick-create');
-        if (quick) {
-          quick.addEventListener('click', function () {
-            var href = "{% url 'admin:blog_post_add' %}";
-            window.location.href = href;
           });
         }
       } catch (e) {
