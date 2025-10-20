@@ -140,6 +140,7 @@ INSTALLED_APPS = [
     'storages',
     'reversion',
     'adminsortable2',
+    'widget_tweaks',
 ]
 
 # ========== CKEDITOR 5 ==========
