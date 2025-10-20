@@ -4,7 +4,9 @@
 {% block extrahead %}
   {{ block.super }}
   <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}"> {# добавлено: унифицированные стили #}
   <script defer src="{% static 'admin/js/custom_admin.js' %}"></script>
+  <script defer src="{% static 'admin/js/admin_dashboard.js' %}"></script> {# добавлено: скрипт дашборда (безопасный) #}
 {% endblock %}
 
 {% block branding %}
@@ -33,4 +35,28 @@
       </div>
     </div>
   </div>
+
+  <script>
+    // Минимальная логика управления сайдбаром и быстрым созданием.
+    document.addEventListener('DOMContentLoaded', function () {
+      try {
+        var toggle = document.getElementById('pt-toggle-sidebar');
+        if (toggle) {
+          toggle.addEventListener('click', function () {
+            document.body.classList.toggle('pt-sidebar-collapsed');
+          });
+        }
+        var quick = document.getElementById('pt-quick-create');
+        if (quick) {
+          quick.addEventListener('click', function () {
+            var href = "{% url 'admin:blog_post_add' %}";
+            window.location.href = href;
+          });
+        }
+      } catch (e) {
+        /* fail silently */
+        if (window.console) console.error('[pt-topbar] init error', e);
+      }
+    });
+  </script>
 {% endblock %}

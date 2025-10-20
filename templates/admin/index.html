@@ -1,47 +1,107 @@
-{% extends "admin/base_site.html" %}
-{% load i18n %}
-{% block title %}{% trans "Дашборд" %}{% endblock %}
-
-{% block content %}
-<div class="dashboard-grid">
-  <section class="card">
-    <header class="card-head">
-      <h2>{% trans "Статистика" %}</h2>
-    </header>
-    <div class="card-body">
-      <canvas id="pt-stats-chart" width="600" height="250" aria-label="График статистики"></canvas>
-
-      <div style="display:none" id="pt-dashboard-labels">{{ dashboard.labels|default:"[]"|json_script:"pt-dashboard-labels" }}</div>
-      <div style="display:none" id="pt-dashboard-posts">{{ dashboard.posts|default:"[]"|json_script:"pt-dashboard-posts" }}</div>
-      <div style="display:none" id="pt-dashboard-comments">{{ dashboard.comments|default:"[]"|json_script:"pt-dashboard-comments" }}</div>
-      <div style="display:none" id="pt-dashboard-views">{{ dashboard.views|default:"[]"|json_script:"pt-dashboard-views" }}</div>
-    </div>
-  </section>
-
-  <section class="card">
-    <header class="card-head"><h2>{% trans "Быстрые действия" %}</h2></header>
-    <div class="card-body">
-      <div class="quick-actions">
-        <a class="btn" href="{% url 'admin:blog_post_add' %}">{% trans "Новый пост" %}</a>
-        <a class="btn" href="{% url 'admin:auth_user_changelist' %}">{% trans "Пользователи" %}</a>
+{# templates/admin/index.html #}
+{% load static i18n %}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>{{ site_title|default:"Admin" }}</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="{% static 'admin/css/custom_admin_dashboard.css' %}">
+  {# подключаем стандартные админ-стили, чтобы не ломать внешний вид #}
+  <link rel="stylesheet" href="{% static 'admin/css/admin.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}"> {# добавлено: унифицированный стиль #}
+</head>
+<body class="dashboard-body">
+  <header class="dashboard-header">
+    <div class="container">
+      <div class="left">
+        <h1 class="site-title">{{ site_header|default:site_title }}</h1>
+        <p class="site-sub">Управление сайтом — быстрый доступ к блогу и медиатеке</p>
+      </div>
+      <div class="right">
+        <div class="user-block">Добро пожаловать, {{ user.get_full_name|default:user.username }}</div>
       </div>
     </div>
-  </section>
+  </header>
 
-  <section class="card wide">
-    <header class="card-head"><h2>{% trans "Приложения и модели" %}</h2></header>
-    <div class="card-body apps-grid">
-      {% for app in app_list %}
-        <div class="app">
-          <div class="app-title">{{ app.name }}</div>
-          <ul class="models">
-            {% for model in app.models %}
-              <li><a href="{{ model.admin_url }}">{{ model.name }}</a></li>
-            {% endfor %}
+  <main class="dashboard-main container">
+    <section class="quick-actions">
+      <a href="{% url 'admin:blog_post_add' %}" class="btn btn-primary">Создать пост</a>
+      <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-outline">Все посты</a>
+      <a href="/admin/media-library/" class="btn btn-outline">Медиатека</a>
+      <a href="{% url 'admin:blog_comment_changelist' %}" class="btn btn-outline">Комментарии</a>
+      <a href="{% url 'admin:auth_user_changelist' %}" class="btn btn-outline">Пользователи</a>
+    </section>
+
+    <section class="stats-grid" id="dashboard-stats" aria-live="polite" aria-busy="true">
+      <!-- карточки статистики будут заполнены JS -->
+      <div class="stat-card" data-key="posts">
+        <div class="stat-title">Посты</div>
+        <div class="stat-value">Загрузка…</div>
+      </div>
+      <div class="stat-card" data-key="drafts">
+        <div class="stat-title">Черновики</div>
+        <div class="stat-value">Загрузка…</div>
+      </div>
+      <div class="stat-card" data-key="views">
+        <div class="stat-title">Просмотры (7d)</div>
+        <div class="stat-value">Загрузка…</div>
+      </div>
+      <div class="stat-card" data-key="users">
+        <div class="stat-title">Пользователи</div>
+        <div class="stat-value">Загрузка…</div>
+      </div>
+      <div class="stat-card" data-key="media">
+        <div class="stat-title">Медиа-файлы</div>
+        <div class="stat-value">Загрузка…</div>
+      </div>
+    </section>
+
+    <section class="apps-and-recent">
+      <div class="apps">
+        <h3>Приложения</h3>
+        <div class="apps-grid">
+          {% for app in app_list %}
+            <div class="app">
+              <div class="app-title">{{ app.name }}</div>
+              <ul class="models">
+                {% for model in app.models %}
+                  <li><a href="{{ model.admin_url }}">{{ model.name }}</a></li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="recent">
+        <h3>Подсказки</h3>
+        <div class="panel">
+          <p>Быстрые операции:</p>
+          <ul>
+            <li>Нажмите «Создать пост», чтобы открыть форму создания нового поста.</li>
+            <li>Откройте медиатеку, чтобы загрузить изображения и прикрепить к постам.</li>
+            <li>Используйте автосохранение при редактировании поста.</li>
           </ul>
         </div>
-      {% endfor %}
+      </div>
+    </section>
+  </main>
+
+  <footer class="dashboard-footer">
+    <div class="container">
+      <span>Positive Theta Admin — удобная панель управления</span>
+      <small>— версия интерфейса: 1</small>
     </div>
-  </section>
-</div>
-{% endblock %}
+  </footer>
+
+  <script>
+    // перед подключением внешнего js — подгружаем базовый CSRF token
+    const ADMIN_CSRF = (function(){
+      function getCookie(name){let v=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');return v?v.pop():"";}
+      return { csrfToken: getCookie('csrftoken') };
+    })();
+  </script>
+  <script src="{% static 'admin/js/admin_dashboard.js' %}"></script>
+</body>
+</html>

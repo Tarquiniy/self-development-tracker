@@ -1,7 +1,6 @@
 import logging
 from django import forms
 from django.contrib import admin
-from django.contrib.admin import AdminSite
 from django.contrib.admin.sites import AlreadyRegistered
 from django.utils import timezone
 from django.utils.safestring import mark_safe
@@ -87,7 +86,8 @@ class BasePostAdmin(VersionAdmin):
             return ""
         colors = {'draft': 'gray', 'published': 'green', 'archived': 'orange'}
         color = colors.get(getattr(obj, 'status', ''), 'gray')
-        return mark_safe(f'<span class="status-badge status-{color}">{getattr(obj, "get_status_display", lambda: lambda: "")() if hasattr(obj, "get_status_display") else getattr(obj, "status", "")}</span>')
+        label = getattr(obj, "get_status_display", lambda: (lambda: getattr(obj, "status", "")))()
+        return mark_safe(f'<span class="status-badge status-{color}">{label}</span>')
     status_badge.short_description = "Статус"
     status_badge.admin_order_field = 'status'
 
@@ -121,8 +121,8 @@ class BasePostAdmin(VersionAdmin):
     make_draft.short_description = "Перевести в черновики"
 
     class Media:
-        css = {'all': ('admin/admin-modern.css', 'admin/custom.css')}
-        js = ('admin/js/admin_dashboard.js',)
+        css = {'all': ('admin/admin-modern.css', 'admin/custom.css', 'admin/css/main.css')}
+        js = ('admin/js/admin_dashboard.js', 'admin/js/custom_admin.js')
 
 # Регистрируем админ, если модель есть
 if Post is not None:
