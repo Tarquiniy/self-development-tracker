@@ -1,122 +1,48 @@
 {% extends "admin/change_form.html" %}
-{% load static %}
+{% load static i18n %}
 
 {% block extrahead %}
-{{ block.super }}
-<style>
-/* Базовые стили для улучшения внешнего вида */
-.post-editor-modern {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
+  <style>
+    /* Небольшие локальные правки для гарантированной корректности сетки */
+    .post-editor-modern { max-width: 1400px; margin: 0 auto; padding: 8px; box-sizing: border-box; }
+    .editor-header { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    .header-content { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    .header-title h1 { margin:0; font-size:20px; color:#0f172a; }
+    .header-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 
-.editor-header {
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 1rem 2rem;
-  margin: -1rem -2rem 2rem;
-}
+    .editor-main { display:grid; grid-template-columns: 1fr 360px; gap:18px; align-items:start; }
+    @media (max-width:1000px) { .editor-main { grid-template-columns: 1fr; } .post-preview{position:relative; width:100%; top:0;} }
 
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+    .editor-card { background:#fff; border-radius:8px; padding:14px; box-shadow:0 1px 3px rgba(0,0,0,0.04); border:1px solid rgba(15,23,42,0.04); }
+    .card-header h3 { margin:0; font-size:16px; color:#0f172a; display:flex; align-items:center; gap:8px; }
 
-.header-actions {
-  display: flex;
-  gap: 0.75rem;
-}
+    .form-input, .form-textarea, .form-select, textarea, input[type="text"], input[type="datetime-local"] {
+      width:100%; box-sizing:border-box; padding:10px 12px; border-radius:6px; border:1px solid #e6eef6; background:#fff;
+      font-size:14px; color:#0f172a;
+    }
 
-.btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
+    .form-textarea { min-height:120px; resize:vertical; }
+    /* Выровнять визуально редактор (CKEditor/TinyMCE) */
+    .editor iframe, .editor textarea, .editor .cke, .editor .tox-tinymce { width:100% !important; box-sizing:border-box; }
 
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-}
+    /* Кнопки */
+    .btn { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:8px; cursor:pointer; text-decoration:none; border:1px solid rgba(15,23,42,0.06); background:#f8fafc; color:#0f172a; font-weight:600; }
+    .btn-primary { background: #3b82f6; color: #fff; border: none; box-shadow: 0 6px 18px rgba(59,130,246,0.12); }
+    .btn-secondary { background: #f3f4f6; color: #0f172a; border:1px solid #e6eef6; }
+    .btn-action { display:block; width:100%; padding:10px 12px; border-radius:8px; text-align:center; background:#f8fafc; border:1px solid rgba(15,23,42,0.04); }
 
-.btn-secondary {
-  background: #6b7280;
-  color: white;
-}
+    /* Быстрая подсказка под полями */
+    .help-text { font-size:12px; color:#6b7280; margin-top:6px; }
 
-.btn-outline {
-  background: transparent;
-  border: 1px solid #d1d5db;
-  color: #374151;
-}
+    /* Счетчик символов справа */
+    .char-counter { text-align:right; font-size:12px; color:#6b7280; }
 
-.editor-main {
-  display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 2rem;
-  margin-top: 2rem;
-}
-
-.content-area, .sidebar-area {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.editor-card {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  padding: 1.5rem;
-}
-
-.card-header {
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-  color: #374151;
-}
-
-.form-input, .form-textarea, .form-select {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-}
-
-.title-field {
-  font-size: 1.25rem !important;
-  font-weight: 600;
-}
-
-.quick-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.btn-action {
-  width: 100%;
-  justify-content: center;
-  padding: 0.875rem 1rem;
-}
-</style>
+    /* Скрытые поля Django — оставляем их невидимыми, но в DOM */
+    .hidden-django-field { display:none !important; }
+  </style>
 {% endblock %}
 
 {% block content %}
@@ -127,260 +53,191 @@
       <div class="header-title">
         <h1>
           {% if original %}
-            Редактирование: {{ original.title|default:"Без названия"|truncatechars:50 }}
+            Редактирование: {{ original.title|default:"Без названия"|truncatechars:60 }}
           {% else %}
             📝 Создание нового поста
           {% endif %}
         </h1>
       </div>
-      <div class="header-actions">
-        <button type="submit" name="_save" class="btn btn-primary" form="post_form">💾 Сохранить</button>
-        <button type="submit" name="_continue" class="btn btn-secondary" form="post_form">🔄 Сохранить и продолжить</button>
-        <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-outline">← Назад</a>
+
+      <div class="header-actions" role="toolbar" aria-label="Действия">
+        <!-- Кнопки используют стандартные имена Django: _save, _continue, _addanother -->
+        <button type="button" class="btn btn-primary" id="pt-save-btn" name="_save" title="Сохранить">💾 Сохранить</button>
+        <button type="button" class="btn btn-secondary" id="pt-continue-btn" name="_continue" title="Сохранить и продолжить">🔄 Сохранить и продолжить</button>
+        <a href="{% url 'admin:app_list' 'blog' %}" class="btn" title="Назад">← Назад</a>
       </div>
     </div>
   </header>
 
   <form method="post" id="post_form" enctype="multipart/form-data" novalidate>
     {% csrf_token %}
+    {# Вставляем media, чтобы подключить js виджетов (WYSIWYG, datepicker и т.п.) #}
+    {{ adminform.media }}
+
     <div class="editor-main">
-      <div class="content-area">
+      <!-- Left Column - Content -->
+      <div>
         <div class="editor-card">
           <div class="card-header"><h3>📌 Основная информация</h3></div>
-          <div class="card-body">
-            <div class="form-group">
-              <label class="form-label" for="id_title">Заголовок поста *</label>
-              <input type="text" name="title" value="{{ adminform.form.title.value|default:'' }}" id="id_title" class="form-input title-field" placeholder="Введите заголовок..." maxlength="255" required>
-              {% if adminform.form.title.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.title.errors }}</div>
-              {% endif %}
+          <div>
+            <div style="margin-bottom:12px;">
+              {{ adminform.form.title.label_tag }} 
+              {{ adminform.form.title }}
+              {% if adminform.form.title.errors %}<div class="error">{{ adminform.form.title.errors }}</div>{% endif %}
             </div>
-            <div class="form-group">
-              <label class="form-label" for="id_slug">URL Slug</label>
-              <input type="text" name="slug" value="{{ adminform.form.slug.value|default:'' }}" id="id_slug" class="form-input" placeholder="avtomaticeskiy-slug">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; font-size: 0.75rem; color: #6b7280;">
-                <span>Используется в URL</span>
-                <button type="button" id="generate-slug" class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">🔄 Сгенерировать</button>
+
+            <div style="margin-bottom:12px;">
+              {{ adminform.form.slug.label_tag }}
+              <div style="display:flex; gap:8px; align-items:center;">
+                {{ adminform.form.slug }}
+                <button type="button" class="btn" id="generate-slug" title="Сгенерировать slug">🔄</button>
               </div>
-              {% if adminform.form.slug.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.slug.errors }}</div>
-              {% endif %}
+              <div class="help-text">Используется в URL</div>
+              {% if adminform.form.slug.errors %}<div class="error">{{ adminform.form.slug.errors }}</div>{% endif %}
             </div>
           </div>
         </div>
 
-        <div class="editor-card">
+        <div class="editor-card" style="margin-top:12px;">
           <div class="card-header"><h3>📝 Содержание</h3></div>
-          <div class="card-body">
-            <div class="form-group">
-              {{ adminform.form.content }}
-              {% if adminform.form.content.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.content.errors }}</div>
-              {% endif %}
-            </div>
+          <div>
+            {{ adminform.form.content }}
+            {% if adminform.form.content.errors %}<div class="error">{{ adminform.form.content.errors }}</div>{% endif %}
+            <div class="help-text" style="margin-top:8px;">Редактор поддерживает визуальное форматирование. Слова/символы считаются редактором.</div>
           </div>
         </div>
 
-        <div class="editor-card">
+        <div class="editor-card" style="margin-top:12px;">
           <div class="card-header"><h3>📋 Краткое описание</h3></div>
-          <div class="card-body">
-            <div class="form-group">
-              <textarea name="excerpt" id="id_excerpt" class="form-textarea" placeholder="Краткое описание поста..." rows="3">{{ adminform.form.excerpt.value|default:'' }}</textarea>
-              <div class="char-counter" style="text-align: right; font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
-                <span id="excerpt-counter">0</span>/320 символов
-              </div>
-              {% if adminform.form.excerpt.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.excerpt.errors }}</div>
-              {% endif %}
-            </div>
+          <div>
+            {{ adminform.form.excerpt }}
+            <div class="char-counter" id="excerpt-counter">0</div>
+            {% if adminform.form.excerpt.errors %}<div class="error">{{ adminform.form.excerpt.errors }}</div>{% endif %}
           </div>
         </div>
       </div>
 
-      <div class="sidebar-area">
+      <!-- Right Column - Sidebar -->
+      <aside>
         <div class="editor-card">
           <div class="card-header"><h3>🚀 Публикация</h3></div>
-          <div class="card-body">
-            <div class="form-group">
-              <label class="form-label" for="id_status">Статус</label>
-              <select name="status" id="id_status" class="form-select">
-                {% for value, label in adminform.form.status.field.choices %}
-                  <option value="{{ value }}" {% if adminform.form.status.value == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-              {% if adminform.form.status.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.status.errors }}</div>
-              {% endif %}
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="id_published_at">Дата публикации</label>
-              <input type="datetime-local" name="published_at" value="{{ adminform.form.published_at.value|default:'' }}" id="id_published_at" class="form-input">
-              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">Оставьте пустым для автоматической установки при публикации</div>
-              {% if adminform.form.published_at.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">
-                {% for error in adminform.form.published_at.errors %}{{ error }}{% endfor %}
-              </div>
-              {% endif %}
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="id_author">Автор</label>
-              <select name="author" id="id_author" class="form-select">
-                <option value="">---------</option>
-                {% for value, label in adminform.form.author.field.choices %}
-                  <option value="{{ value }}" {% if adminform.form.author.value == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-              {% if adminform.form.author.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.author.errors }}</div>
-              {% endif %}
-            </div>
+          <div>
+            <div style="margin-bottom:10px;">{{ adminform.form.status.label_tag }} {{ adminform.form.status }}</div>
+            <div style="margin-bottom:10px;">{{ adminform.form.published_at.label_tag }} {{ adminform.form.published_at }}</div>
+            <div style="margin-bottom:10px;">{{ adminform.form.author.label_tag }} {{ adminform.form.author }}</div>
+            {% if adminform.form.published_at.errors %}<div class="error">{{ adminform.form.published_at.errors }}</div>{% endif %}
           </div>
         </div>
 
-        <div class="editor-card">
+        <div class="editor-card" style="margin-top:12px;">
           <div class="card-header"><h3>🏷️ Классификация</h3></div>
-          <div class="card-body">
-            <div class="form-group">
-              <label class="form-label" for="id_categories">Категории</label>
-              <select name="categories" id="id_categories" class="form-select" multiple style="height: 120px;">
-                {% for value, label in adminform.form.categories.field.choices %}
-                  <option value="{{ value }}" {% if value in adminform.form.categories.value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-              {% if adminform.form.categories.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.categories.errors }}</div>
-              {% endif %}
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="id_tags">Теги</label>
-              <select name="tags" id="id_tags" class="form-select" multiple style="height: 120px;">
-                {% for value, label in adminform.form.tags.field.choices %}
-                  <option value="{{ value }}" {% if value in adminform.form.tags.value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-              {% if adminform.form.tags.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.tags.errors }}</div>
-              {% endif %}
-            </div>
+          <div>
+            <div style="margin-bottom:10px;">{{ adminform.form.categories.label_tag }} {{ adminform.form.categories }}</div>
+            <div style="margin-bottom:10px;">{{ adminform.form.tags.label_tag }} {{ adminform.form.tags }}</div>
           </div>
         </div>
 
-        <div class="editor-card">
+        <div class="editor-card" style="margin-top:12px;">
           <div class="card-header"><h3>⚡ Быстрые действия</h3></div>
-          <div class="card-body">
-            <div class="quick-actions">
-              <button type="button" id="preview-btn" class="btn btn-action">👁️ Предпросмотр</button>
-              <button type="button" id="fill-meta" class="btn btn-action">📝 Заполнить SEO</button>
-              <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-action" target="_blank">🗂️ Медиатека / Blog</a>
-            </div>
+          <div>
+            <button type="button" class="btn-action" id="preview-btn">👁️ Предпросмотр</button>
+            <button type="button" class="btn-action" id="fill-meta">📝 Заполнить SEO</button>
+            <a class="btn-action" href="{% url 'admin:app_list' 'blog' %}" target="_blank">🗂️ Медиатека</a>
           </div>
         </div>
-      </div>
+      </aside>
     </div>
 
-    {% for field in adminform.form.hidden_fields %}{{ field }}{% endfor %}
+    {# Скрытые поля Django (ключевые hidden fields и management form) #}
+    {% for field in adminform.form.hidden_fields %}
+      {{ field }}
+    {% endfor %}
+    {# inlines, formsets и т.д. оставляем как есть, если они есть в adminform.instance #}
+    {% for inline in inline_admin_formsets %}
+      {{ inline }}
+    {% endfor %}
   </form>
 </div>
+{% endblock %}
 
 {% block footer %}
 {{ block.super }}
+<script src="{% static 'admin/js/custom_admin.js' %}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  initDateTimeFields();
-  initSlugGeneration();
-  initCharacterCounters();
-  initQuickActions();
-
-  function initDateTimeFields() {
-    const publishedAtField = document.getElementById('id_published_at');
-    if (publishedAtField && !publishedAtField.value) {
-        const now = new Date();
-        const timezoneOffset = now.getTimezoneOffset() * 60000;
-        const localISOTime = new Date(now - timezoneOffset).toISOString().slice(0, 16);
-        publishedAtField.value = localISOTime;
-    }
+(function(){
+  // Гарантируем, что кнопки корректно отправляют Django-форму с нужным name
+  function submitWithName(form, name, value) {
+    // создаём скрытое поле с именем
+    var inpt = document.createElement('input');
+    inpt.type = 'hidden';
+    inpt.name = name;
+    if (value !== undefined) inpt.value = value;
+    form.appendChild(inpt);
+    form.submit();
   }
 
-  function initSlugGeneration() {
-    const generateBtn = document.getElementById('generate-slug');
-    const titleField = document.getElementById('id_title');
-    const slugField = document.getElementById('id_slug');
-    if (generateBtn && titleField && slugField) {
-      generateBtn.addEventListener('click', function() {
-        const title = titleField.value.trim();
-        if (title) {
-          slugField.value = generateSlug(title);
-          showNotification('Slug сгенерирован', 'success');
-        } else showNotification('Введите заголовок сначала', 'warning');
+  document.addEventListener('DOMContentLoaded', function(){
+    var form = document.getElementById('post_form');
+    if (!form) return;
+
+    // Подключаем стандартный admin submit-row скриптам если они есть
+    // Обработчики для наших кнопок
+    var saveBtn = document.getElementById('pt-save-btn');
+    var contBtn = document.getElementById('pt-continue-btn');
+
+    if (saveBtn) saveBtn.addEventListener('click', function(){ submitWithName(form, '_save', '1'); });
+    if (contBtn) contBtn.addEventListener('click', function(){ submitWithName(form, '_continue', '1'); });
+
+    // Generate slug
+    var gen = document.getElementById('generate-slug');
+    var title = document.getElementById('id_title');
+    var slug = document.getElementById('id_slug');
+    if (gen && title && slug) {
+      gen.addEventListener('click', function(){
+        var t = title.value.trim();
+        if (!t) { alert('Введите заголовок перед генерацией slug'); return; }
+        var s = t.toLowerCase().replace(/[^\w\s-]/g,'').replace(/[\s_-]+/g,'-').replace(/^-+|-+$/g,'').substring(0,60);
+        slug.value = s;
       });
-      titleField.addEventListener('blur', function() {
-        if (!slugField.value.trim()) {
-          const title = titleField.value.trim();
-          if (title) slugField.value = generateSlug(title);
-        }
-      });
     }
-  }
 
-  function initCharacterCounters() {
-    const excerptField = document.getElementById('id_excerpt');
-    if (excerptField) {
-      updateCounter(excerptField, 'excerpt-counter', 320);
-      excerptField.addEventListener('input', () => updateCounter(excerptField, 'excerpt-counter', 320));
+    // Excerpt counter
+    var excerpt = document.getElementById('id_excerpt');
+    var counter = document.getElementById('excerpt-counter');
+    if (excerpt && counter) {
+      function update() { counter.textContent = excerpt.value.length + ' символов'; }
+      update();
+      excerpt.addEventListener('input', update);
     }
-    function updateCounter(field, counterId, maxLength) {
-      const counter = document.getElementById(counterId);
-      if (!counter || !field) return;
-      const length = field.value.length;
-      counter.textContent = length;
-      if (length > maxLength) counter.style.color = '#ef4444';
-      else if (length > maxLength * 0.9) counter.style.color = '#f59e0b';
-      else counter.style.color = '';
-    }
-  }
 
-  function initQuickActions() {
-    const previewBtn = document.getElementById('preview-btn');
+    // Preview button - если есть сохранённый ID, открываем preview
+    var previewBtn = document.getElementById('preview-btn');
     if (previewBtn) {
-      previewBtn.addEventListener('click', function() {
-        const postId = getPostId();
-        if (postId) window.open(`/preview/${postId}`, '_blank');
-        else showNotification('Сохраните пост для предпросмотра', 'warning');
+      previewBtn.addEventListener('click', function(){
+        // пытаемся получить ID из URL вида /admin/blog/post/<id>/change/
+        var m = window.location.pathname.match(/\/admin\/.+\/post\/(\d+)\/change/);
+        if (m && m[1]) { window.open('/preview/' + m[1], '_blank'); return; }
+        alert('Сохраните пост, чтобы открыть предпросмотр');
       });
     }
-    const fillMetaBtn = document.getElementById('fill-meta');
-    const titleField = document.getElementById('id_title');
-    const excerptField = document.getElementById('id_excerpt');
-    if (fillMetaBtn && titleField) {
-      fillMetaBtn.addEventListener('click', function() {
-        const title = titleField.value.trim();
-        if (title) showNotification('SEO данные заполнены', 'success');
-        else showNotification('Введите заголовок сначала', 'warning');
-      });
-    }
-  }
 
-  function generateSlug(text) {
-    return text.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '').substring(0, 50);
-  }
+    // Fill meta - минимальный placeholder
+    var fillMeta = document.getElementById('fill-meta');
+    if (fillMeta) fillMeta.addEventListener('click', function(){
+      var t = title ? title.value.trim() : '';
+      var e = excerpt ? excerpt.value.trim() : '';
+      if (!t) { alert('Введите заголовок'); return; }
+      // если есть поля meta_title/meta_description, пробуем заполнить
+      var metaTitle = document.getElementById('id_meta_title');
+      var metaDesc = document.getElementById('id_meta_description');
+      if (metaTitle && !metaTitle.value) metaTitle.value = t;
+      if (metaDesc && !metaDesc.value) metaDesc.value = e.substring(0,160);
+      alert('SEO данные заполнены (локально)');
+    });
 
-  function getPostId() {
-    const urlMatch = window.location.pathname.match(/\/admin\/blog\/post\/(\d+)\/change/);
-    return urlMatch ? urlMatch[1] : null;
-  }
-
-  function showNotification(message, type = 'info', duration = 3000) {
-    const existing = document.querySelector('.custom-notification'); if (existing) existing.remove();
-    const notification = document.createElement('div');
-    notification.className = `custom-notification`;
-    notification.innerHTML = message;
-    notification.style.cssText = `position: fixed; top: 20px; right: 20px; padding: 12px 16px; background: white; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10000; border-left: 4px solid ${type === 'success' ? '#10b981' : type === 'warning' ? '#f59e0b' : '#3b82f6'}; max-width: 300px;`;
-    document.body.appendChild(notification);
-    setTimeout(() => { if (notification.parentNode) notification.parentNode.removeChild(notification); }, duration);
-  }
-});
+    // Safety: если админ подключил встроенные submit handlers, оставить их
+    // Ничего больше не ломаем
+  });
+})();
 </script>
 {% endblock %}
