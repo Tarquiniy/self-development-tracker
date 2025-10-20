@@ -275,6 +275,9 @@ class MediaLibrary(PostAttachment):
         proxy = True
         verbose_name = "Медиа библиотека"
         verbose_name_plural = "Медиа библиотека"
+        app_label = 'blog'
+    def __str__(self):
+        return f"Media: {self.title or self.file.name}"
 
 
 class PostRevision(models.Model):
