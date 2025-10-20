@@ -7,8 +7,8 @@
   <title>{{ site_title|default:"Admin" }}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="{% static 'admin/css/custom_admin_dashboard.css' %}">
-  {# подключаем стандартные админ-стили, чтобы не ломать внешний вид #}
   <link rel="stylesheet" href="{% static 'admin/css/admin.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
 </head>
 <body class="dashboard-body">
   <header class="dashboard-header">
@@ -25,34 +25,32 @@
 
   <main class="dashboard-main container">
     <section class="quick-actions">
-      <a href="{% url 'admin:blog_post_add' %}" class="btn btn-primary">Создать пост</a>
-      <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-outline">Все посты</a>
-      <a href="/admin/media-library/" class="btn btn-outline">Медиатека</a>
-      <a href="{% url 'admin:blog_comment_changelist' %}" class="btn btn-outline">Комментарии</a>
-      <a href="{% url 'admin:auth_user_changelist' %}" class="btn btn-outline">Пользователи</a>
+      <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-primary">Создать / Управлять постами</a>
+      <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-outline">Все посты</a>
+      <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-outline">Медиатека</a>
+      <a href="{% url 'admin:app_list' 'auth' %}" class="btn btn-outline">Пользователи</a>
     </section>
 
-    <section class="stats-grid" id="dashboard-stats">
-      <!-- карточки статистики будут заполнены JS -->
-      <div class="stat-card">
-        <div class="stat-title">Загрузка…</div>
-        <div class="stat-value">—</div>
+    <section class="stats-grid" id="dashboard-stats" aria-live="polite" aria-busy="true">
+      <div class="stat-card" data-key="posts">
+        <div class="stat-title">Посты</div>
+        <div class="stat-value">Загрузка…</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-title">Загрузка…</div>
-        <div class="stat-value">—</div>
+      <div class="stat-card" data-key="drafts">
+        <div class="stat-title">Черновики</div>
+        <div class="stat-value">Загрузка…</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-title">Загрузка…</div>
-        <div class="stat-value">—</div>
+      <div class="stat-card" data-key="views">
+        <div class="stat-title">Просмотры (7d)</div>
+        <div class="stat-value">Загрузка…</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-title">Загрузка…</div>
-        <div class="stat-value">—</div>
+      <div class="stat-card" data-key="users">
+        <div class="stat-title">Пользователи</div>
+        <div class="stat-value">Загрузка…</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-title">Загрузка…</div>
-        <div class="stat-value">—</div>
+      <div class="stat-card" data-key="media">
+        <div class="stat-title">Медиа-файлы</div>
+        <div class="stat-value">Загрузка…</div>
       </div>
     </section>
 
@@ -95,7 +93,6 @@
   </footer>
 
   <script>
-    // перед подключением внешнего js — подгружаем базовый CSRF token
     const ADMIN_CSRF = (function(){
       function getCookie(name){let v=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');return v?v.pop():"";}
       return { csrfToken: getCookie('csrftoken') };
