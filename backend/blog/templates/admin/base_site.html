@@ -1,5 +1,5 @@
 {% extends "admin/base.html" %}
-{% load static i18n admin_compat %}
+{% load static i18n %}
 
 {% block extrahead %}
   {{ block.super }}
@@ -31,24 +31,18 @@
       </div>
       <div class="flex items-center gap-2">
         <a href="{% url 'admin:index' %}" class="pt-btn">Dashboard</a>
-        <a href="{% admin_changelist_or_app_list 'blog' 'post' %}" class="pt-btn-primary">Quick create / Blog</a>
+        <a href="{% url 'admin:app_list' 'blog' %}" class="pt-btn-primary">Blog</a>
       </div>
     </div>
   </div>
 
   <script>
-    // Минимальная логика управления сайдбаром и быстрым созданием.
+    // Минимальная логика управления сайдбаром и быстрой навигации
     document.addEventListener('DOMContentLoaded', function () {
       try {
         var toggle = document.getElementById('pt-toggle-sidebar');
-        if (toggle) {
-          toggle.addEventListener('click', function () {
-            document.body.classList.toggle('pt-sidebar-collapsed');
-          });
-        }
-      } catch (e) {
-        if (window.console) console.error('[pt-topbar] init error', e);
-      }
+        if (toggle) toggle.addEventListener('click', function () { document.body.classList.toggle('pt-sidebar-collapsed'); });
+      } catch (e) { if (window.console) console.error('[pt-topbar] init error', e); }
     });
   </script>
 {% endblock %}
