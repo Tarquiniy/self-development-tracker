@@ -1,82 +1,241 @@
 {% load static i18n %}
 <!DOCTYPE html>
-<html lang="{{ LANGUAGE_CODE }}">
+<html lang="{{ LANGUAGE_CODE }}" class="modern-admin">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}{{ site_title|default:_('Django site admin') }}{% endblock %}</title>
+    <title>{% block title %}{{ site_title|default:_('Positive Theta Admin') }}{% endblock %}</title>
     
-    <!-- Standard Django Admin CSS -->
-    <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
-    <link rel="stylesheet" href="{% static 'admin/css/dashboard.css' %}">
+    <!-- Modern CSS Framework -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Modern Admin CSS -->
-    <link rel="stylesheet" href="{% static 'admin/css/admin-modern.css' %}">
-    <link rel="stylesheet" href="{% static 'admin/css/post_admin_enhanced.css' %}">
-    <link rel="stylesheet" href="{% static 'admin/css/post_edit_enhanced.css' %}">
+    <!-- Custom Admin CSS -->
+    <link rel="stylesheet" href="{% static 'admin/css/modern-admin.css' %}">
     
-    <!-- CKEditor 5 CSS -->
-    <link rel="stylesheet" href="{% static 'admin/css/ckeditor5-admin.css' %}">
+    <!-- CKEditor -->
+    <script src="https://cdn.ckeditor.com/ckeditor5/41.4.2/ckeditor.js"></script>
     
     {% block extrastyle %}{% endblock %}
     {% block extrahead %}{% endblock %}
+    
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #f43f5e;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #1f2937;
+            --light: #f8fafc;
+            --sidebar: #0f172a;
+            --sidebar-hover: #1e293b;
+            --card-bg: #ffffff;
+            --border: #e2e8f0;
+            --text: #374151;
+            --text-light: #6b7280;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --radius: 12px;
+        }
+    </style>
 </head>
 
-<body class="admin-modern-theme">
-    <!-- Header -->
-    <div id="container">
-        <div id="header">
-            <div id="branding">
-                <h1 id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></h1>
+<body class="modern-admin-body">
+    <!-- Sidebar -->
+    <div class="admin-sidebar">
+        <div class="sidebar-header">
+            <div class="brand">
+                <div class="brand-logo">
+                    <i class="fas fa-brain"></i>
+                </div>
+                <span class="brand-text">Positive Theta</span>
             </div>
-            <div id="user-tools">
-                {% if user.is_authenticated %}
-                {% trans 'Welcome,' %}
-                <strong>{% firstof user.get_short_name user.get_username %}</strong>.
-                {% endif %}
-            </div>
+            <button class="sidebar-toggle" id="sidebarToggle">
+                <i class="fas fa-bars"></i>
+            </button>
         </div>
 
-        <!-- Breadcrumbs -->
-        <div class="breadcrumbs">
-            <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
-            {% if title %} &rsaquo; {{ title }}{% endif %}
+        <nav class="sidebar-nav">
+            <div class="nav-section">
+                <h3 class="nav-title">MAIN</h3>
+                <a href="{% url 'admin:index' %}" class="nav-link {% if request.path == '/admin/' %}active{% endif %}">
+                    <i class="fas fa-home"></i>
+                    <span>Dashboard</span>
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <h3 class="nav-title">BLOG</h3>
+                <a href="{% url 'admin:blog_post_changelist' %}" class="nav-link">
+                    <i class="fas fa-newspaper"></i>
+                    <span>Posts</span>
+                    {% if posts_count %}<span class="nav-badge">{{ posts_count }}</span>{% endif %}
+                </a>
+                <a href="{% url 'admin:blog_category_changelist' %}" class="nav-link">
+                    <i class="fas fa-folder"></i>
+                    <span>Categories</span>
+                </a>
+                <a href="{% url 'admin:blog_tag_changelist' %}" class="nav-link">
+                    <i class="fas fa-tags"></i>
+                    <span>Tags</span>
+                </a>
+                <a href="{% url 'admin:blog_comment_changelist' %}" class="nav-link">
+                    <i class="fas fa-comments"></i>
+                    <span>Comments</span>
+                    {% if comments_count %}<span class="nav-badge">{{ comments_count }}</span>{% endif %}
+                </a>
+                <a href="{% url 'admin:blog_medialibrary_changelist' %}" class="nav-link">
+                    <i class="fas fa-images"></i>
+                    <span>Media Library</span>
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <h3 class="nav-title">USERS</h3>
+                <a href="{% url 'admin:auth_user_changelist' %}" class="nav-link">
+                    <i class="fas fa-users"></i>
+                    <span>Users</span>
+                </a>
+                <a href="{% url 'admin:auth_group_changelist' %}" class="nav-link">
+                    <i class="fas fa-user-friends"></i>
+                    <span>Groups</span>
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <h3 class="nav-title">TOOLS</h3>
+                <a href="{% url 'admin:blog_post_add' %}" class="nav-link">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Create Post</span>
+                </a>
+                <a href="/admin/media-library/" class="nav-link">
+                    <i class="fas fa-upload"></i>
+                    <span>Upload Media</span>
+                </a>
+            </div>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar">
+                    <i class="fas fa-user-circle"></i>
+                </div>
+                <div class="user-details">
+                    <span class="user-name">{{ user.get_username }}</span>
+                    <span class="user-role">Administrator</span>
+                </div>
+            </div>
+            <a href="{% url 'admin:logout' %}" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+            </a>
         </div>
+    </div>
 
-        <!-- Messages -->
-        {% if messages %}
-        <ul class="messagelist">
-            {% for message in messages %}
-            <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
-            {% endfor %}
-        </ul>
-        {% endif %}
+    <!-- Main Content -->
+    <div class="admin-main">
+        <!-- Top Header -->
+        <header class="admin-header">
+            <div class="header-left">
+                <h1 class="page-title">{% block content_title %}{% if title %}{{ title }}{% else %}Dashboard{% endif %}{% endblock %}</h1>
+                {% block breadcrumbs %}
+                <nav class="breadcrumb">
+                    <a href="{% url 'admin:index' %}">Home</a>
+                    {% if title %} <i class="fas fa-chevron-right"></i> <span>{{ title }}</span>{% endif %}
+                </nav>
+                {% endblock %}
+            </div>
 
-        <!-- Content -->
-        <div id="content" class="{% block coltype %}colM{% endblock %}">
-            {% block pretitle %}{% endblock %}
-            {% block content_title %}{% if title %}<h1>{{ title }}</h1>{% endif %}{% endblock %}
+            <div class="header-right">
+                <div class="header-actions">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Search...">
+                    </div>
+                    <button class="notification-btn">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge">3</span>
+                    </button>
+                    <button class="theme-toggle" id="themeToggle">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <main class="content-area">
+            {% if messages %}
+            <div class="messages-container">
+                {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">
+                    <i class="fas fa-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
             {% block content %}
-            {% block object-tools %}{% endblock %}
-            {{ content }}
+            <div class="content-wrapper">
+                {% block object-tools %}{% endblock %}
+                {{ content }}
+            </div>
             {% endblock %}
-            {% block sidebar %}{% endblock %}
-            <br class="clear">
-        </div>
-
-        <!-- Footer -->
-        <div id="footer"></div>
+        </main>
     </div>
 
     <!-- Scripts -->
-    <script src="{% static 'admin/js/vendor/jquery/jquery.js' %}"></script>
-    <script src="{% static 'admin/js/jquery.init.js' %}"></script>
-    
-    <!-- CKEditor 5 Scripts -->
-    <script src="https://cdn.ckeditor.com/ckeditor5/41.4.2/ckeditor.js"></script>
-    <script src="{% static 'admin/js/ckeditor_upload_adapter.js' %}"></script>
-    <script src="{% static 'admin/js/ckeditor_init.js' %}"></script>
-    
+    <script>
+        // Theme Toggle
+        document.getElementById('themeToggle').addEventListener('click', function() {
+            document.body.classList.toggle('dark-theme');
+            const icon = this.querySelector('i');
+            if (document.body.classList.contains('dark-theme')) {
+                icon.className = 'fas fa-sun';
+            } else {
+                icon.className = 'fas fa-moon';
+            }
+        });
+
+        // Sidebar Toggle
+        document.getElementById('sidebarToggle').addEventListener('click', function() {
+            document.querySelector('.admin-sidebar').classList.toggle('collapsed');
+        });
+
+        // Initialize CKEditor for all textareas with class 'ckeditor'
+        document.addEventListener('DOMContentLoaded', function() {
+            const textareas = document.querySelectorAll('textarea.ckeditor');
+            textareas.forEach(textarea => {
+                ClassicEditor
+                    .create(textarea, {
+                        toolbar: {
+                            items: [
+                                'heading', '|',
+                                'bold', 'italic', 'underline', 'strikethrough', '|',
+                                'link', 'blockQuote', 'imageUpload', 'mediaEmbed', '|',
+                                'alignment', 'bulletedList', 'numberedList', '|',
+                                'codeBlock', 'htmlEmbed', '|',
+                                'undo', 'redo'
+                            ]
+                        },
+                        language: 'en',
+                        licenseKey: '',
+                    })
+                    .then(editor => {
+                        window.editor = editor;
+                    })
+                    .catch(error => {
+                        console.error('Oops, something went wrong!');
+                        console.error('Please, report the following error on https://github.com/ckeditor/ckeditor5/issues with the build id and the error stack trace:');
+                        console.error(error);
+                    });
+            });
+        });
+    </script>
+
     {% block footer_extra %}{% endblock %}
 </body>
 </html>

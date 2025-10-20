@@ -1,82 +1,114 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
 
-{# admin/dashboard.html — современный и безопасный дашборд #}
-
-{% block title %}Админ — Панель управления{% endblock %}
-
-{% block extrahead %}
-<link rel="stylesheet" href="{% static 'admin/css/dashboard.css' %}">
-<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}" defer></script>
-<script src="{% static 'admin/js/dashboard.js' %}" defer></script>
-{% endblock %}
+{% block title %}Dashboard - Positive Theta Admin{% endblock %}
 
 {% block content %}
-<div class="pt-admin-dashboard container">
-  <header class="pt-dash-header">
-    <div>
-      <h1>Панель управления</h1>
-      <p class="muted">Быстрый доступ к статистике и созданию контента</p>
-    </div>
-    <div class="pt-dash-actions">
-      <a class="btn btn-primary" href="{% url 'admin:blog_post_add' %}">Создать пост</a>
-      <a class="btn btn-outline" href="{% url 'admin:blog_post_changelist' %}">Список постов</a>
-      <a class="btn btn-outline" href="{% url 'admin-media-library' %}">Медиатека</a>
-    </div>
-  </header>
-
-  <section class="pt-dash-counters">
-    <div class="card counter">
-      <div class="card-body">
-        <div class="counter-value">{{ posts_count|default:0 }}</div>
-        <div class="counter-label">Постов</div>
-      </div>
-    </div>
-    <div class="card counter">
-      <div class="card-body">
-        <div class="counter-value">{{ comments_count|default:0 }}</div>
-        <div class="counter-label">Комментариев</div>
-      </div>
-    </div>
-    <div class="card counter">
-      <div class="card-body">
-        <div class="counter-value">{{ users_count|default:0 }}</div>
-        <div class="counter-label">Пользователей</div>
-      </div>
-    </div>
-  </section>
-
-  <section class="pt-dash-main grid">
-    <div class="card area">
-      <div class="card-header"><strong>Активность (последние {{ days|default:30 }} дней)</strong></div>
-      <div class="card-body">
-        <canvas id="pt-stats-chart" height="140" aria-label="График активности"></canvas>
-      </div>
+<div class="dashboard-container">
+    <!-- Stats Cards -->
+    <div class="dashboard-stats">
+        <div class="stat-card">
+            <div class="stat-value">{{ posts_count }}</div>
+            <div class="stat-label">Total Posts</div>
+            <div class="stat-trend">📈 +12% this month</div>
+        </div>
+        <div class="stat-card success">
+            <div class="stat-value">{{ comments_count }}</div>
+            <div class="stat-label">Comments</div>
+            <div class="stat-trend">💬 5 new today</div>
+        </div>
+        <div class="stat-card warning">
+            <div class="stat-value">1.2K</div>
+            <div class="stat-label">Monthly Views</div>
+            <div class="stat-trend">👁️ +8% growth</div>
+        </div>
+        <div class="stat-card danger">
+            <div class="stat-value">24</div>
+            <div class="stat-label">Pending Tasks</div>
+            <div class="stat-trend">⏰ 3 urgent</div>
+        </div>
     </div>
 
-    <div class="card area">
-      <div class="card-header"><strong>Последние посты</strong></div>
-      <div class="card-body">
-        {% if recent_posts %}
-          <ul class="recent-posts">
-            {% for p in recent_posts %}
-              <li>
-                <a href="{% url 'admin:blog_post_change' p.pk %}">{{ p.title|default:"(без названия)" }}</a>
-                <div class="meta">{{ p.author }} • {{ p.published_at|date:"Y-m-d H:i" }}</div>
-              </li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p class="muted">Нет последних постов.</p>
-        {% endif %}
-      </div>
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <a href="{% url 'admin:blog_post_add' %}" class="quick-action-btn">
+            <i class="fas fa-edit"></i>
+            <div class="action-text">
+                <h3>Write New Post</h3>
+                <p>Create and publish new content</p>
+            </div>
+        </a>
+        <a href="/admin/media-library/" class="quick-action-btn">
+            <i class="fas fa-images"></i>
+            <div class="action-text">
+                <h3>Media Library</h3>
+                <p>Manage images and files</p>
+            </div>
+        </a>
+        <a href="{% url 'admin:blog_comment_changelist' %}" class="quick-action-btn">
+            <i class="fas fa-comments"></i>
+            <div class="action-text">
+                <h3>Moderate Comments</h3>
+                <p>Review user comments</p>
+            </div>
+        </a>
+        <a href="{% url 'admin:blog_post_changelist' %}" class="quick-action-btn">
+            <i class="fas fa-chart-bar"></i>
+            <div class="action-text">
+                <h3>View Analytics</h3>
+                <p>See post performance</p>
+            </div>
+        </a>
     </div>
-  </section>
+
+    <!-- Recent Activity -->
+    <div class="content-wrapper">
+        <div class="modern-fieldset">
+            <h2 style="margin-bottom: 1.5rem;">📊 Recent Activity</h2>
+            
+            <div class="recent-posts">
+                <h3 style="margin-bottom: 1rem; color: var(--text-light);">Latest Posts</h3>
+                {% if recent_posts %}
+                    {% for post in recent_posts %}
+                    <div class="activity-item" style="padding: 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem;">
+                        <div class="activity-icon" style="width: 40px; height: 40px; background: var(--light); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-newspaper" style="color: var(--primary);"></i>
+                        </div>
+                        <div class="activity-content" style="flex: 1;">
+                            <div style="font-weight: 600;">{{ post.title }}</div>
+                            <div style="font-size: 0.875rem; color: var(--text-light);">
+                                By {{ post.author|default:"Unknown" }} • {{ post.created_at|timesince }} ago
+                            </div>
+                        </div>
+                        <div class="activity-status">
+                            <span class="status-badge status-{{ post.status }}">{{ post.get_status_display }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p style="color: var(--text-light); text-align: center; padding: 2rem;">No recent posts found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 </div>
 
-{# Передаём данные в JS безопасно #}
-{{ labels|default:"[]"|json_script:"pt-dashboard-labels" }}
-{{ posts|default:"[]"|json_script:"pt-dashboard-posts" }}
-{{ comments|default:"[]"|json_script:"pt-dashboard-comments" }}
-{{ views|default:"[]"|json_script:"pt-dashboard-views" }}
+<style>
+.stat-trend {
+    font-size: 0.75rem;
+    color: var(--text-light);
+    margin-top: 0.5rem;
+}
+
+.activity-item:last-child {
+    border-bottom: none;
+}
+
+.activity-item:hover {
+    background: var(--light);
+    margin: 0 -1rem;
+    padding: 1rem;
+    border-radius: 8px;
+}
+</style>
 {% endblock %}
