@@ -1,4 +1,4 @@
-{# templates/admin/index.html #}
+{# backend/templates/admin/index.html #}
 {% load static i18n %}
 <!doctype html>
 <html lang="ru">
@@ -9,7 +9,6 @@
   <link rel="stylesheet" href="{% static 'admin/css/custom_admin_dashboard.css' %}">
   {# подключаем стандартные админ-стили, чтобы не ломать внешний вид #}
   <link rel="stylesheet" href="{% static 'admin/css/admin.css' %}">
-  <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}"> {# добавлено: унифицированный стиль #}
 </head>
 <body class="dashboard-body">
   <header class="dashboard-header">
@@ -26,36 +25,35 @@
 
   <main class="dashboard-main container">
     <section class="quick-actions">
-      {# Все ссылки заменены на безопасные: открывают список приложения blog в админке.
-         Это предотвращает NoReverseMatch, если конкретные именованные URL отсутствуют. #}
-      <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-primary">Создать / Управлять постами</a>
-      <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-outline">Все посты</a>
-      <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-outline">Медиатека</a>
+      <a href="{% url 'admin:blog_post_add' %}" class="btn btn-primary">Создать пост</a>
+      <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-outline">Все посты</a>
+      <a href="/admin/media-library/" class="btn btn-outline">Медиатека</a>
+      {# Безопасная ссылка на список приложения blog вместо прямого reverse по комментам #}
       <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-outline">Комментарии</a>
-      <a href="{% url 'admin:app_list' 'auth' %}" class="btn btn-outline">Пользователи</a>
+      <a href="{% url 'admin:auth_user_changelist' %}" class="btn btn-outline">Пользователи</a>
     </section>
 
-    <section class="stats-grid" id="dashboard-stats" aria-live="polite" aria-busy="true">
+    <section class="stats-grid" id="dashboard-stats">
       <!-- карточки статистики будут заполнены JS -->
-      <div class="stat-card" data-key="posts">
-        <div class="stat-title">Посты</div>
-        <div class="stat-value">Загрузка…</div>
+      <div class="stat-card">
+        <div class="stat-title">Загрузка…</div>
+        <div class="stat-value">—</div>
       </div>
-      <div class="stat-card" data-key="drafts">
-        <div class="stat-title">Черновики</div>
-        <div class="stat-value">Загрузка…</div>
+      <div class="stat-card">
+        <div class="stat-title">Загрузка…</div>
+        <div class="stat-value">—</div>
       </div>
-      <div class="stat-card" data-key="views">
-        <div class="stat-title">Просмотры (7d)</div>
-        <div class="stat-value">Загрузка…</div>
+      <div class="stat-card">
+        <div class="stat-title">Загрузка…</div>
+        <div class="stat-value">—</div>
       </div>
-      <div class="stat-card" data-key="users">
-        <div class="stat-title">Пользователи</div>
-        <div class="stat-value">Загрузка…</div>
+      <div class="stat-card">
+        <div class="stat-title">Загрузка…</div>
+        <div class="stat-value">—</div>
       </div>
-      <div class="stat-card" data-key="media">
-        <div class="stat-title">Медиа-файлы</div>
-        <div class="stat-value">Загрузка…</div>
+      <div class="stat-card">
+        <div class="stat-title">Загрузка…</div>
+        <div class="stat-value">—</div>
       </div>
     </section>
 
