@@ -1,522 +1,407 @@
-<!-- backend/templates/admin/blog/post/change_form_fixed.html -->
-{% extends "admin/change_form.html" %}
-{% load static %}
+{# admin/blog/post/change_form_fixed.html
+   Полноценный change_form для модели Post с улучшенным UI:
+   - единый layout (совместим с admin/base_site.html)
+   - рендер стандартного adminform + инлайнов
+   - сайдбар с Publish / Status / Metadata
+   - JS: autosave -> localStorage, preview, slugify, image preview
+#}
+
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static widget_tweaks %}
+
+{% block title %}{% if original %}{% blocktrans with title=original %}Change: {{ title }}{% endblocktrans %}{% else %}{% trans "Add post" %}{% endif %}{% endblock %}
 
 {% block extrahead %}
-{{ block.super }}
-<style>
-/* Базовые стили для улучшения внешнего вида */
-.post-editor-modern {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
+  {{ block.super }}
+  {# Optionally include editor init scripts if you have them in static #}
+  <script src="{% static 'admin/js/ckeditor-init.js' %}"></script>
+  <script src="{% static 'admin/js/tiptap-init.js' %}"></script>
 
-.editor-header {
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 1rem 2rem;
-  margin: -1rem -2rem 2rem;
-}
-
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.header-actions {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-secondary {
-  background: #6b7280;
-  color: white;
-}
-
-.btn-outline {
-  background: transparent;
-  border: 1px solid #d1d5db;
-  color: #374151;
-}
-
-.editor-main {
-  display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 2rem;
-  margin-top: 2rem;
-}
-
-.content-area, .sidebar-area {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.editor-card {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  padding: 1.5rem;
-}
-
-.card-header {
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-  color: #374151;
-}
-
-.form-input, .form-textarea, .form-select {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-}
-
-.title-field {
-  font-size: 1.25rem !important;
-  font-weight: 600;
-}
-
-.quick-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.btn-action {
-  width: 100%;
-  justify-content: center;
-  padding: 0.875rem 1rem;
-}
-</style>
+  <style>
+    /* Local adjustments specific to change form to match admin-modern.css */
+    .post-edit-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+    .meta-panel { position: sticky; top: 86px; }
+    .field-label { font-weight:700; margin-bottom:6px; color: #0f172a; }
+    .help-text { color: #6b7280; font-size:0.92rem; margin-top:6px; }
+    .preview-image { max-width:100%; border-radius:8px; border:1px solid #e8eef8; margin-top:8px; }
+    .autosave-indicator { font-size:0.85rem; color:#64748b; margin-left:8px; }
+    .slug-auto { font-size:0.85rem; color:#475569; margin-top:6px; display:block; }
+    .actions-row { display:flex; gap:10px; align-items:center; }
+    .save-primary { background:var(--primary-2); color:#fff; padding:8px 12px; border-radius:8px; border:none; font-weight:700; }
+    .save-secondary { background:#f3f4f6; padding:8px 12px; border-radius:8px; border:1px solid #e6eef6; }
+  </style>
 {% endblock %}
 
 {% block content %}
-<div class="post-editor-modern">
-  <!-- Header -->
-  <header class="editor-header">
-    <div class="header-content">
-      <div class="header-title">
-        <h1>
+  <div class="card">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <h1 style="margin:0;">
           {% if original %}
-            Редактирование: {{ original.title|default:"Без названия"|truncatechars:50 }}
+            {{ original }} <small style="color:var(--muted);font-weight:600;">— Редактирование</small>
           {% else %}
-            📝 Создание нового поста
+            <span>{% trans "Создать новый пост" %}</span>
           {% endif %}
         </h1>
+        <div style="margin-top:6px;color:var(--muted);">ID: {% if original %}{{ original.pk }}{% else %}{% trans "не сохранено" %}{% endif %}</div>
       </div>
-      <div class="header-actions">
-        <!-- Эти кнопки теперь работают через стандартную форму Django -->
-        <button type="submit" name="_save" class="btn btn-primary" form="post_form">
-          💾 Сохранить
-        </button>
-        <button type="submit" name="_continue" class="btn btn-secondary" form="post_form">
-          🔄 Сохранить и продолжить
-        </button>
-        <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-outline">
-          ← Назад
-        </a>
+
+      <div class="actions-row">
+        {# Standard admin save buttons (use submit_row rendered block) #}
+        {% if has_delete_permission and original %}
+          <a href="{% url opts|admin_urlname:'delete' original.pk %}{% if preserved_filters %}?{{ preserved_filters }}{% endif %}" class="save-secondary">{% trans "Удалить" %}</a>
+        {% endif %}
+
+        <button type="submit" form="post-form" class="save-primary" id="btn-save">{% trans "Сохранить" %}</button>
+
+        <button type="button" class="save-secondary" id="btn-preview">{% trans "Предпросмотр" %}</button>
+        <span class="autosave-indicator" id="autosave-info">{% trans "Последний автосейв:" %} <span id="autosave-time">—</span></span>
       </div>
     </div>
-  </header>
 
-  <!-- Используем стандартную форму Django, но с нашей разметкой -->
-  <form method="post" id="post_form" enctype="multipart/form-data" novalidate>
-    {% csrf_token %}
-    
-    <div class="editor-main">
-      <!-- Left Column - Content -->
-      <div class="content-area">
-        <!-- Title & Slug -->
-        <div class="editor-card">
-          <div class="card-header">
-            <h3>📌 Основная информация</h3>
-          </div>
-          <div class="card-body">
-            <div class="form-group">
-              <label class="form-label" for="id_title">Заголовок поста *</label>
-              <input type="text" name="title" value="{{ adminform.form.title.value|default:'' }}" id="id_title" class="form-input title-field" placeholder="Введите captivating заголовок..." maxlength="255" required>
-              {% if adminform.form.title.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.title.errors }}</div>
-              {% endif %}
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="id_slug">URL Slug</label>
-              <input type="text" name="slug" value="{{ adminform.form.slug.value|default:'' }}" id="id_slug" class="form-input" placeholder="avtomaticeskiy-slug">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; font-size: 0.75rem; color: #6b7280;">
-                <span>Используется в URL</span>
-                <button type="button" id="generate-slug" class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">🔄 Сгенерировать</button>
-              </div>
-              {% if adminform.form.slug.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.slug.errors }}</div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
+    <div class="card-body">
+      <form id="post-form" method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        <div class="post-edit-grid">
+          <section>
+            {# Render non-field errors #}
+            {% if adminform.non_field_errors %}
+              <div class="errors">{{ adminform.non_field_errors }}</div>
+            {% endif %}
 
-        <!-- Content Editor -->
-        <div class="editor-card">
-          <div class="card-header">
-            <h3>📝 Содержание</h3>
-          </div>
-          <div class="card-body">
-            <div class="form-group">
-              {{ adminform.form.content }}
-              {% if adminform.form.content.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.content.errors }}</div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
+            {# Main form fields (we render them grouped as in default admin: fieldsets) #}
+            {% for fieldset in adminform %}
+              <fieldset class="module aligned">
+                {% if fieldset.name %}
+                  <h2 style="margin:0 0 8px 0;font-size:16px;">{{ fieldset.name }}</h2>
+                {% endif %}
+                <div class="form-row">
+                  {% for field in fieldset %}
+                    <div class="form-row item" style="margin-bottom:14px;">
+                      {% if field.is_hidden %}
+                        {{ field }}
+                      {% else %}
+                        <div class="field-label">{{ field.label }}</div>
+                        <div class="field widget-wrap">
+                          {{ field|add_class:"w-full" }}
+                          {% if field.errors %}
+                            <div class="errors">{{ field.errors }}</div>
+                          {% endif %}
+                          {% if field.help_text %}
+                            <div class="help-text">{{ field.help_text|safe }}</div>
+                          {% endif %}
+                        </div>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                </div>
+              </fieldset>
+            {% endfor %}
 
-        <!-- Excerpt -->
-        <div class="editor-card">
-          <div class="card-header">
-            <h3>📋 Краткое описание</h3>
-          </div>
-          <div class="card-body">
-            <div class="form-group">
-              <textarea name="excerpt" id="id_excerpt" class="form-textarea" placeholder="Краткое описание поста, отображается в превью..." rows="3">{{ adminform.form.excerpt.value|default:'' }}</textarea>
-              <div class="char-counter" style="text-align: right; font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
-                <span id="excerpt-counter">0</span>/320 символов
-              </div>
-              {% if adminform.form.excerpt.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.excerpt.errors }}</div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Right Column - Sidebar -->
-      <div class="sidebar-area">
-        <!-- Publication -->
-        <div class="editor-card">
-          <div class="card-header">
-            <h3>🚀 Публикация</h3>
-          </div>
-          <div class="card-body">
-            <!-- Status -->
-            <div class="form-group">
-              <label class="form-label" for="id_status">Статус</label>
-              <select name="status" id="id_status" class="form-select">
-                {% for value, label in adminform.form.status.field.choices %}
-                  <option value="{{ value }}" {% if adminform.form.status.value == value %}selected{% endif %}>{{ label }}</option>
+            {# Inline formsets (comments, attachments, etc.) #}
+            {% for inline_admin_formset in inline_admin_formsets %}
+              <div class="inline-group card" style="margin-top:18px; padding:14px;">
+                <h3 style="margin:0 0 12px 0;">{{ inline_admin_formset.opts.verbose_name_plural }}</h3>
+                {% for frm in inline_admin_formset %}
+                  <div class="inline-related" style="margin-bottom:12px;">
+                    {% for field in frm %}
+                      <div style="margin-bottom:8px;">
+                        {% if field.is_hidden %}
+                          {{ field }}
+                        {% else %}
+                          <div class="field-label">{{ field.label }}</div>
+                          <div class="field">{{ field }}</div>
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                    {% if frm.original %}
+                      <div class="help-text">ID: {{ frm.original.pk }}</div>
+                    {% endif %}
+                  </div>
                 {% endfor %}
-              </select>
-              {% if adminform.form.status.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.status.errors }}</div>
-              {% endif %}
-            </div>
+                {% if inline_admin_formset.has_add_permission %}
+                  <p><a class="add-related" href="#">{% trans "Добавить ещё" %} {{ inline_admin_formset.opts.verbose_name }}</a></p>
+                {% endif %}
+              </div>
+            {% endfor %}
 
-            <!-- Published At -->
-<div class="form-group">
-    <label class="form-label" for="id_published_at">Дата публикации</label>
-    <input type="datetime-local" name="published_at" value="{{ adminform.form.published_at.value|default:'' }}" id="id_published_at" class="form-input">
-    <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
-        Оставьте пустым для автоматической установки при публикации
-    </div>
-    {% if adminform.form.published_at.errors %}
-    <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">
-        {% for error in adminform.form.published_at.errors %}
-            {{ error }}
+            {# Submit buttons at bottom too for convenience #}
+            <div style="margin-top:18px;display:flex;gap:8px;">
+              <button type="submit" class="save-primary">{% trans "Сохранить" %}</button>
+              <a href="{% url 'admin:index' %}" class="save-secondary">{% trans "Отмена" %}</a>
+            </div>
+          </section>
+
+          <aside class="meta-panel card" aria-label="Post metadata">
+            <div class="card-body">
+              <h3 style="margin-top:0;">{% trans "Статус" %}</h3>
+
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                {# Published checkbox or status field #}
+                {% if adminform.form.publish %}
+                  <label class="field-label">{{ adminform.form.publish.label_tag }}</label>
+                  <div>{{ adminform.form.publish }}</div>
+                {% else %}
+                  {# fallback to status/status_display fields #}
+                  {% if original and original.get_status_display %}
+                    <div class="status-badge status-green">{{ original.get_status_display }}</div>
+                  {% endif %}
+                {% endif %}
+
+                {# Published date/time #}
+                {% if adminform.form.published_at %}
+                  <div>
+                    <div class="field-label">{{ adminform.form.published_at.label }}</div>
+                    <div>{{ adminform.form.published_at }}</div>
+                  </div>
+                {% endif %}
+
+                {# Slug helper #}
+                {% if adminform.form.slug %}
+                  <div>
+                    <div class="field-label">{{ adminform.form.slug.label }}</div>
+                    <div>{{ adminform.form.slug }}</div>
+                    <span class="slug-auto" id="slug-suggestion">{% trans "Подсказка slug будет здесь" %}</span>
+                  </div>
+                {% endif %}
+
+                {# Featured image preview (if present in form) #}
+                {% if adminform.form.featured_image %}
+                  <div>
+                    <div class="field-label">{{ adminform.form.featured_image.label }}</div>
+                    <div>{{ adminform.form.featured_image }}</div>
+                    {% if original and original.featured_image %}
+                      <img src="{{ original.featured_image.url }}" alt="preview" class="preview-image" id="existing-image-preview" />
+                    {% else %}
+                      <img src="" alt="" class="preview-image" id="new-image-preview" style="display:none;" />
+                    {% endif %}
+                  </div>
+                {% endif %}
+
+                {# Author / Created info #}
+                <div style="margin-top:12px;">
+                  <div class="field-label">{% trans "Автор" %}</div>
+                  <div style="color:var(--muted);">
+                    {% if original %}{{ original.author }}{% else %}{% trans "Не указано" %}{% endif %}
+                  </div>
+
+                  <div class="field-label" style="margin-top:8px;">{% trans "Создано" %}</div>
+                  <div style="color:var(--muted);">
+                    {% if original and original.created_at %}{{ original.created_at|date:"SHORT_DATETIME_FORMAT" }}{% else %}—{% endif %}
+                  </div>
+                </div>
+
+                {# Preview link (will POST current draft to preview if possible) #}
+                <div style="margin-top:12px;">
+                  <button type="button" id="btn-preview-sidebar" class="save-secondary">{% trans "Открыть предпросмотр" %}</button>
+                </div>
+              </div>
+
+              <hr style="margin:12px 0;" />
+
+              <div>
+                <h4 style="margin:0 0 8px 0;">{% trans "Дополнительно" %}</h4>
+                <div style="font-size:0.95rem;color:var(--muted);">
+                  {% if original and original.pk %}
+                    <div>{% trans "URL:" %} <br /><a href="{{ original.get_absolute_url }}" target="_blank">{{ original.get_absolute_url }}</a></div>
+                    <div style="margin-top:8px;">ID: {{ original.pk }}</div>
+                  {% else %}
+                    <div>{% trans "Запись ещё не сохранена" %}</div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        {# Render hidden fields Django admin needs (prepopulated fields etc.) #}
+        {% for hidden in adminform.form.hidden_fields %}
+          {{ hidden }}
         {% endfor %}
+      </form>
     </div>
-    {% endif %}
-</div>
-
-            <!-- Author -->
-            <div class="form-group">
-              <label class="form-label" for="id_author">Автор</label>
-              <select name="author" id="id_author" class="form-select">
-                <option value="">---------</option>
-                {% for value, label in adminform.form.author.field.choices %}
-                  <option value="{{ value }}" {% if adminform.form.author.value == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-              {% if adminform.form.author.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.author.errors }}</div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-
-        <!-- Categories & Tags -->
-        <div class="editor-card">
-          <div class="card-header">
-            <h3>🏷️ Классификация</h3>
-          </div>
-          <div class="card-body">
-            <!-- Categories -->
-            <div class="form-group">
-              <label class="form-label" for="id_categories">Категории</label>
-              <select name="categories" id="id_categories" class="form-select" multiple style="height: 120px;">
-                {% for value, label in adminform.form.categories.field.choices %}
-                  <option value="{{ value }}" {% if value in adminform.form.categories.value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-              {% if adminform.form.categories.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.categories.errors }}</div>
-              {% endif %}
-            </div>
-
-            <!-- Tags -->
-            <div class="form-group">
-              <label class="form-label" for="id_tags">Теги</label>
-              <select name="tags" id="id_tags" class="form-select" multiple style="height: 120px;">
-                {% for value, label in adminform.form.tags.field.choices %}
-                  <option value="{{ value }}" {% if value in adminform.form.tags.value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-              {% if adminform.form.tags.errors %}
-              <div class="error" style="color: red; font-size: 0.875rem; margin-top: 0.25rem;">{{ adminform.form.tags.errors }}</div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="editor-card">
-          <div class="card-header">
-            <h3>⚡ Быстрые действия</h3>
-          </div>
-          <div class="card-body">
-            <div class="quick-actions">
-              <button type="button" id="preview-btn" class="btn btn-action">
-                👁️ Предпросмотр
-              </button>
-              <button type="button" id="fill-meta" class="btn btn-action">
-                📝 Заполнить SEO
-              </button>
-              <a href="{% url 'admin:blog_medialibrary_changelist' %}" class="btn btn-action" target="_blank">
-                🗂️ Медиатека
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Скрытые поля Django -->
-    {% for field in adminform.form.hidden_fields %}
-      {{ field }}
-    {% endfor %}
-  </form>
-</div>
+  </div>
 {% endblock %}
 
-{% block footer %}
-{{ block.super }}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('🚀 Fixed Post Editor initialized');
+{% block footer_extra %}
+  {{ block.super }}
+  <script>
+    (function () {
+      // Basic helpers
+      function qs(sel, ctx) { return (ctx || document).querySelector(sel); }
+      function qsa(sel, ctx) { return Array.from((ctx || document).querySelectorAll(sel)); }
+      function nowFmt(){ return new Date().toLocaleString(); }
 
-  // Базовая функциональность
-  initDateTimeFields();  // <-- ДОБАВЬТЕ ЭТУ СТРОЧКУ
-  initSlugGeneration();
-  initCharacterCounters();
-  initQuickActions();
+      // CSRF token setup for AJAX if needed
+      function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+      }
+      const csrftoken = getCookie('csrftoken');
 
-  function initDateTimeFields() {
-    const publishedAtField = document.getElementById('id_published_at');
-    
-    if (publishedAtField && !publishedAtField.value) {
-        // Устанавливаем текущую дату и время по умолчанию для новых постов
-        const now = new Date();
-        const timezoneOffset = now.getTimezoneOffset() * 60000; // Смещение в миллисекундах
-        const localISOTime = new Date(now - timezoneOffset).toISOString().slice(0, 16);
-        publishedAtField.value = localISOTime;
-        console.log('✅ Установлена текущая дата публикации:', localISOTime);
-    } else if (publishedAtField && publishedAtField.value) {
-        console.log('✅ Дата публикации уже установлена:', publishedAtField.value);
-    }
-  }
+      // autosave to localStorage (safe, no server calls). Keyed by admin model & pk (or "new")
+      const modelKey = "{{ opts.app_label }}_{{ opts.model_name }}";
+      const pk = "{% if original %}{{ original.pk }}{% else %}new{% endif %}";
+      const autosaveKey = "autosave:" + modelKey + ":" + pk;
 
-  function initSlugGeneration() {
-    const generateBtn = document.getElementById('generate-slug');
-    const titleField = document.getElementById('id_title');
-    const slugField = document.getElementById('id_slug');
+      const form = qs('#post-form');
+      const autosaveInfo = qs('#autosave-info');
+      const autosaveTime = qs('#autosave-time');
+      const btnSave = qs('#btn-save');
+      const btnPreview = qs('#btn-preview');
+      const btnPreviewSidebar = qs('#btn-preview-sidebar');
 
-    if (generateBtn && titleField && slugField) {
-      generateBtn.addEventListener('click', function() {
-        const title = titleField.value.trim();
-        if (title) {
-          const slug = generateSlug(title);
-          slugField.value = slug;
-          showNotification('Slug сгенерирован', 'success');
+      // Load autosaved data (if any) into inputs
+      try {
+        const saved = localStorage.getItem(autosaveKey);
+        if (saved) {
+          const data = JSON.parse(saved);
+          Object.keys(data).forEach(function(name){
+            const el = form.querySelector('[name="'+name+'"]');
+            if (!el) return;
+            if (el.type === 'checkbox') el.checked = data[name];
+            else if (el.tagName === 'SELECT' && el.multiple) {
+              Array.from(el.options).forEach(o => o.selected = (data[name]||[]).includes(o.value));
+            } else el.value = data[name];
+          });
+          autosaveTime.textContent = new Date(data._autosave_time).toLocaleString();
         } else {
-          showNotification('Введите заголовок сначала', 'warning');
+          autosaveTime.textContent = '—';
         }
-      });
+      } catch(e){ console.warn('autosave load failed', e); }
 
-      // Auto-generate slug when title changes (if slug is empty)
-      titleField.addEventListener('blur', function() {
-        if (!slugField.value.trim()) {
-          const title = titleField.value.trim();
-          if (title) {
-            slugField.value = generateSlug(title);
+      // Collect form fields to save
+      function collectFormData() {
+        const data = {};
+        Array.from(form.elements).forEach(function(el){
+          if (!el.name) return;
+          if (el.type === 'file') return; // skip files for localStorage
+          if (el.type === 'checkbox') data[el.name] = el.checked;
+          else if (el.tagName === 'SELECT' && el.multiple) data[el.name] = Array.from(el.selectedOptions).map(o=>o.value);
+          else data[el.name] = el.value;
+        });
+        data._autosave_time = new Date().toISOString();
+        return data;
+      }
+
+      // Autosave interval
+      let autosaveTimer = setInterval(function(){
+        try {
+          const data = collectFormData();
+          localStorage.setItem(autosaveKey, JSON.stringify(data));
+          autosaveTime.textContent = new Date(data._autosave_time).toLocaleString();
+        } catch(e){ console.warn('autosave failed', e); }
+      }, 30000); // every 30s
+
+      // Slug suggestion: from title
+      const titleInput = form.querySelector('[name="title"]') || form.querySelector('[name="name"]');
+      const slugInput = form.querySelector('[name="slug"]');
+      const slugSuggestion = qs('#slug-suggestion');
+
+      function slugify(text){
+        return (text || '').toString().toLowerCase()
+          .replace(/\s+/g,'-')
+          .replace(/[^\w\-]+/g,'')
+          .replace(/\-\-+/g,'-')
+          .replace(/^-+/, '')
+          .replace(/-+$/, '');
+      }
+      if (titleInput && slugInput && slugSuggestion) {
+        const updateSlugHint = () => {
+          const hint = slugify(titleInput.value);
+          slugSuggestion.textContent = hint ? ('Подсказка: ' + hint) : '{% trans "Подсказка slug будет здесь" %}';
+        };
+        titleInput.addEventListener('input', updateSlugHint);
+        updateSlugHint();
+      }
+
+      // Image preview for file inputs named like featured_image
+      const imageInput = form.querySelector('input[type=file][name="featured_image"]') || form.querySelector('input[type=file].featured_image');
+      const newImagePreview = qs('#new-image-preview');
+      if (imageInput && newImagePreview) {
+        imageInput.addEventListener('change', function(ev){
+          const file = ev.target.files && ev.target.files[0];
+          if (!file) { newImagePreview.style.display = 'none'; return; }
+          const url = URL.createObjectURL(file);
+          newImagePreview.src = url;
+          newImagePreview.style.display = 'block';
+        });
+      }
+
+      // Preview: we create a temporary form and POST it to a new window (to use server-side preview if route exists)
+      function openPreview(){
+        // try to find preview url on model: preview_url or original.get_absolute_url? fallback to opening a new blank window with form content.
+        const previewWindow = window.open('', '_blank');
+        if (!previewWindow) { alert('{% trans "Поп-ап блокируется. Разрешите всплывающие окна для этого сайта." %}'); return; }
+
+        // create a form, clone inputs (except files) and post to preview endpoint if provided; otherwise show raw title/content.
+        const tempForm = document.createElement('form');
+        tempForm.method = 'post';
+        tempForm.target = previewWindow.name;
+        tempForm.style.display = 'none';
+
+        // use preview endpoint if defined in DOM via data attribute
+        const previewUrl = "{{ original.get_preview_url|default:'' }}";
+        tempForm.action = previewUrl || window.location.pathname.replace(/\/change\/?$/, '/preview/') || window.location.pathname;
+
+        // csrf
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden'; csrfInput.name = 'csrfmiddlewaretoken'; csrfInput.value = csrftoken;
+        tempForm.appendChild(csrfInput);
+
+        // append textual fields only
+        Array.from(form.elements).forEach(function(el){
+          if (!el.name) return;
+          if (el.type === 'file') return;
+          if (el.type === 'checkbox') {
+            const i = document.createElement('input'); i.type='hidden'; i.name=el.name; i.value = el.checked ? 'on' : '';
+            tempForm.appendChild(i);
+          } else if (el.tagName === 'SELECT' && el.multiple) {
+            Array.from(el.selectedOptions).forEach(function(opt){
+              const i = document.createElement('input'); i.type='hidden'; i.name = el.name; i.value = opt.value;
+              tempForm.appendChild(i);
+            });
+          } else {
+            const i = document.createElement('input'); i.type='hidden'; i.name=el.name; i.value = el.value;
+            tempForm.appendChild(i);
           }
+        });
+
+        document.body.appendChild(tempForm);
+        tempForm.submit();
+        tempForm.remove();
+      }
+
+      // Bind preview buttons
+      if (btnPreview) btnPreview.addEventListener('click', openPreview);
+      if (btnPreviewSidebar) btnPreviewSidebar.addEventListener('click', openPreview);
+
+      // If TipTap or CKEditor initialization script exists, try to initialize editors in page
+      function initEditors(){
+        try {
+          if (window.tiptap && typeof window.initTipTapEditors === 'function') {
+            window.initTipTapEditors(); // your static admin js may provide this
+          }
+          if (window.CKEDITOR && typeof window.initCkeditors === 'function') {
+            window.initCkeditors();
+          }
+        } catch(e){
+          // ignore
         }
+      }
+      document.addEventListener('DOMContentLoaded', initEditors);
+
+      // Clean up autosave on real save (when form successfully submits server-side, user will be redirected; but to be safe we remove key on submit)
+      form.addEventListener('submit', function(){
+        try { localStorage.removeItem(autosaveKey); } catch(e) {}
       });
-    }
-  }
 
-  function initCharacterCounters() {
-    const excerptField = document.getElementById('id_excerpt');
-    const metaDescField = document.getElementById('id_meta_description');
-
-    function updateCounter(field, counterId, maxLength) {
-      const counter = document.getElementById(counterId);
-      if (!counter || !field) return;
-
-      const length = field.value.length;
-      counter.textContent = length;
-
-      // Update counter color based on length
-      if (length > maxLength) {
-        counter.style.color = '#ef4444';
-      } else if (length > maxLength * 0.9) {
-        counter.style.color = '#f59e0b';
-      } else {
-        counter.style.color = '';
-      }
-    }
-
-    if (excerptField) {
-      updateCounter(excerptField, 'excerpt-counter', 320);
-      excerptField.addEventListener('input', () => updateCounter(excerptField, 'excerpt-counter', 320));
-    }
-  }
-
-  function initQuickActions() {
-    // Preview button
-    const previewBtn = document.getElementById('preview-btn');
-    if (previewBtn) {
-      previewBtn.addEventListener('click', function() {
-        const postId = getPostId();
-        if (postId) {
-          window.open(`/preview/${postId}`, '_blank');
-        } else {
-          showNotification('Сохраните пост для предпросмотра', 'warning');
-        }
-      });
-    }
-
-    // Fill meta button
-    const fillMetaBtn = document.getElementById('fill-meta');
-    const titleField = document.getElementById('id_title');
-    const excerptField = document.getElementById('id_excerpt');
-
-    if (fillMetaBtn && titleField) {
-      fillMetaBtn.addEventListener('click', function() {
-        const title = titleField.value.trim();
-        const excerpt = excerptField ? excerptField.value.trim() : '';
-
-        if (title) {
-          // Здесь можно добавить логику заполнения SEO полей
-          showNotification('SEO данные заполнены', 'success');
-        } else {
-          showNotification('Введите заголовок сначала', 'warning');
-        }
-      });
-    }
-  }
-
-  function generateSlug(text) {
-    return text
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_-]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .substring(0, 50);
-  }
-
-  function getPostId() {
-    const urlMatch = window.location.pathname.match(/\/admin\/blog\/post\/(\d+)\/change/);
-    return urlMatch ? urlMatch[1] : null;
-  }
-
-  function showNotification(message, type = 'info', duration = 3000) {
-    // Remove existing notifications
-    const existing = document.querySelector('.custom-notification');
-    if (existing) existing.remove();
-
-    // Create notification
-    const notification = document.createElement('div');
-    notification.className = `custom-notification`;
-    notification.innerHTML = message;
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      padding: 12px 16px;
-      background: white;
-      border-radius: 6px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      z-index: 10000;
-      border-left: 4px solid ${type === 'success' ? '#10b981' : type === 'warning' ? '#f59e0b' : '#3b82f6'};
-      max-width: 300px;
-    `;
-
-    document.body.appendChild(notification);
-
-    // Auto remove
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, duration);
-  }
-
-  // Базовая валидация формы
-  const form = document.getElementById('post_form');
-  if (form) {
-    form.addEventListener('submit', function(e) {
-      const title = document.getElementById('id_title').value.trim();
-      if (!title) {
-        e.preventDefault();
-        showNotification('Заголовок обязателен для заполнения', 'error');
-        document.getElementById('id_title').focus();
-        return;
+      // Show autosave timestamp initially
+      if (!autosaveTime.textContent || autosaveTime.textContent === '—') {
+        autosaveTime.textContent = '—';
       }
 
-      // Показываем индикатор сохранения
-      const submitBtn = document.querySelector('button[name="_save"]');
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '⏳ Сохранение...';
-      }
-    });
-  }
-});
-</script>
+    })();
+  </script>
 {% endblock %}

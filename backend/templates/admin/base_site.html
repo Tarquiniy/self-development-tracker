@@ -1,124 +1,86 @@
-{% extends "admin/base.html" %}
-{% load static %}
+{# backend/templates/admin/base_site.html (REPLACED ENTIRE FILE) #}
+{% load static i18n %}
+<!doctype html>
+<html lang="{{ LANGUAGE_CODE|default:'ru' }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>{% block title %}{{ site_title|default:_('Positive Theta — Admin') }}{% endblock %}</title>
 
-{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+    {# Primary admin theme — modern global styles (keeps admin consistent) #}
+    <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
+    {# Dashboard-specific styles (so dashboard and other admin pages look identical) #}
+    <link rel="stylesheet" href="{% static 'admin/css/custom_admin_dashboard.css' %}">
+    {# Post editing styles (TipTap / CKEditor fallbacks) #}
+    <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
 
-{% block branding %}
-<h1 id="site-name">
-    <a href="{% url 'admin:index' %}">
-        <img src="{% static 'admin/img/logo.png' %}" alt="Positive Theta" height="40" style="margin-right: 10px;">
-        Positive Theta Admin
-    </a>
-</h1>
-{% endblock %}
+    {% block extrahead %}{% endblock %}
+</head>
 
-{% block nav-global %}
-{% endblock %}
+<body class="admin-theme admin-modern">
+    <header class="admin-topbar">
+        <div class="admin-topbar-inner" style="max-width:1300px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 18px;">
+            <div class="brand">
+                <a href="{% url 'admin:index' %}" class="brand-link" style="display:flex;align-items:center;text-decoration:none;color:inherit">
+                    <img src="{% static 'admin/logo.png' %}" alt="logo" class="brand-logo" />
+                    <span class="brand-title">{{ site_header|default:site_title|default:_('Site administration') }}</span>
+                </a>
+            </div>
 
-{% block extrastyle %}
-{{ block.super }}
-<link rel="stylesheet" href="{% static 'admin/css/grappelli-custom.css' %}">
-<style>
-    /* Дополнительные кастомные стили для Grappelli */
-    .grp-module h2 {
-        background: #2c3e50;
-        color: white;
-    }
-    
-    .status-badge {
-        padding: 4px 8px;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-    
-    .status-published {
-        background: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
-    }
-    
-    .status-draft {
-        background: #fff3cd;
-        color: #856404;
-        border: 1px solid #ffeaa7;
-    }
-    
-    .status-archived {
-        background: #f8d7da;
-        color: #721c24;
-        border: 1px solid #f5c6cb;
-    }
-    
-    /* Улучшения для CKEditor */
-    .ck-editor__editable {
-        min-height: 400px;
-        font-size: 16px;
-        line-height: 1.6;
-    }
-    
-    .ck.ck-editor {
-        border-radius: 8px;
-        overflow: hidden;
-        margin-bottom: 1rem;
-    }
-    
-    /* Карточки для медиа библиотеки */
-    .media-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 1rem;
-        margin: 1rem 0;
-    }
-    
-    .media-item {
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        padding: 1rem;
-        text-align: center;
-        background: white;
-        transition: transform 0.2s;
-    }
-    
-    .media-item:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    
-    .media-thumbnail {
-        max-width: 100%;
-        height: 150px;
-        object-fit: cover;
-        border-radius: 4px;
-    }
-    
-    /* Адаптивность */
-    @media (max-width: 768px) {
-        .media-grid {
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-        }
-    }
-</style>
-{% endblock %}
+            <form action="{% url 'admin:index' %}" method="get" style="margin-left:24px;">
+                <input name="q" placeholder="{% trans 'Search admin...' %}" class="top-search" />
+            </form>
 
-{% block extrahead %}
-{{ block.super }}
-<script src="{% static 'admin/js/grappelli-custom.js' %}"></script>
-<script>
-// Глобальные JavaScript утилиты
-document.addEventListener('DOMContentLoaded', function() {
-    // Добавляем обработчики для статус-бейджей
-    const statusBadges = document.querySelectorAll('.status-badge');
-    statusBadges.forEach(badge => {
-        badge.style.margin = '2px 0';
-    });
-    
-    // Улучшаем таблицы
-    const tables = document.querySelectorAll('table.grp-table');
-    tables.forEach(table => {
-        table.classList.add('grp-table-striped');
-    });
-});
-</script>
-{% endblock %}
+            <div class="top-actions" style="margin-left:auto;display:flex;gap:12px;align-items:center;">
+                <nav class="top-links" aria-label="admin quick links">
+                    <a href="{% url 'admin:blog_post_changelist' %}" class="top-link">Посты</a>
+                    <a href="{% url 'admin:blog_category_changelist' %}" class="top-link">Категории</a>
+                    <a href="/admin/media-library/" class="top-link">Медиа</a>
+                    <a href="{% url 'admin:logout' %}" class="top-link">Выйти</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <div class="admin-container" style="max-width:1300px;margin:20px auto;display:flex;gap:20px;padding:0 18px;">
+        <aside class="admin-sidebar" role="navigation" aria-label="admin sidebar">
+            <div class="sidebar-section">
+                <h4 class="sidebar-heading">Управление</h4>
+                <ul class="sidebar-list">
+                    <li><a href="{% url 'admin:index' %}">Главная</a></li>
+                    <li><a href="{% url 'admin:blog_post_changelist' %}">Посты</a></li>
+                    <li><a href="{% url 'admin:blog_category_changelist' %}">Категории</a></li>
+                    <li><a href="{% url 'admin:blog_tag_changelist' %}">Теги</a></li>
+                    <li><a href="{% url 'admin:blog_comment_changelist' %}">Комментарии</a></li>
+                    <li><a href="/admin/media-library/">Медиа библиотека</a></li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section" style="margin-top:14px;">
+                <h4 class="sidebar-heading">Инструменты</h4>
+                <ul class="sidebar-list">
+                    <li><a href="{% url 'admin:blog_post_add' %}">Создать пост</a></li>
+                    <li><a href="{% url 'admin:blog_changelist' %}">Blog App</a></li>
+                    <li><a href="{% url 'admin:auth_user_changelist' %}">Пользователи</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <main class="admin-main" style="flex:1;">
+            <div class="admin-breadcrumbs">{% block breadcrumbs %}{% endblock %}</div>
+
+            <div class="admin-content card" style="padding:20px;">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <footer class="admin-footer" style="text-align:center;padding:18px 0;color:#6b7280;">
+        <div>© {{ now|date:"Y" }} — Positive Theta Admin · Powered by Django</div>
+    </footer>
+
+    {% block footer_extra %}
+      <script src="{% static 'admin/js/admin-core.js' %}"></script>
+    {% endblock %}
+</body>
+</html>
