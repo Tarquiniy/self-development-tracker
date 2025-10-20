@@ -24,6 +24,14 @@ from django.template.loader import render_to_string
 
 logger = logging.getLogger(__name__)
 
+# CKEditor import
+try:
+    from django_ckeditor_5.widgets import CKEditor5Widget
+    HAS_CKEDITOR_WIDGET = True
+except ImportError:
+    HAS_CKEDITOR_WIDGET = False
+    CKEditor5Widget = forms.Textarea
+
 # Optional reversion support
 try:
     import reversion
@@ -69,6 +77,17 @@ class PostAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        
+        # Add CKEditor widget for content field
+        if HAS_CKEDITOR_WIDGET and 'content' in self.fields:
+            self.fields['content'].widget = CKEditor5Widget(
+                attrs={
+                    'class': 'django_ckeditor_5',
+                    'placeholder': 'Начните писать ваш пост здесь...'
+                },
+                config_name='extends'
+            )
+        
         # Add CSS classes for styling
         self.fields['title'].widget.attrs.update({
             'class': 'vTextField wide',

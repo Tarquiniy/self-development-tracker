@@ -6,12 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{{ site_title|default:_('Django site admin') }}{% endblock %}</title>
     
-    <!-- Modern CSS -->
+    <!-- Standard Django Admin CSS -->
+    <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'admin/css/dashboard.css' %}">
+    
+    <!-- Modern Admin CSS -->
     <link rel="stylesheet" href="{% static 'admin/css/admin-modern.css' %}">
     <link rel="stylesheet" href="{% static 'admin/css/post_admin_enhanced.css' %}">
     <link rel="stylesheet" href="{% static 'admin/css/post_edit_enhanced.css' %}">
     
-    <!-- CKEditor Styles -->
+    <!-- CKEditor 5 CSS -->
     <link rel="stylesheet" href="{% static 'admin/css/ckeditor5-admin.css' %}">
     
     {% block extrastyle %}{% endblock %}
@@ -20,99 +24,59 @@
 
 <body class="admin-modern-theme">
     <!-- Header -->
-    <header class="admin-header">
-        <div class="admin-header-content">
-            <div class="brand">
-                <a href="/admin/" class="brand-link">
-                    <span class="brand-title">{{ site_header|default:_('Django administration') }}</span>
-                </a>
+    <div id="container">
+        <div id="header">
+            <div id="branding">
+                <h1 id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></h1>
             </div>
-            
-            <div class="admin-actions">
-                <div class="user-info">
-                    {% if user.is_authenticated %}
-                    <span class="welcome">Welcome, {{ user.get_username }}</span>
-                    <a href="{% url 'admin:logout' %}" class="logout-link">Log out</a>
-                    {% endif %}
-                </div>
+            <div id="user-tools">
+                {% if user.is_authenticated %}
+                {% trans 'Welcome,' %}
+                <strong>{% firstof user.get_short_name user.get_username %}</strong>.
+                {% endif %}
             </div>
         </div>
-    </header>
 
-    <!-- Main Container -->
-    <div class="admin-container">
-        <!-- Sidebar -->
-        <aside class="admin-sidebar">
-            <nav class="sidebar-nav">
-                <div class="sidebar-section">
-                    <h3 class="sidebar-title">Blog</h3>
-                    <ul class="sidebar-links">
-                        <li><a href="{% url 'admin:blog_post_changelist' %}">Posts</a></li>
-                        <li><a href="{% url 'admin:blog_category_changelist' %}">Categories</a></li>
-                        <li><a href="{% url 'admin:blog_tag_changelist' %}">Tags</a></li>
-                        <li><a href="{% url 'admin:blog_comment_changelist' %}">Comments</a></li>
-                        <li><a href="{% url 'admin:blog_medialibrary_changelist' %}">Media Library</a></li>
-                    </ul>
-                </div>
-                
-                <div class="sidebar-section">
-                    <h3 class="sidebar-title">Users</h3>
-                    <ul class="sidebar-links">
-                        <li><a href="{% url 'admin:auth_user_changelist' %}">Users</a></li>
-                        <li><a href="{% url 'admin:auth_group_changelist' %}">Groups</a></li>
-                    </ul>
-                </div>
-                
-                <div class="sidebar-section">
-                    <h3 class="sidebar-title">Tools</h3>
-                    <ul class="sidebar-links">
-                        <li><a href="{% url 'admin-dashboard' %}">Dashboard</a></li>
-                        <li><a href="{% url 'admin-media-library' %}">Media Library</a></li>
-                    </ul>
-                </div>
-            </nav>
-        </aside>
+        <!-- Breadcrumbs -->
+        <div class="breadcrumbs">
+            <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+            {% if title %} &rsaquo; {{ title }}{% endif %}
+        </div>
 
-        <!-- Main Content -->
-        <main class="admin-main">
-            <!-- Breadcrumbs -->
-            <div class="admin-breadcrumbs">
-                {% block breadcrumbs %}
-                <div class="breadcrumbs">
-                    <a href="{% url 'admin:index' %}">Home</a>
-                    {% if title %} &rsaquo; {{ title }}{% endif %}
-                </div>
-                {% endblock %}
-            </div>
+        <!-- Messages -->
+        {% if messages %}
+        <ul class="messagelist">
+            {% for message in messages %}
+            <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
 
-            <!-- Messages -->
-            {% if messages %}
-            <ul class="messagelist">
-                {% for message in messages %}
-                <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
-                {% endfor %}
-            </ul>
-            {% endif %}
+        <!-- Content -->
+        <div id="content" class="{% block coltype %}colM{% endblock %}">
+            {% block pretitle %}{% endblock %}
+            {% block content_title %}{% if title %}<h1>{{ title }}</h1>{% endif %}{% endblock %}
+            {% block content %}
+            {% block object-tools %}{% endblock %}
+            {{ content }}
+            {% endblock %}
+            {% block sidebar %}{% endblock %}
+            <br class="clear">
+        </div>
 
-            <!-- Content -->
-            <div class="admin-content">
-                {% block content %}
-                {% block object-tools %}{% endblock %}
-                {{ content }}
-                {% endblock %}
-            </div>
-        </main>
+        <!-- Footer -->
+        <div id="footer"></div>
     </div>
 
-    <!-- Footer -->
-    <footer class="admin-footer">
-        <div class="footer-content">
-            <p>&copy; 2025 Positive Theta. Powered by Django.</p>
-        </div>
-    </footer>
-
     <!-- Scripts -->
-    <script src="{% static 'admin/js/admin-core.js' %}"></script>
+    <script src="{% static 'admin/js/vendor/jquery/jquery.js' %}"></script>
+    <script src="{% static 'admin/js/jquery.init.js' %}"></script>
+    
+    <!-- CKEditor 5 Scripts -->
+    <script src="https://cdn.ckeditor.com/ckeditor5/41.4.2/ckeditor.js"></script>
+    <script src="{% static 'admin/js/ckeditor_upload_adapter.js' %}"></script>
+    <script src="{% static 'admin/js/ckeditor_init.js' %}"></script>
+    
     {% block footer_extra %}{% endblock %}
 </body>
 </html>
