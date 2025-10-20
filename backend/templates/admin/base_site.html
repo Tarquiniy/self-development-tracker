@@ -1,79 +1,117 @@
-{# backend/templates/admin/base_site.html (REPLACED ENTIRE FILE) #}
-{% load static i18n %}
+{# backend/templates/admin/base_site.html
+   Unified admin base template — корректные admin URL names for your schema.
+   Uses only Django admin named URLs:
+     - admin:index
+     - admin:auth_user_changelist
+     - admin:blog_post_changelist
+     - admin:blog_post_add
+     - admin:blog_category_changelist
+     - admin:blog_tag_changelist
+     - admin:blog_postattachment_changelist
+     - admin:blog_comment_changelist
+     - admin:blog_postreaction_changelist
+     - admin:logout
+   Place this file at backend/templates/admin/base_site.html
+#}
+{% load i18n static admin_urls %}
+
 <!doctype html>
 <html lang="{{ LANGUAGE_CODE|default:'ru' }}">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>{% block title %}{{ site_title|default:_('Positive Theta — Admin') }}{% endblock %}</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}{{ site_title|default:_('Positive Theta — Admin') }}{% endblock %}</title>
 
-    {# Primary admin theme — modern global styles (keeps admin consistent) #}
-    <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
-    {# Dashboard-specific styles (so dashboard and other admin pages look identical) #}
-    <link rel="stylesheet" href="{% static 'admin/css/custom_admin_dashboard.css' %}">
-    {# Post editing styles (TipTap / CKEditor fallbacks) #}
-    <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/css/custom_admin_dashboard.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
 
-    {% block extrahead %}{% endblock %}
+  {% block extrahead %}{% endblock %}
 </head>
 
 <body class="admin-theme admin-modern">
-    <header class="admin-topbar">
-        <div class="admin-topbar-inner" style="max-width:1300px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 18px;">
-            <div class="brand">
-                <a href="{% url 'admin:index' %}" class="brand-link" style="display:flex;align-items:center;text-decoration:none;color:inherit">
-                    <img src="{% static 'admin/logo.png' %}" alt="logo" class="brand-logo" />
-                    <span class="brand-title">{{ site_header|default:site_title|default:_('Site administration') }}</span>
-                </a>
-            </div>
+  <header class="admin-topbar">
+    <div class="admin-topbar-inner" style="max-width:1300px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 18px;">
+      <div class="brand">
+        <a href="{% url 'admin:index' %}" class="brand-link" style="display:flex;align-items:center;text-decoration:none;color:inherit">
+          <img src="{% static 'admin/logo.png' %}" alt="logo" class="brand-logo" />
+          <span class="brand-title">{{ site_header|default:site_title|default:_('Site administration') }}</span>
+        </a>
+      </div>
 
-            <form action="{% url 'admin:index' %}" method="get" style="margin-left:24px;">
-                <input name="q" placeholder="{% trans 'Search admin...' %}" class="top-search" />
-            </form>
+      <form action="{% url 'admin:index' %}" method="get" style="margin-left:24px;">
+        <input name="q" placeholder="{% trans 'Search admin...' %}" class="top-search" />
+      </form>
 
-            <div class="top-actions" style="margin-left:auto;display:flex;gap:12px;align-items:center;">
-                <nav class="top-links" aria-label="admin quick links">
-                    <a href="{% url 'admin:blog_post_changelist' %}" class="top-link">Посты</a>
-                    <a href="/admin/media-library/" class="top-link">Медиа</a>
-                    <a href="{% url 'admin:logout' %}" class="top-link">Выйти</a>
-                </nav>
-            </div>
-        </div>
-    </header>
+      <div class="top-actions" style="margin-left:auto;display:flex;gap:12px;align-items:center;">
+        <nav class="top-links" aria-label="admin quick links">
+          {# Standard admin changelist links (use admin URL namespace + app_label_modelname) #}
+          <a href="{% url 'admin:blog_post_changelist' %}" class="top-link">{% trans "Посты" %}</a>
+          <a href="{% url 'admin:blog_category_changelist' %}" class="top-link">{% trans "Категории" %}</a>
+          <a href="{% url 'admin:blog_tag_changelist' %}" class="top-link">{% trans "Теги" %}</a>
 
-    <div class="admin-container" style="max-width:1300px;margin:20px auto;display:flex;gap:20px;padding:0 18px;">
-        <aside class="admin-sidebar" role="navigation" aria-label="admin sidebar">
-            <div class="sidebar-section">
-                <h4 class="sidebar-heading">Управление</h4>
-                <ul class="sidebar-list">
-                    <li><a href="{% url 'admin:index' %}">Главная</a></li>
-                    <li><a href="/admin/media-library/">Медиа библиотека</a></li>
-                </ul>
-            </div>
+          {# Attachments, Comments, Reactions (if registered) #}
+          <a href="{% url 'admin:blog_postattachment_changelist' %}" class="top-link">{% trans "Вложения" %}</a>
+          <a href="{% url 'admin:blog_comment_changelist' %}" class="top-link">{% trans "Комментарии" %}</a>
+          <a href="{% url 'admin:blog_postreaction_changelist' %}" class="top-link">{% trans "Реакции" %}</a>
 
-            <div class="sidebar-section" style="margin-top:14px;">
-                <h4 class="sidebar-heading">Инструменты</h4>
-                <ul class="sidebar-list">
-                    <li><a href="{% url 'admin:blog_post_add' %}">Создать пост</a></li>
-                </ul>
-            </div>
-        </aside>
-
-        <main class="admin-main" style="flex:1;">
-            <div class="admin-breadcrumbs">{% block breadcrumbs %}{% endblock %}</div>
-
-            <div class="admin-content card" style="padding:20px;">
-                {% block content %}{% endblock %}
-            </div>
-        </main>
+          {# Users (auth) and logout #}
+          <a href="{% url 'admin:auth_user_changelist' %}" class="top-link">{% trans "Пользователи" %}</a>
+          <a href="{% url 'admin:logout' %}" class="top-link">{% trans "Выйти" %}</a>
+        </nav>
+      </div>
     </div>
+  </header>
 
-    <footer class="admin-footer" style="text-align:center;padding:18px 0;color:#6b7280;">
-        <div>© {{ now|date:"Y" }} — Positive Theta Admin · Powered by Django</div>
-    </footer>
+  <div class="admin-container" style="max-width:1300px;margin:20px auto;display:flex;gap:20px;padding:0 18px;">
+    <aside class="admin-sidebar" role="navigation" aria-label="admin sidebar">
+      <div class="sidebar-section">
+        <h4 class="sidebar-heading">{% trans "Управление" %}</h4>
+        <ul class="sidebar-list">
+          <li><a href="{% url 'admin:index' %}">{% trans "Главная" %}</a></li>
+          <li><a href="{% url 'admin:blog_post_changelist' %}">{% trans "Посты" %}</a></li>
+          <li><a href="{% url 'admin:blog_category_changelist' %}">{% trans "Категории" %}</a></li>
+          <li><a href="{% url 'admin:blog_tag_changelist' %}">{% trans "Теги" %}</a></li>
+          <li><a href="{% url 'admin:blog_postattachment_changelist' %}">{% trans "Вложения" %}</a></li>
+          <li><a href="{% url 'admin:blog_comment_changelist' %}">{% trans "Комментарии" %}</a></li>
+        </ul>
+      </div>
 
-    {% block footer_extra %}
-      <script src="{% static 'admin/js/admin-core.js' %}"></script>
-    {% endblock %}
+      <div class="sidebar-section" style="margin-top:14px;">
+        <h4 class="sidebar-heading">{% trans "Быстрые действия" %}</h4>
+        <ul class="sidebar-list">
+          <li><a href="{% url 'admin:blog_post_add' %}">{% trans "Создать пост" %}</a></li>
+          <li><a href="{% url 'admin:auth_user_changelist' %}">{% trans "Управление пользователями" %}</a></li>
+          <li><a href="{% url 'admin:django_content_type_changelist' %}">{% trans "Content types" %}</a></li>
+          <li><a href="{% url 'admin:django_session_changelist' %}">{% trans "Сессии" %}</a></li>
+        </ul>
+      </div>
+
+      <div class="sidebar-section" style="margin-top:14px;">
+        <h4 class="sidebar-heading">{% trans "Инструменты" %}</h4>
+        <ul class="sidebar-list">
+          <li><a href="{% url 'admin:django_admin_log_changelist' %}">{% trans "Лог админки" %}</a></li>
+          <li><a href="{% url 'admin:reversion_revision_changelist' %}">{% trans "Reversion" %}</a></li>
+          <li><a href="{% url 'admin:django_migrations_changelist' %}">{% trans "Миграции" %}</a></li>
+        </ul>
+      </div>
+    </aside>
+
+    <main class="admin-main" style="flex:1;">
+      <div class="admin-breadcrumbs">{% block breadcrumbs %}{% endblock %}</div>
+
+      <div class="admin-content card" style="padding:20px;">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+
+  <footer class="admin-footer" style="text-align:center;padding:18px 0;color:#6b7280;">
+    <div>© {{ now|date:"Y" }} — Positive Theta Admin · Powered by Django</div>
+  </footer>
+
+  {% block footer_extra %}
+    <script src="{% static 'admin/js/admin-core.js' %}"></script>
+  {% endblock %}
 </body>
 </html>
