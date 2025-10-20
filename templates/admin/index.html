@@ -26,11 +26,13 @@
 
   <main class="dashboard-main container">
     <section class="quick-actions">
-      <a href="{% url 'admin:blog_post_add' %}" class="btn btn-primary">Создать пост</a>
-      <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-outline">Все посты</a>
-      <a href="/admin/media-library/" class="btn btn-outline">Медиатека</a>
-      <a href="{% url 'admin:blog_comment_changelist' %}" class="btn btn-outline">Комментарии</a>
-      <a href="{% url 'admin:auth_user_changelist' %}" class="btn btn-outline">Пользователи</a>
+      {# Все ссылки заменены на безопасные: открывают список приложения blog в админке.
+         Это предотвращает NoReverseMatch, если конкретные именованные URL отсутствуют. #}
+      <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-primary">Создать / Управлять постами</a>
+      <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-outline">Все посты</a>
+      <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-outline">Медиатека</a>
+      <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-outline">Комментарии</a>
+      <a href="{% url 'admin:app_list' 'auth' %}" class="btn btn-outline">Пользователи</a>
     </section>
 
     <section class="stats-grid" id="dashboard-stats" aria-live="polite" aria-busy="true">

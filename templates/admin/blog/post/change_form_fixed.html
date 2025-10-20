@@ -142,7 +142,8 @@
         <button type="submit" name="_continue" class="btn btn-secondary" form="post_form">
           🔄 Сохранить и продолжить
         </button>
-        <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-outline">
+        {# Безопасная ссылка назад: открывает список приложения blog в админке #}
+        <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-outline">
           ← Назад
         </a>
       </div>
@@ -317,8 +318,9 @@
               <button type="button" id="fill-meta" class="btn btn-action">
                 📝 Заполнить SEO
               </button>
-              <a href="{% url 'admin:blog_medialibrary_changelist' %}" class="btn btn-action" target="_blank">
-                🗂️ Медиатека
+              {# Безопасная ссылка на список app blog в админке вместо прямого обратного вызова model change list #}
+              <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-action" target="_blank">
+                🗂️ Медиатека / Blog
               </a>
             </div>
           </div>
