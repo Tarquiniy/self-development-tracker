@@ -1,67 +1,78 @@
-// static/admin/js/admin_dashboard.js
-(function(){
-  const el = document.getElementById('dashboard-stats');
-  if(!el) return;
+// backend/blog/static/admin/js/admin_dashboard.js
+// Лёгкий и устойчивый скрипт для заполнения дашборда.
+// Работает безопасно при отсутствии API. Не ломает страницу при ошибках.
 
-  function setCards(data){
-    // ordering: total_posts, published_posts, draft_posts, total_comments, total_views
-    const labels = [
-      ['Всего постов', data.total_posts],
-      ['Опубликовано', data.published_posts],
-      ['Черновиков', data.draft_posts],
-      ['Комментариев', data.total_comments],
-      ['Просмотров', data.total_views]
-    ];
-    el.innerHTML = '';
-    labels.forEach(function(item){
-      const card = document.createElement('div');
-      card.className = 'stat-card';
-      const t = document.createElement('div');
-      t.className = 'stat-title';
-      t.textContent = item[0];
-      const v = document.createElement('div');
-      v.className = 'stat-value';
-      v.textContent = item[1] != null ? item[1] : '—';
-      card.appendChild(t);
-      card.appendChild(v);
-      el.appendChild(card);
-    });
-  }
+(function () {
+  if (typeof window === 'undefined') return;
+  document.addEventListener('DOMContentLoaded', function () {
+    try {
+      var container = document.getElementById('dashboard-stats');
+      if (!container) return;
 
-  function fetchStats(){
-    const url = '/admin/dashboard/stats-data/?days=30';
-    fetch(url, { credentials:'same-origin', headers: {'X-Requested-With':'XMLHttpRequest'} })
-      .then(r => {
-        if(!r.ok) throw new Error('Network response not ok');
-        return r.json();
-      })
-      .then(data => {
-        // endpoint returns labels/posts/comments/views arrays OR keys — be tolerant
-        if(data && typeof data === 'object'){
-          // try old style keys
-          if(data.total_posts !== undefined){
-            setCards(data);
-            return;
-          }
-          // try to derive counts from arrays
-          const posts = Array.isArray(data.posts) ? data.posts.reduce((a,b)=>a+b,0) : 0;
-          const comments = Array.isArray(data.comments) ? data.comments.reduce((a,b)=>a+b,0) : 0;
-          const views = Array.isArray(data.views) ? data.views.reduce((a,b)=>a+b,0) : 0;
-          setCards({
-            total_posts: posts,
-            published_posts: '—',
-            draft_posts: '—',
-            total_comments: comments,
-            total_views: views
+      var cards = Array.prototype.slice.call(container.querySelectorAll('.stat-card'));
+      // Пробуем получить метрики через стандартный эндпоинт (если есть).
+      var endpoint = '/admin/api/dashboard-metrics/'; // optional endpoint, должен вернуть JSON
+      var didUpdate = false;
+
+      function setCard(key, value) {
+        var card = container.querySelector('.stat-card[data-key="' + key + '"]');
+        if (!card) return;
+        var v = card.querySelector('.stat-value');
+        if (v) v.textContent = value;
+      }
+
+      function setAllFallback() {
+        // Без API просто проставим числа на основе DOM или дефолты
+        setTimeout(function () {
+          // Примеры безопасных значений, чтобы интерфейс не выглядел сломанным
+          setCard('posts', '—');
+          setCard('drafts', '—');
+          setCard('views', '—');
+          setCard('users', '—');
+          setCard('media', '—');
+          container.setAttribute('aria-busy', 'false');
+        }, 10);
+      }
+
+      // Попробуем fetch, но при ошибке — fallback
+      if (window.fetch) {
+        fetch(endpoint, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function (resp) {
+            if (!resp.ok) throw new Error('no-metrics');
+            return resp.json();
+          })
+          .then(function (json) {
+            // ожидаем структуру: {posts: n, drafts: n, views_7d: n, users: n, media: n}
+            if (json && typeof json === 'object') {
+              if (json.posts !== undefined) setCard('posts', json.posts);
+              if (json.drafts !== undefined) setCard('drafts', json.drafts);
+              if (json.views_7d !== undefined) setCard('views', json.views_7d);
+              if (json.users !== undefined) setCard('users', json.users);
+              if (json.media !== undefined) setCard('media', json.media);
+              didUpdate = true;
+            }
+            container.setAttribute('aria-busy', 'false');
+          })
+          .catch(function () {
+            // Если API нет или ошибка, делаем аккуратный fallback
+            setAllFallback();
           });
-        }
-      })
-      .catch(err => {
-        console.debug('[admin_dashboard] stats fetch failed', err);
-        // fallback: leave placeholders
-      });
-  }
+      } else {
+        setAllFallback();
+      }
 
-  // init
-  fetchStats();
+      // Также попытка извлечь численные значения прямо из DOM (если присутствуют)
+      if (!didUpdate) {
+        // нет гарантии, но если админ подключил скрипт сервера, он мог положить data-* напр.
+        cards.forEach(function (card) {
+          var key = card.getAttribute('data-key');
+          var dataVal = card.getAttribute('data-value');
+          if (dataVal) setCard(key, dataVal);
+        });
+      }
+
+    } catch (e) {
+      if (window.console) console.error('[admin_dashboard] init error', e);
+    }
+  });
 })();
