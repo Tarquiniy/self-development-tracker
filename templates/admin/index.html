@@ -1,96 +1,45 @@
-{% load static i18n %}
+{# templates/admin/index.html #}
 <!doctype html>
-<html lang="ru" class="admin-modern">
+<html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <title>{{ site_title|default:_("Admin") }}</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-
-  <!-- Стили для дашборда -->
-  <link rel="stylesheet" href="{% static 'admin/css/custom_admin_dashboard.css' %}">
-  <!-- Стандартные админ-стили (если требуются) -->
-  <link rel="stylesheet" href="{% static 'admin/css/admin.css' %}">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin Dashboard</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;background:#f6f8fb;color:#111;margin:0;padding:20px}
+    .card{background:#fff;border-radius:8px;padding:16px;margin:12px 0;box-shadow:0 4px 12px rgba(0,0,0,0.06)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+    h1{margin:0 0 12px 0}
+  </style>
 </head>
-<body class="dashboard-body">
-  <header class="dashboard-header container">
-    <div class="left">
-      <h1 class="site-title">{{ site_header|default:site_title }}</h1>
-      <p class="site-sub">{% trans "Quick access to blog and media library" %}</p>
+<body>
+  <h1>Админ — Дашборд</h1>
+  <div class="grid">
+    <div class="card">
+      <div>Постов</div>
+      <div style="font-size:20px;font-weight:700">{{ posts_count }}</div>
     </div>
-    <div class="right">
-      <div class="user-block">{% trans "Hello" %}, {{ user.get_full_name|default:user.username }}</div>
+    <div class="card">
+      <div>Опубликовано</div>
+      <div style="font-size:20px;font-weight:700">{{ published_count }}</div>
     </div>
-  </header>
+    <div class="card">
+      <div>Черновиков</div>
+      <div style="font-size:20px;font-weight:700">{{ drafts_count }}</div>
+    </div>
+    <div class="card">
+      <div>Медиа</div>
+      <div style="font-size:20px;font-weight:700">{{ media_count }}</div>
+    </div>
+    <div class="card">
+      <div>Комментарии</div>
+      <div style="font-size:20px;font-weight:700">{{ comments_count }}</div>
+    </div>
+  </div>
 
-  <main class="dashboard-main container">
-    <section class="quick-actions">
-      <a href="{% url 'admin:blog_post_add' %}" class="button button-primary">{% trans "Create Post" %}</a>
-      <a href="{% url 'admin:blog_post_changelist' %}" class="button button-secondary">{% trans "All Posts" %}</a>
-      <a href="{% url 'admin:media-library' %}" class="button button-secondary">{% trans "Media Library" %}</a>
-      <a href="{% url 'admin:blog_comment_changelist' %}" class="button button-secondary">{% trans "Comments" %}</a>
-      <a href="{% url 'admin:auth_user_changelist' %}" class="button button-secondary">{% trans "Users" %}</a>
-    </section>
-
-    <section class="stats-grid" id="dashboard-stats">
-      <!-- Статистика (заполняется JS) -->
-      <div class="stat-card">
-        <div class="stat-title">{% trans "Loading..." %}</div>
-        <div class="stat-value">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">{% trans "Loading..." %}</div>
-        <div class="stat-value">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">{% trans "Loading..." %}</div>
-        <div class="stat-value">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">{% trans "Loading..." %}</div>
-        <div class="stat-value">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">{% trans "Loading..." %}</div>
-        <div class="stat-value">—</div>
-      </div>
-    </section>
-
-    <section class="apps-and-recent">
-      <div class="apps">
-        <h3>{% trans "Applications" %}</h3>
-        <div class="apps-grid">
-          {% for app in app_list %}
-            <div class="app">
-              <div class="app-title">{{ app.name }}</div>
-              <ul class="models">
-                {% for model in app.models %}
-                  <li><a href="{{ model.admin_url }}">{{ model.name }}</a></li>
-                {% endfor %}
-              </ul>
-            </div>
-          {% endfor %}
-        </div>
-      </div>
-      <div class="recent">
-        <h3>{% trans "Tips" %}</h3>
-        <div class="panel">
-          <p>{% trans "Quick tips:" %}</p>
-          <ul>
-            <li>{% trans "Click 'Create Post' to make a new blog post." %}</li>
-            <li>{% trans "Open the Media Library to upload and attach images." %}</li>
-            <li>{% trans "Use autosave while editing your post." %}</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <footer class="dashboard-footer">
-    <span>PositiveTheta Admin – {% trans "admin interface" %}</span>
-    <small>{% trans "Version" %}: 1.0</small>
-  </footer>
-
-  <!-- Скрипты: статистика, дашборд -->
-  <script src="{% static 'admin/js/admin_dashboard.js' %}"></script>
+  <div style="margin-top:16px">
+    <a href="{% url 'admin:index' %}">Вернуться в админ</a> •
+    <a href="{% url 'media-library' %}">Медиа библиотека</a>
+  </div>
 </body>
 </html>

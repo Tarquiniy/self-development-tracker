@@ -1,70 +1,80 @@
-{% extends "admin/base_site.html" %}
-{% load i18n %}
-{% block content %}
-  <h1>{% trans "Media Library" %}</h1>
+{# templates/admin/media_library.html #}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Media Library</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;background:#f6f8fb;color:#111;margin:0;padding:18px}
+    .card{background:#fff;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 4px 12px rgba(0,0,0,0.06)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+    .thumb{border-radius:6px;overflow:hidden;height:120px;display:flex;align-items:center;justify-content:center;background:#fafafa}
+    .thumb img{max-width:100%;max-height:100%}
+    .meta{font-size:12px;color:#666;margin-top:6px}
+    form.inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  </style>
+</head>
+<body>
+  <h1>Медиа библиотека</h1>
 
-  <form id="uploadForm" enctype="multipart/form-data" method="post">
-    {% csrf_token %}
-    <input type="file" name="file" id="fileInput" />
-    <input type="text" name="title" placeholder="{% trans 'Title (optional)' %}" />
-    <button type="submit" class="button button-primary">{% trans "Upload" %}</button>
-  </form>
-
-  <hr/>
-
-  <div id="attachments" class="media-grid">
-    {% for a in attachments %}
-      <div class="media-item" data-url="{{ a.file.url }}">
-        <div class="media-thumb">
-          <img src="{{ a.file.url }}" alt="{{ a.title }}" />
-        </div>
-        <div class="media-title">{{ a.title }}</div>
-        <div class="media-meta">
-          <span>{{ a.file_size|filesizeformat }}</span>
-          <button class="button button-secondary" onclick="insertToEditor('{{ a.file.url }}')">{% trans "Insert" %}</button>
-        </div>
-      </div>
-    {% empty %}
-      <div>{% trans "No files" %}</div>
-    {% endfor %}
+  <div class="card">
+    <form id="uploadForm" class="inline" enctype="multipart/form-data" method="post">
+      {% csrf_token %}
+      <input type="file" name="file" required />
+      <input type="text" name="title" placeholder="Название (необязательно)" />
+      <button type="submit">Загрузить</button>
+    </form>
+    <div id="uploadResult" style="margin-top:8px"></div>
   </div>
 
-  <script>
-    const uploadForm = document.getElementById('uploadForm');
-    uploadForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const resp = await fetch("", {
-        method: "POST",
-        body: new FormData(uploadForm),
-        headers: {'X-Requested-With': 'XMLHttpRequest'}
-      });
-      const data = await resp.json();
-      if (data.success) {
-        alert('{% trans "Uploaded successfully." %}');
-        location.reload();
-      } else {
-        alert('{% trans "Error" %}: ' + (data.error||'{% trans "Unknown" %}'));
-      }
-    });
+  <div class="card">
+    <h3>Файлы</h3>
+    <div class="grid">
+      {% for a in attachments %}
+        <div>
+          <div class="thumb">
+            {% if a.file and a.file.url %}
+              <img src="{{ a.file.url }}" alt="{{ a.title|default:'file' }}" />
+            {% else %}
+              <div>Файл</div>
+            {% endif %}
+          </div>
+          <div class="meta">{{ a.title|default:"(без названия)" }}</div>
+          <div class="meta">{{ a.uploaded_at|default:a.uploaded|default:"-" }}</div>
+          <div style="margin-top:6px">
+            <a href="{{ a.file.url }}" target="_blank">Открыть</a>
+          </div>
+        </div>
+      {% empty %}
+        <div>Нет файлов</div>
+      {% endfor %}
+    </div>
+  </div>
 
-    function insertToEditor(url) {
-      if (window.opener) {
+  <p><a href="{% url 'admin:index' %}">Вернуться в админ</a></p>
+
+  <script>
+    (function(){
+      const form = document.getElementById('uploadForm');
+      const result = document.getElementById('uploadResult');
+      form.addEventListener('submit', async function(e){
+        e.preventDefault();
+        const fd = new FormData(form);
+        const resp = await fetch("", {method:"POST", body: fd, credentials: 'same-origin'});
         try {
-          const fg = window.opener.document.querySelector('input[name="featured_image"]');
-          if (fg) {
-            fg.value = url;
-            window.close();
-            return;
+          const data = await resp.json();
+          if (data.success) {
+            result.textContent = "Загрузка успешна";
+            setTimeout(()=>location.reload(), 700);
+          } else {
+            result.textContent = "Ошибка: " + (data.message || JSON.stringify(data));
           }
-          const cnt = window.opener.document.querySelector('textarea[name="content"]');
-          if (cnt) {
-            cnt.value = (cnt.value || '') + "\\n<img src='" + url + "' />\\n";
-            window.close();
-            return;
-          }
-        } catch (e) { console.error(e); }
-      }
-      alert('{% trans "Cannot insert image. Please open media library from a post edit form." %}');
-    }
+        } catch (err) {
+          result.textContent = "Ошибка ответа сервера";
+        }
+      });
+    })();
   </script>
-{% endblock %}
+</body>
+</html>
