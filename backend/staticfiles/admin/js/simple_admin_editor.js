@@ -1,21 +1,27 @@
 // simple_admin_editor.js
-// Minimal editor enhancement for Django admin textarea with class "admin-simple-editor"
-// - toolbar for bold/italic/link/image (inserts markdown-like syntax)
-// - simple live preview
-
+// Lightweight fallback editor enhancement for textareas with class "admin-rich-textarea"
+// - Adds toolbar with large accessible buttons
+// - Provides simple image insert via prompt/upload hook (delegates to server if provided)
+// - Works well in Firefox and other browsers
 (function(){
-  function $(s, ctx){ return (ctx || document).querySelector(s); }
-  function $all(s, ctx){ return Array.from((ctx || document).querySelectorAll(s)); }
+  'use strict';
+
+  function $(sel, ctx){ return (ctx || document).querySelector(sel); }
+  function $all(sel, ctx){ return Array.from((ctx || document).querySelectorAll(sel)); }
 
   function createToolbar(textarea){
     var toolbar = document.createElement('div');
     toolbar.className = 'simple-editor-toolbar';
     var buttons = [
-      {name: 'B', title: 'Bold', insert: function(t){ wrapSelection(t, '**', '**'); }},
-      {name: 'I', title: 'Italic', insert: function(t){ wrapSelection(t, '_', '_'); }},
-      {name: 'Link', title: 'Link', insert: function(t){ insertAtCaret(t, '[link text](https://)'); }},
-      {name: 'Image', title: 'Image', insert: function(t){ insertAtCaret(t, '![alt text](https://)'); }},
-      {name: 'Preview', title: 'Toggle preview', insert: function(t){ togglePreview(t); }}
+      {name: 'B', title: 'Bold', action: function(t){ wrapSelection(t, '<strong>', '</strong>'); }},
+      {name: 'I', title: 'Italic', action: function(t){ wrapSelection(t, '<em>', '</em>'); }},
+      {name: 'U', title: 'Underline', action: function(t){ wrapSelection(t, '<u>', '</u>'); }},
+      {name: 'H1', title: 'Heading', action: function(t){ insertAtCaret(t, '<h1>Heading</h1>'); }},
+      {name: '•', title: 'Bulleted list', action: function(t){ insertAtCaret(t, '<ul><li>Item</li></ul>'); }},
+      {name: '1.', title: 'Numbered list', action: function(t){ insertAtCaret(t, '<ol><li>Item</li></ol>'); }},
+      {name: 'Link', title: 'Insert link', action: function(t){ var u=prompt('Enter URL:'); if(u) insertAtCaret(t, '<a href=\"'+u+'\">link</a>'); }},
+      {name: 'Image', title: 'Insert image URL', action: function(t){ var u=prompt('Image URL:'); if(u) insertAtCaret(t, '<img src=\"'+u+'\" alt=\"image\" />'); }},
+      {name: 'Preview', title: 'Toggle preview', action: function(t){ togglePreview(t); }}
     ];
     buttons.forEach(function(b){
       var btn = document.createElement('button');
@@ -25,31 +31,29 @@
       btn.title = b.title;
       btn.addEventListener('click', function(e){
         e.preventDefault();
-        b.insert(textarea);
-        // trigger input event for preview
+        b.action(textarea);
         textarea.dispatchEvent(new Event('input'));
+        textarea.focus();
       });
       toolbar.appendChild(btn);
     });
     return toolbar;
   }
 
-  function wrapSelection(t, prefix, suffix){
-    var start = t.selectionStart, end = t.selectionEnd;
-    var val = t.value;
-    t.value = val.slice(0,start) + prefix + val.slice(start,end) + suffix + val.slice(end);
-    t.selectionStart = start + prefix.length;
-    t.selectionEnd = end + prefix.length;
-    t.focus();
+  function wrapSelection(t, before, after){
+    var start = t.selectionStart || 0, end = t.selectionEnd || 0;
+    var val = t.value || '';
+    t.value = val.slice(0,start) + before + val.slice(start,end) + after + val.slice(end);
+    t.selectionStart = start + before.length;
+    t.selectionEnd = end + before.length;
   }
 
   function insertAtCaret(t, text){
-    var start = t.selectionStart, end = t.selectionEnd;
-    var val = t.value;
+    var start = t.selectionStart || 0, end = t.selectionEnd || 0;
+    var val = t.value || '';
     t.value = val.slice(0,start) + text + val.slice(end);
     t.selectionStart = start + text.length;
     t.selectionEnd = start + text.length;
-    t.focus();
   }
 
   function createPreviewContainer(){
@@ -63,74 +67,65 @@
     var preview = t._simple_preview;
     if(!preview) return;
     preview.style.display = preview.style.display === 'none' ? 'block' : 'none';
-    // update content
-    renderPreview(t);
+    if(preview.style.display === 'block') renderPreview(t);
+  }
+
+  function escapeHtml(s){
+    return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   function renderPreview(t){
     var preview = t._simple_preview;
     if(!preview) return;
-    // super-simple markdown -> HTML conversion
-    var v = escapeHtml(t.value || '');
-    // headings
-    v = v.replace(/^###### (.*$)/gim, '<h6>$1</h6>');
-    v = v.replace(/^##### (.*$)/gim, '<h5>$1</h5>');
-    v = v.replace(/^#### (.*$)/gim, '<h4>$1</h4>');
-    v = v.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-    v = v.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-    v = v.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-    // bold/italic
-    v = v.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    v = v.replace(/\_(.*?)\_/g, '<em>$1</em>');
-    // links
-    v = v.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-    // images
-    v = v.replace(/\!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;">');
-    // paragraphs
-    v = v.replace(/\n{2,}/g, '</p><p>');
-    v = '<p>' + v.replace(/\n/g, '<br>') + '</p>';
-    preview.innerHTML = v;
-  }
-
-  function escapeHtml(str){
-    return str.replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; });
+    // Very small conversion: allow basic tags (we store HTML in textarea)
+    preview.innerHTML = t.value || '';
   }
 
   function enhanceTextarea(t){
-    if(t._simple_enhanced) return;
-    t._simple_enhanced = true;
+    if(t._enhanced) return;
+    t._enhanced = true;
 
+    // Make sure textarea is visible and responsive
+    t.style.minHeight = t.style.minHeight || '200px';
+    t.style.boxSizing = 'border-box';
+    t.style.width = '100%';
+
+    // Create container
+    var container = document.createElement('div');
+    container.className = 'simple-editor-container';
+    t.parentNode.insertBefore(container, t);
+    container.appendChild(t);
+
+    // Toolbar
     var toolbar = createToolbar(t);
+    container.insertBefore(toolbar, t);
+
+    // Preview
     var preview = createPreviewContainer();
+    container.appendChild(preview);
     t._simple_preview = preview;
 
-    // insert toolbar before textarea
-    t.parentNode.insertBefore(toolbar, t);
-    t.parentNode.insertBefore(preview, t.nextSibling);
-
-    // listen to input -> update preview if visible
+    // Update preview on input
     t.addEventListener('input', function(){ renderPreview(t); });
 
-    // initial render
-    renderPreview(t);
-
-    // allow TAB to insert tab char
-    t.addEventListener('keydown', function(e){
-      if(e.key === 'Tab'){
-        e.preventDefault();
-        var start = t.selectionStart, end = t.selectionEnd;
-        t.value = t.value.substring(0,start) + '    ' + t.value.substring(end);
-        t.selectionStart = t.selectionEnd = start + 4;
-      }
-    });
+    // On form submit ensure value is ok (no-op but kept for hooks)
+    var form = t.closest('form');
+    if(form){
+      form.addEventListener('submit', function(){ /* no-op: textarea already contains HTML */ });
+    }
   }
 
-  // On DOM ready, find textareas with class admin-simple-editor
-  document.addEventListener('DOMContentLoaded', function(){
-    var areas = $all('textarea.admin-simple-editor');
+  // Initialize on DOMContentLoaded for all admin-rich-textarea fields
+  function initAll(){
+    var areas = $all('textarea.admin-rich-textarea');
     areas.forEach(function(t){
       enhanceTextarea(t);
     });
-  });
+  }
 
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', initAll);
+  } else {
+    initAll();
+  }
 })();

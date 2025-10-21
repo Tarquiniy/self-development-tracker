@@ -1,198 +1,292 @@
-<<<<<<< HEAD
-/* backend/blog/static/admin/admin-modern.css
-   Modern admin global styles — unified with dashboard look
-   Reworked 2025-style: variables, topbar, sidebar, cards, responsive.
-*/
-
+/* Modern Admin Styles */
 :root {
-  --bg: #f6f8fb;
-  --card: #ffffff;
-  --muted: #6b7280;
-  --primary: #0b3b75;       /* matches dashboard primary */
-  --primary-2: #0ea5e9;
-  --accent: #7c3aed;
-  --success: #10b981;
-  --danger: #ef4444;
-  --border: #e6eef6;
-  --text: #0f172a;
-  --shadow: 0 6px 18px rgba(16,24,40,0.06);
-  --radius: 12px;
-  --gap: 14px;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    --primary: #4361ee;
+    --primary-dark: #3a56d4;
+    --secondary: #7209b7;
+    --success: #4cc9f0;
+    --warning: #f72585;
+    --danger: #e63946;
+    --light: #f8f9fa;
+    --dark: #212529;
+    --border: #dee2e6;
+    --shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
 
-/* Page reset */
-html, body {
-  height: 100%;
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+.admin-modern-theme {
+    background: #f5f7fb;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
 }
 
-/* Topbar */
-.admin-topbar {
-  background: linear-gradient(90deg, #0f172a 0%, #0b1220 100%);
-  color: #fff;
-  padding: 12px 0;
-  box-shadow: 0 6px 18px rgba(2,6,23,0.4);
-  position: sticky;
-  top: 0;
-  z-index: 60;
-}
-.admin-topbar .admin-topbar-inner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  max-width: 1300px;
-  margin: 0 auto;
-  padding: 6px 18px;
-}
-.brand { display:flex; align-items:center; gap:12px; }
-.brand-logo { width:36px; height:36px; border-radius:8px; background:#fff; display:inline-block; object-fit:cover; }
-.brand-title { font-weight:700; font-size:18px; color:#fff; }
-
-/* Top links / actions */
-.top-links a, .top-link {
-  color: rgba(255,255,255,0.9);
-  text-decoration: none;
-  margin-left: 8px;
-  font-weight:600;
-  font-size: 0.95rem;
-}
-.top-links a:hover, .top-link:hover { text-decoration: underline; }
-
-/* Admin container layout */
-.admin-container { max-width:1300px; margin: 20px auto; display:flex; gap:20px; padding:0 18px; box-sizing:border-box; }
-.admin-sidebar {
-  width:220px;
-  flex-shrink:0;
-  background: transparent;
-}
-.sidebar-section { margin-bottom: 18px; }
-.sidebar-heading { margin: 0 0 8px; font-size:13px; color:var(--muted); text-transform:uppercase; }
-.sidebar-list { list-style:none; padding:0; margin:0; }
-.sidebar-list li { margin:6px 0; }
-.sidebar-list a { color: var(--text); text-decoration:none; display:block; padding:8px 10px; border-radius:8px; font-weight:600; }
-.sidebar-list a:hover { background:#f3f6fb; }
-
-/* Main content */
-.admin-main { flex:1; }
-.admin-content.card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); }
-
-/* Breadcrumbs */
-.admin-breadcrumbs { margin-bottom: 12px; color: var(--muted); font-size: 0.95rem; }
-
-/* Generic badge */
-.badge {
-  display: inline-block;
-  padding: 2px 6px;
-  background: #6b7280;
-  color: white;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 600;
+/* Container fixes */
+#container {
+    max-width: 1400px;
+    margin: 0 auto;
+    background: white;
+    box-shadow: var(--shadow);
+    min-height: 100vh;
 }
 
-/* Status badge (used by Post list & post edit) */
-.status-badge { padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; font-weight:600; text-transform:uppercase; }
-.status-green { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
-.status-orange { background:#ffedd5; color:#9a3412; border:1px solid #fed7aa; }
-.status-gray { background:#f3f4f6; color:#374151; border:1px solid #e5e7eb; }
-
-/* Action buttons (list) */
-.action-buttons { display:flex; gap:8px; }
-.action-buttons .button { padding:6px 10px; text-decoration:none; border-radius:8px; font-size:13px; font-weight:700; display:inline-flex; align-items:center; gap:8px; }
-.action-buttons .edit-btn { background: var(--primary-2); color: #fff; }
-.action-buttons .view-btn { background: var(--success); color: #fff; }
-
-/* Cards used across admin */
-.card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); overflow:hidden; }
-.card-header { padding: 14px 18px; background: #fbfdff; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
-.card-body { padding: 18px; }
-
-/* Form helpers */
-.top-search { padding:8px 12px; border-radius:8px; border:1px solid var(--border); width:320px; }
-@media (max-width: 900px) { .top-search { width: 180px; } }
-
-/* Responsive adjustments */
-@media (max-width: 1200px) {
-  .admin-container { padding:0 12px; }
-  .admin-sidebar { width: 200px; }
-}
-@media (max-width: 800px) {
-  .admin-container { flex-direction: column; padding:0 12px; }
-  .admin-sidebar { width: 100%; order: 2; }
-  .admin-main { order: 1; }
+#header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-/* Small helpers: unify look with dashboard cards */
-.dashboard-footer, .admin-footer { text-align:center; padding:18px 0; color:var(--muted); font-size:13px; }
-
-/* Keep editor widgets comfortable */
-.tiptap-editor-container, .admin-ckeditor-widget, .card .ck-editor__editable {
-  border-radius: 10px;
-  background: #fff;
+#branding h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
 }
 
-/* Ensure links/buttons are easily visible in admin */
-a.button, .btn { display:inline-block; padding:8px 12px; border-radius:8px; text-decoration:none; font-weight:700; }
-
-/* Avoid interfering with third-party admin app selectors:
-   minimal, high-level selectors only — specific editor js, widget CSS are left intact. */
-=======
-/* Полный файл стилей для админки. Замените существующий admin-modern.css этим файлом. */
-/* Умышленно простой, без конфликтующих селекторов и с приоритетной сеткой. */
-
-:root{
-  --bg:#f6f8fb;
-  --surface:#ffffff;
-  --muted:#6b7280;
-  --accent:#0b5fff;
-  --accent-dark:#0846d8;
-  --text:#0b1220;
-  --radius:10px;
-  --shadow: 0 8px 20px rgba(11,17,32,0.06);
-  --maxw:1200px;
-  --gap:18px;
-  font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+#branding h1 a {
+    color: white;
+    text-decoration: none;
 }
 
-html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-size:14px}
-.post-editor-modern{max-width:var(--maxw);margin:12px auto;padding:0 16px;box-sizing:border-box}
+#branding h1 a:hover {
+    color: rgba(255,255,255,0.9);
+}
 
-/* Header */
-.editor-header{margin-bottom:16px}
-.header-content{display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box}
-.header-title{flex:1 1 auto;min-width:0}
-.header-actions{flex:0 0 auto;display:flex;gap:10px;align-items:center;justify-content:flex-end;white-space:nowrap;flex-wrap:wrap}
+#user-tools {
+    color: rgba(255,255,255,0.9);
+    font-size: 0.9rem;
+}
 
-/* Grid */
-.editor-main{display:grid;grid-template-columns:1fr 360px;gap:var(--gap);align-items:start;width:100%;box-sizing:border-box}
-@media (max-width:1024px){ .editor-main{grid-template-columns:1fr} }
+#user-tools strong {
+    color: white;
+}
 
-/* Card */
-.editor-card{background:var(--surface);border-radius:var(--radius);padding:12px;box-shadow:var(--shadow);border:1px solid rgba(11,17,32,0.03);box-sizing:border-box}
+.breadcrumbs {
+    background: #f8f9fa;
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 2rem;
+    font-size: 0.9rem;
+}
 
-/* Form fields */
-input, textarea, select { background:#fff; color:var(--text); border-radius:8px; border:1px solid rgba(11,17,32,0.06); padding:10px; box-sizing:border-box; width:100%; }
-textarea{min-height:140px; resize:vertical;}
+.breadcrumbs a {
+    color: var(--primary);
+    text-decoration: none;
+}
 
-/* Buttons */
-.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;background:#fff;color:var(--text);border:1px solid rgba(11,17,32,0.06);cursor:pointer;font-weight:600;text-decoration:none;box-sizing:border-box}
-.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent-dark);box-shadow:0 6px 18px rgba(11,85,255,0.12)}
+.breadcrumbs a:hover {
+    color: var(--primary-dark);
+}
 
-/* Helpers */
-.help-text{color:var(--muted);font-size:12px;margin-top:6px}
-.char-counter{text-align:right;font-size:12px;color:var(--muted);margin-top:6px}
+#content {
+    padding: 2rem;
+    background: white;
+}
 
-/* Editor widgets */
-.cke, .tox, iframe { width:100% !important; max-width:100% !important; box-sizing:border-box !important; }
+/* Form improvements */
+.form-row {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid var(--primary);
+}
 
-/* Safety: не даём элементам визуально выходить за контейнер */
-.post-editor-modern *, .post-editor-modern img, .post-editor-modern iframe { max-width:100%; }
+.form-row label {
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 0.5rem;
+    display: block;
+}
 
-/* Minimal reset for problematic inherited styles */
-.post-editor-modern * { background-blend-mode: normal !important; filter: none !important; }
->>>>>>> a9b60d2bedb4e42a680cc1704ebe6b94174a21f5
+.vTextField, .vLargeTextField, select {
+    width: 100%;
+    max-width: 600px;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+
+.vTextField:focus, .vLargeTextField:focus, select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+}
+
+.vTextField.wide {
+    max-width: 800px;
+}
+
+/* Submit row improvements */
+.submit-row {
+    background: #f8f9fa;
+    border-top: 1px solid var(--border);
+    padding: 1.5rem 2rem;
+    margin: 2rem -2rem -2rem;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.submit-row input {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.submit-row input[type="submit"] {
+    background: var(--primary);
+    color: white;
+}
+
+.submit-row input[type="submit"]:hover {
+    background: var(--primary-dark);
+}
+
+.submit-row input.default {
+    background: var(--success);
+}
+
+.submit-row input.default:hover {
+    background: #3ab0d6;
+}
+
+/* Table improvements */
+#changelist {
+    background: white;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+#changelist table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#changelist table th {
+    background: #f8f9fa;
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--dark);
+    border-bottom: 2px solid var(--border);
+}
+
+#changelist table td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+#changelist table tr:hover {
+    background: #f8f9fa;
+}
+
+/* Status badges */
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    display: inline-block;
+}
+
+.status-green {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-orange {
+    background: #ffeaa7;
+    color: #856404;
+}
+
+.status-gray {
+    background: #e9ecef;
+    color: #495057;
+}
+
+/* Action buttons */
+.action-buttons {
+    display: flex;
+    gap: 5px;
+}
+
+.button {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 12px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.edit-btn {
+    background: var(--primary);
+    color: white;
+}
+
+.view-btn {
+    background: var(--success);
+    color: white;
+}
+
+.button:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+/* CKEditor container */
+.ck-editor__editable {
+    min-height: 400px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.ck.ck-editor {
+    margin-top: 0.5rem;
+}
+
+.ck.ck-toolbar {
+    background: #f8f9fa;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+}
+
+.ck.ck-content {
+    border-radius: 0 0 6px 6px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    #container {
+        margin: 0;
+    }
+    
+    #header {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    #content {
+        padding: 1rem;
+    }
+    
+    .submit-row {
+        flex-direction: column;
+        padding: 1rem;
+    }
+    
+    .submit-row input {
+        width: 100%;
+    }
+}
