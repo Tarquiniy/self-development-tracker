@@ -4,7 +4,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import RedirectView
-from django.http import HttpResponseNotFound
+from django.http import HttpResponseNotFound, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 
 logger = logging.getLogger(__name__)
@@ -12,59 +12,59 @@ logger = logging.getLogger(__name__)
 def custom_404_view(request, exception=None):
     return HttpResponseNotFound("Страница не найдена")
 
+# Simple safe views defined inline so reverse('media-library') always exists.
+def _redirect_to_admin(request: HttpRequest, *args, **kwargs) -> HttpResponse:
+    """Быстрый безопасный handler — просто редирект в /admin/"""
+    return redirect('/admin/')
+
+# Core URL patterns
 urlpatterns = [
-    path("grappelli/", include("grappelli.urls")),
-    path("admin/", admin.site.urls),
+    path('grappelli/', include('grappelli.urls')),
+    path('admin/', admin.site.urls),
 
     # Blog API
-    path("api/blog/", include(("blog.urls", "blog"), namespace="blog")),
+    path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
 
-    # Summernote
-    path("summernote/", include("django_summernote.urls")),
+    # Summernote (if present)
+    path('summernote/', include('django_summernote.urls')),
 ]
 
-# Try to attach extra admin URLs from blog.admin_extras
-try:
-    from blog.admin_extras import get_extra_admin_urls  # type: ignore
-    extra = get_extra_admin_urls() or []
-    if extra:
-        urlpatterns += extra
-        logger.debug("Loaded extra admin URLs from blog.admin_extras")
-except Exception as e:
-    logger.debug("blog.admin_extras not available or failed: %s", e)
-    # Add defensive fallback routes so reverse('media-library') never fails
-    def _fallback_to_admin(request, *a, **k):
-        return redirect("/admin/")
-    urlpatterns += [
-        path("admin/media-library/", _fallback_to_admin, name="media-library"),
-        path("admin/media-library/", _fallback_to_admin, name="admin-media-library"),
-        path("media-library/", _fallback_to_admin, name="media-library-public"),
-        path("admin/dashboard/", _fallback_to_admin, name="dashboard"),
-        path("admin/dashboard/", _fallback_to_admin, name="admin-dashboard"),
-        path("dashboard/", _fallback_to_admin, name="dashboard-plain"),
-    ]
+# Ensure the names templates might expect exist and are safe:
+# - admin/media-library/  -> name 'admin-media-library' and 'media-library'
+# - admin/dashboard/     -> name 'admin-dashboard' and 'dashboard'
+# Also add plain /media-library/ just in case.
+urlpatterns += [
+    path('admin/media-library/', _redirect_to_admin, name='admin-media-library'),
+    path('admin/media-library/', _redirect_to_admin, name='media-library'),
+    path('media-library/', _redirect_to_admin, name='media-library-public'),
 
-# Optional: preview view
+    path('admin/dashboard/', _redirect_to_admin, name='admin-dashboard'),
+    path('admin/dashboard/', _redirect_to_admin, name='dashboard'),
+    path('dashboard/', _redirect_to_admin, name='dashboard-plain'),
+]
+
+# Optional preview view (if your blog.views.MediaLibraryView exists, it will be attached)
 try:
     from blog.views import MediaLibraryView  # type: ignore
     urlpatterns += [
-        path("preview/<str:token>/", MediaLibraryView.as_view(), name="post-preview"),
+        path('preview/<str:token>/', MediaLibraryView.as_view(), name='post-preview'),
     ]
-except Exception as e:
-    logger.debug("blog.views.MediaLibraryView not available: %s", e)
+except Exception:
+    logger.debug("blog.views.MediaLibraryView not available; skipping preview route")
 
-# Health + root redirect
+# Health & root
 urlpatterns += [
-    path("health/", lambda request: HttpResponseNotFound("OK"), name="health-check"),
-    path("", RedirectView.as_view(url="/admin/")),
+    path('health/', lambda request: HttpResponseNotFound("OK"), name='health-check'),
+    path('', RedirectView.as_view(url='/admin/')),
 ]
 
-# CKEditor5 urls (optional)
+# Optional ckeditor5 urls
 try:
-    urlpatterns += [path("ckeditor5/", include("django_ckeditor_5.urls"))]
+    urlpatterns += [path('ckeditor5/', include('django_ckeditor_5.urls'))]
 except Exception:
     logger.debug("django_ckeditor_5 not available; skipping ckeditor5 urls.")
 
+# Static in DEBUG
 if settings.DEBUG:
     from django.conf.urls.static import static
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

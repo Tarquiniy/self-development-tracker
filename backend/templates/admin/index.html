@@ -1,13 +1,13 @@
-{# templates/admin/index.html #}
+{% load static %}
 <!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Admin Dashboard</title>
+  <!-- Подключаем наш CSS безопасно; если статик недоступен, браузер просто не загрузит файл -->
   <link rel="stylesheet" href="{% static 'admin/css/admin-fixes.css' %}">
   <style>
-    /* небольшой локальный штрих чтобы dashboard выглядел красиво сразу */
     .dashboard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
     .stat-card{background:#fff;padding:14px;border-radius:10px;box-shadow:0 6px 20px rgba(2,6,23,0.06);text-align:center}
     .stat-title{font-size:13px;color:#6b7280;margin-bottom:8px}
