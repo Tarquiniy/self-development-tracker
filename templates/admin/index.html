@@ -1,62 +1,63 @@
-{# templates/admin/index.html #}
 {% load static i18n %}
 <!doctype html>
-<html lang="ru">
+<html lang="ru" class="admin-modern">
 <head>
   <meta charset="utf-8">
-  <title>{{ site_title|default:"Admin" }}</title>
+  <title>{{ site_title|default:_("Admin") }}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
+
+  <!-- Стили для дашборда -->
   <link rel="stylesheet" href="{% static 'admin/css/custom_admin_dashboard.css' %}">
+  <!-- Стандартные админ-стили (если требуются) -->
   <link rel="stylesheet" href="{% static 'admin/css/admin.css' %}">
-  <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
 </head>
 <body class="dashboard-body">
-  <header class="dashboard-header">
-    <div class="container">
-      <div class="left">
-        <h1 class="site-title">{{ site_header|default:site_title }}</h1>
-        <p class="site-sub">Управление сайтом — быстрый доступ к блогу и медиатеке</p>
-      </div>
-      <div class="right">
-        <div class="user-block">Добро пожаловать, {{ user.get_full_name|default:user.username }}</div>
-      </div>
+  <header class="dashboard-header container">
+    <div class="left">
+      <h1 class="site-title">{{ site_header|default:site_title }}</h1>
+      <p class="site-sub">{% trans "Quick access to blog and media library" %}</p>
+    </div>
+    <div class="right">
+      <div class="user-block">{% trans "Hello" %}, {{ user.get_full_name|default:user.username }}</div>
     </div>
   </header>
 
   <main class="dashboard-main container">
     <section class="quick-actions">
-      <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-primary">Создать / Управлять постами</a>
-      <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-outline">Все посты</a>
-      <a href="{% url 'admin:app_list' 'blog' %}" class="btn btn-outline">Медиатека</a>
-      <a href="{% url 'admin:app_list' 'auth' %}" class="btn btn-outline">Пользователи</a>
+      <a href="{% url 'admin:blog_post_add' %}" class="button button-primary">{% trans "Create Post" %}</a>
+      <a href="{% url 'admin:blog_post_changelist' %}" class="button button-secondary">{% trans "All Posts" %}</a>
+      <a href="{% url 'admin:media-library' %}" class="button button-secondary">{% trans "Media Library" %}</a>
+      <a href="{% url 'admin:blog_comment_changelist' %}" class="button button-secondary">{% trans "Comments" %}</a>
+      <a href="{% url 'admin:auth_user_changelist' %}" class="button button-secondary">{% trans "Users" %}</a>
     </section>
 
-    <section class="stats-grid" id="dashboard-stats" aria-live="polite" aria-busy="true">
-      <div class="stat-card" data-key="posts">
-        <div class="stat-title">Посты</div>
-        <div class="stat-value">Загрузка…</div>
+    <section class="stats-grid" id="dashboard-stats">
+      <!-- Статистика (заполняется JS) -->
+      <div class="stat-card">
+        <div class="stat-title">{% trans "Loading..." %}</div>
+        <div class="stat-value">—</div>
       </div>
-      <div class="stat-card" data-key="drafts">
-        <div class="stat-title">Черновики</div>
-        <div class="stat-value">Загрузка…</div>
+      <div class="stat-card">
+        <div class="stat-title">{% trans "Loading..." %}</div>
+        <div class="stat-value">—</div>
       </div>
-      <div class="stat-card" data-key="views">
-        <div class="stat-title">Просмотры (7d)</div>
-        <div class="stat-value">Загрузка…</div>
+      <div class="stat-card">
+        <div class="stat-title">{% trans "Loading..." %}</div>
+        <div class="stat-value">—</div>
       </div>
-      <div class="stat-card" data-key="users">
-        <div class="stat-title">Пользователи</div>
-        <div class="stat-value">Загрузка…</div>
+      <div class="stat-card">
+        <div class="stat-title">{% trans "Loading..." %}</div>
+        <div class="stat-value">—</div>
       </div>
-      <div class="stat-card" data-key="media">
-        <div class="stat-title">Медиа-файлы</div>
-        <div class="stat-value">Загрузка…</div>
+      <div class="stat-card">
+        <div class="stat-title">{% trans "Loading..." %}</div>
+        <div class="stat-value">—</div>
       </div>
     </section>
 
     <section class="apps-and-recent">
       <div class="apps">
-        <h3>Приложения</h3>
+        <h3>{% trans "Applications" %}</h3>
         <div class="apps-grid">
           {% for app in app_list %}
             <div class="app">
@@ -70,15 +71,14 @@
           {% endfor %}
         </div>
       </div>
-
       <div class="recent">
-        <h3>Подсказки</h3>
+        <h3>{% trans "Tips" %}</h3>
         <div class="panel">
-          <p>Быстрые операции:</p>
+          <p>{% trans "Quick tips:" %}</p>
           <ul>
-            <li>Нажмите «Создать пост», чтобы открыть форму создания нового поста.</li>
-            <li>Откройте медиатеку, чтобы загрузить изображения и прикрепить к постам.</li>
-            <li>Используйте автосохранение при редактировании поста.</li>
+            <li>{% trans "Click 'Create Post' to make a new blog post." %}</li>
+            <li>{% trans "Open the Media Library to upload and attach images." %}</li>
+            <li>{% trans "Use autosave while editing your post." %}</li>
           </ul>
         </div>
       </div>
@@ -86,18 +86,11 @@
   </main>
 
   <footer class="dashboard-footer">
-    <div class="container">
-      <span>Positive Theta Admin — удобная панель управления</span>
-      <small>— версия интерфейса: 1</small>
-    </div>
+    <span>PositiveTheta Admin – {% trans "admin interface" %}</span>
+    <small>{% trans "Version" %}: 1.0</small>
   </footer>
 
-  <script>
-    const ADMIN_CSRF = (function(){
-      function getCookie(name){let v=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');return v?v.pop():"";}
-      return { csrfToken: getCookie('csrftoken') };
-    })();
-  </script>
+  <!-- Скрипты: статистика, дашборд -->
   <script src="{% static 'admin/js/admin_dashboard.js' %}"></script>
 </body>
 </html>
