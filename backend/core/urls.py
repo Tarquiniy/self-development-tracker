@@ -26,7 +26,7 @@ try:
         extra = [
             # These names will live *inside* admin.site.urls namespace,
             # so templates resolving within current_app='admin' will find them.
-            path('media-library/', _redirect_to_admin, name='media-library'),
+            #path('media-library/', _redirect_to_admin, name='media-library'),
             path('dashboard/', _redirect_to_admin, name='dashboard'),
         ]
         # add our extra admin urls before the default admin urls
@@ -50,9 +50,12 @@ urlpatterns = [
 ]
 
 # Also provide top-level routes for compatibility (global names)
+from blog.admin_extras import admin_media_library_view
 urlpatterns += [
-    path('admin/media-library/', _redirect_to_admin, name='admin-media-library'),
-    path('media-library/', _redirect_to_admin, name='media-library'),
+    #path('admin/media-library/', _redirect_to_admin, name='admin-media-library'),
+    #path('media-library/', _redirect_to_admin, name='media-library'),
+    path('admin/media-library/', admin_media_library_view, name='admin-media-library'),
+    path('media-library/', admin_media_library_view, name='media-library'),
     path('admin/dashboard/', _redirect_to_admin, name='admin-dashboard'),
     path('dashboard/', _redirect_to_admin, name='dashboard-plain'),
 ]

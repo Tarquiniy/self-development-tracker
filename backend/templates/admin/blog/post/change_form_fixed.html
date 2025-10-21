@@ -1,11 +1,8 @@
-{# backend/templates/admin/blog/post/change_form_fixed.html #}
 {% extends "admin/change_form.html" %}
 {% load i18n static admin_urls %}
 
 {% block extrahead %}
   {{ block.super }}
-  <!-- Inter font (optional, fallback included) -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'admin/css/change-form.css' %}">
 {% endblock %}
 
@@ -14,23 +11,11 @@
   <form method="post" id="post_form" enctype="multipart/form-data" novalidate>
     {% csrf_token %}
 
-    <!-- Topbar -->
     <div class="pt-topbar">
       <div class="pt-topbar-left">
-        <div class="pt-title">
-          {% if original and original.title %}
-            {{ original.title|truncatechars:80 }}
-          {% else %}
-            📝 {% trans "Новый пост" %}
-          {% endif %}
-        </div>
-        <div class="pt-sub muted">
-          {% if original and original.pk %}
-            {% trans "ID" %}: {{ original.pk }} • {% trans "Обновлён" %}: {{ original.updated_at|default:"—" }}
-          {% endif %}
-        </div>
+        <div class="pt-title">{% if original and original.title %}{{ original.title|truncatechars:80 }}{% else %}📝 {% trans "Новый пост" %}{% endif %}</div>
+        <div class="pt-sub muted">{% if original and original.pk %}{% trans "ID" %}: {{ original.pk }}{% endif %}</div>
       </div>
-
       <div class="pt-topbar-right">
         <button type="submit" name="_save" class="pt-btn pt-btn-primary">💾 {% trans "Сохранить" %}</button>
         <button type="submit" name="_continue" class="pt-btn">🔁 {% trans "Сохранить и продолжить" %}</button>
@@ -38,23 +23,18 @@
       </div>
     </div>
 
-    <!-- Main grid -->
     <div class="pt-editor-grid">
-      <!-- LEFT: main content -->
       <main class="pt-main">
-        <!-- Primary card: title + slug -->
         <section class="pt-card">
           <div class="pt-card-header">📌 {% trans "Основное" %}</div>
           <div class="pt-card-body">
             <div class="pt-field">
-              <label class="pt-label" for="{{ adminform.form.title.auto_id }}">{{ adminform.form.title.label }}</label>
               {{ adminform.form.title }}
               {% if adminform.form.title.errors %}<div class="pt-error">{{ adminform.form.title.errors|join:", " }}</div>{% endif %}
             </div>
 
             <div class="pt-split">
               <div style="flex:1" class="pt-field">
-                <label class="pt-label" for="{{ adminform.form.slug.auto_id }}">{{ adminform.form.slug.label }}</label>
                 {{ adminform.form.slug }}
                 {% if adminform.form.slug.errors %}<div class="pt-error">{{ adminform.form.slug.errors|join:", " }}</div>{% endif %}
               </div>
@@ -65,7 +45,6 @@
           </div>
         </section>
 
-        <!-- Content card (CKEditor) -->
         <section class="pt-card">
           <div class="pt-card-header">📝 {% trans "Содержание" %}</div>
           <div class="pt-card-body">
@@ -76,7 +55,6 @@
           </div>
         </section>
 
-        <!-- Excerpt -->
         <section class="pt-card">
           <div class="pt-card-header">📋 {% trans "Краткое описание" %}</div>
           <div class="pt-card-body">
@@ -88,46 +66,33 @@
           </div>
         </section>
 
-        {# Any additional fieldsets that are not in sidebar: render them here #}
-        {% for fieldset in adminform %}
-          {% if fieldset.name and fieldset not in None %}
-            {# We already rendered many fields; this loop keeps compatibility but avoids duplicates #}
-          {% endif %}
-        {% endfor %}
+        {# render hidden/other main fields if any #}
+        {% for field in adminform.form.hidden_fields %}{{ field }}{% endfor %}
       </main>
 
-      <!-- RIGHT: sidebar -->
       <aside class="pt-sidebar">
         <section class="pt-card">
           <div class="pt-card-header">🚀 {% trans "Публикация" %}</div>
           <div class="pt-card-body">
-            {% if adminform.form.status %}
-              <div class="pt-field">{{ adminform.form.status }}</div>
-            {% endif %}
-            {% if adminform.form.published_at %}
-              <div class="pt-field">{{ adminform.form.published_at }}</div>
-            {% endif %}
-            {% if adminform.form.author %}
-              <div class="pt-field">{{ adminform.form.author }}</div>
-            {% endif %}
+            {% if adminform.form.status %}{{ adminform.form.status }}{% endif %}
+            {% if adminform.form.published_at %}{{ adminform.form.published_at }}{% endif %}
+            {% if adminform.form.author %}{{ adminform.form.author }}{% endif %}
           </div>
         </section>
 
         <section class="pt-card">
           <div class="pt-card-header">🏷️ {% trans "Классификация" %}</div>
           <div class="pt-card-body">
-            {% if adminform.form.categories %}<div class="pt-field">{{ adminform.form.categories }}</div>{% endif %}
-            {% if adminform.form.tags %}<div class="pt-field">{{ adminform.form.tags }}</div>{% endif %}
+            {% if adminform.form.categories %}{{ adminform.form.categories }}{% endif %}
+            {% if adminform.form.tags %}{{ adminform.form.tags }}{% endif %}
           </div>
         </section>
 
         <section class="pt-card">
           <div class="pt-card-header">🔎 {% trans "SEO" %}</div>
           <div class="pt-card-body">
-            {% if adminform.form.meta_title %}<div class="pt-field">{{ adminform.form.meta_title }}</div>{% endif %}
-            {% if adminform.form.meta_description %}
-              <div class="pt-field">{{ adminform.form.meta_description }}<div class="pt-charcounter"><span id="pt-meta-count">0</span> / 160</div></div>
-            {% endif %}
+            {% if adminform.form.meta_title %}{{ adminform.form.meta_title }}{% endif %}
+            {% if adminform.form.meta_description %}{{ adminform.form.meta_description }}<div class="pt-charcounter"><span id="pt-meta-count">0</span> / 160</div>{% endif %}
             <div style="margin-top:8px">
               <button type="button" id="pt-fill-seo" class="pt-btn pt-btn-outline">📝 {% trans "Заполнить SEO" %}</button>
             </div>
@@ -137,8 +102,8 @@
         <section class="pt-card">
           <div class="pt-card-header">🖼️ {% trans "Медиа" %}</div>
           <div class="pt-card-body">
-            {% if adminform.form.featured_image %}<div class="pt-field">{{ adminform.form.featured_image }}</div>{% endif %}
-            {% if adminform.form.og_image %}<div class="pt-field">{{ adminform.form.og_image }}</div>{% endif %}
+            {% if adminform.form.featured_image %}{{ adminform.form.featured_image }}{% endif %}
+            {% if adminform.form.og_image %}{{ adminform.form.og_image }}{% endif %}
             <div class="pt-field">
               <a href="{% url 'media-library' %}" class="pt-btn pt-btn-ghost" target="_blank">{% trans "Открыть медиатеку" %}</a>
             </div>
@@ -147,9 +112,7 @@
       </aside>
     </div>
 
-    {# Keep hidden fields and default submit area to preserve admin behaviour #}
     <div style="display:none;">
-      {% for field in adminform.form.hidden_fields %}{{ field }}{% endfor %}
       {% block submit_buttons_bottom %}{% endblock %}
     </div>
   </form>
@@ -160,9 +123,5 @@
   {{ block.super }}
   <script src="https://cdn.ckeditor.com/ckeditor5/40.2.0/classic/ckeditor.js"></script>
   <script src="{% static 'admin/js/change-form.js' %}"></script>
-
-  <script>
-    // small inline safety: set preview url if available
-    window.__pt_post_preview = {% if original and original.get_absolute_url %}"{{ original.get_absolute_url|escapejs }}"{% else %}null{% endif %};
-  </script>
+  <script>window.__pt_post_preview = {% if original and original.get_absolute_url %}"{{ original.get_absolute_url|escapejs }}"{% else %}null{% endif %};</script>
 {% endblock %}
