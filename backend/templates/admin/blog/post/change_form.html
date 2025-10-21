@@ -1,159 +1,192 @@
-{% extends "admin/change_form.html" %}
-{% load static %}
+/* backend/blog/static/admin/css/change-form.css
+   Адаптивная, без-переползания версия для редактора поста.
+   Обязательно замените файл целиком и выполните collectstatic, затем перезапустите. */
 
-{% block extrahead %}
-{{ block.super }}
-<style>
-    /* Простые улучшения для лучшей организации */
-    .form-row {
-        margin-bottom: 15px;
-        padding: 10px;
-        background: #f8f9fa;
-        border-radius: 4px;
-    }
-    
-    .form-row label {
-        display: block;
-        margin-bottom: 5px;
-        font-weight: bold;
-        color: #333;
-    }
-    
-    .char-counter {
-        font-size: 12px;
-        color: #666;
-        margin-top: 5px;
-        text-align: right;
-    }
-    
-    .field-group {
-        background: white;
-        padding: 15px;
-        margin-bottom: 20px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-    }
-    
-    .field-group h3 {
-        margin-top: 0;
-        margin-bottom: 15px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid #eee;
-        color: #333;
-    }
-    
-    .image-preview {
-        margin-top: 10px;
-    }
-    
-    .image-preview img {
-        max-width: 200px;
-        max-height: 150px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-    }
-    
-    /* Улучшения для Grappelli */
-    .grp-module {
-        margin-bottom: 20px;
-    }
-    
-    .grp-module h2 {
-        background: #2c3e50;
-        color: white;
-        padding: 10px 15px;
-        margin: 0;
-    }
-</style>
-{% endblock %}
+:root{
+  --bg: #f6f8fb;
+  --card: #ffffff;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --accent-2: #7c3aed;
+  --border: #e6eef6;
+  --radius: 12px;
+  --shadow: 0 10px 30px rgba(11,35,77,0.06);
+  --text: #0f172a;
+  --max-width: 1200px;
+}
 
-{% block content %}
-<div class="grp-module">
-    {{ block.super }}
-</div>
+/* Universal box-sizing prevents unexpected overflow */
+*,
+*::before,
+*::after { box-sizing: border-box; }
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Счетчики символов для важных полей
-    function setupCharCounter(fieldId, maxLength) {
-        const field = document.getElementById(fieldId);
-        if (!field) return;
-        
-        const counter = document.createElement('div');
-        counter.className = 'char-counter';
-        counter.textContent = `0/${maxLength}`;
-        field.parentNode.appendChild(counter);
-        
-        field.addEventListener('input', function() {
-            const length = this.value.length;
-            counter.textContent = `${length}/${maxLength}`;
-            
-            if (length > maxLength) {
-                counter.style.color = 'red';
-            } else if (length > maxLength * 0.8) {
-                counter.style.color = 'orange';
-            } else {
-                counter.style.color = '#666';
-            }
-        });
-        
-        // Инициализация
-        field.dispatchEvent(new Event('input'));
-    }
-    
-    // Настройка счетчиков
-    setupCharCounter('id_title', 255);
-    setupCharCounter('id_meta_title', 60);
-    setupCharCounter('id_meta_description', 160);
-    
-    // Предпросмотр изображений
-    function setupImagePreview(inputId) {
-        const input = document.getElementById(inputId);
-        if (!input) return;
-        
-        const preview = document.createElement('div');
-        preview.className = 'image-preview';
-        input.parentNode.appendChild(preview);
-        
-        input.addEventListener('input', function() {
-            const url = this.value;
-            if (url && (url.includes('.jpg') || url.includes('.png') || url.includes('.jpeg') || url.includes('.gif'))) {
-                preview.innerHTML = `<img src="${url}" alt="Preview" onerror="this.style.display='none'">`;
-            } else {
-                preview.innerHTML = '';
-            }
-        });
-    }
-    
-    setupImagePreview('id_featured_image');
-    setupImagePreview('id_og_image');
-    
-    // Автозаполнение meta title из title
-    const titleField = document.getElementById('id_title');
-    const metaTitleField = document.getElementById('id_meta_title');
-    
-    if (titleField && metaTitleField) {
-        titleField.addEventListener('blur', function() {
-            if (!metaTitleField.value) {
-                metaTitleField.value = this.value;
-            }
-        });
-    }
-    
-    // Подсчет слов в контенте
-    const contentField = document.getElementById('id_content');
-    if (contentField) {
-        const wordCount = document.createElement('div');
-        wordCount.className = 'char-counter';
-        wordCount.textContent = '0 слов';
-        contentField.parentNode.appendChild(wordCount);
-        
-        contentField.addEventListener('input', function() {
-            const text = this.value;
-            const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-            wordCount.textContent = `${words} слов, ~${Math.ceil(words/200)} мин чтения`;
-        });
-    }
-});
-</script>
-{% endblock %}
+/* Page container */
+.pt-editor-page {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  background: var(--bg);
+  padding: 18px;
+  color: var(--text);
+  /* Prevent accidental horizontal scroll from very long children */
+  overflow-x: hidden;
+}
+
+/* Keep form centered with safe max width */
+.pt-editor-page form {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0;
+}
+
+/* Topbar: flexible and wraps when needed */
+.pt-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap; /* important: buttons wrap instead of causing horizontal scroll */
+}
+.pt-topbar-left { min-width: 0; } /* allow truncation */
+.pt-topbar-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap; /* buttons wrap to next line on narrow screens */
+}
+
+/* Titles */
+.pt-title { font-weight: 800; font-size: 1.15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt-sub.muted { color: var(--muted); font-size: 0.9rem; }
+
+/* Buttons */
+.pt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pt-btn:active { transform: translateY(0); }
+.pt-btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pt-btn-ghost { background: transparent; color: var(--accent); border: 1px solid transparent; }
+.pt-btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+
+/* Editor grid:
+   - left column flexible (minmax(0,1fr) to allow shrinking)
+   - right column fixed but not causing overflow
+*/
+.pt-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+  align-items: start;
+}
+
+/* Important: allow main column to shrink below content width without creating scroll */
+.pt-main { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.pt-sidebar { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+
+/* Card */
+.pt-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 12px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.pt-card-header { font-weight: 800; margin-bottom: 8px; }
+
+/* Form controls */
+.pt-field { margin-bottom: 10px; min-width: 0; }
+.pt-label { display:block; margin-bottom:6px; font-weight:700; color:#111827; }
+input[type="text"], input[type="url"], input[type="datetime-local"], textarea, select,
+.vLargeTextField, .admin-rich-textarea, .select2-container--default {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 14px;
+  box-sizing: border-box;
+  min-width: 0; /* critical for shrinking in grids/flex */
+}
+
+/* CKEditor / editor box */
+.ck-editor__editable_inline,
+.admin-rich-textarea {
+  min-height: 320px;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+/* Split row for slug + button */
+.pt-split { display:flex; gap:12px; align-items:flex-end; }
+.pt-split > * { min-width: 0; } /* allow children to shrink */
+
+/* counters & errors */
+.pt-charcounter { text-align: right; color: var(--muted); font-size: 13px; margin-top: 6px; }
+.pt-error { color: #ef4444; font-weight: 700; margin-top: 6px; }
+
+/* Sidebar sticky on large screens but not causing overflow */
+.pt-sidebar { position: relative; }
+@media (min-width: 1100px) {
+  .pt-sidebar { position: sticky; top: 88px; align-self: start; }
+}
+
+/* Media modal */
+.pt-modal { position: fixed; inset: 0; display: none; z-index: 9999; }
+.pt-modal[aria-hidden="false"] { display:block; }
+.pt-modal-backdrop { position:absolute; inset:0; background: rgba(2,6,23,0.5); }
+.pt-modal-dialog {
+  position: relative;
+  width: min(1100px, 96%);
+  max-height: 86vh;
+  margin: 40px auto;
+  background: var(--card);
+  border-radius: 10px;
+  overflow: auto;
+  padding: 16px;
+}
+
+/* Media grid thumbnails */
+.pt-media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.pt-thumb { border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #fff; text-align:center; padding:6px; }
+.pt-thumb img { width: 100%; height: 110px; object-fit: cover; display:block; }
+
+/* Make sure any plugin widgets (select2, datepickers) don't force width */
+.select2-container, .ui-datepicker, .chosen-container, .vDateField {
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+
+/* Prevent any child from exceeding page width */
+img, iframe, table {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Small screens: collapse to single column, sidebar becomes full width below content */
+@media (max-width: 1000px) {
+  .pt-editor-grid { grid-template-columns: 1fr; }
+  .pt-sidebar { order: 2; }
+  .pt-main { order: 1; }
+  /* reduce modal margins on small screens */
+  .pt-modal-dialog { margin: 18px auto; width: 96%; }
+}
+
+/* Extra polish: reduce big paddings on very small devices */
+@media (max-width: 480px) {
+  .pt-editor-page { padding: 10px; }
+  .pt-btn { padding: 7px 10px; font-size: 13px; }
+  .pt-card { padding: 10px; }
+}
+
+/* Accessibility / focus */
+input:focus, textarea:focus, select:focus { outline: 2px solid rgba(37,99,235,0.15); outline-offset: 2px; }
+
+/* End of file */
