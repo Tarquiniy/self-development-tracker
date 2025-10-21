@@ -1,69 +1,72 @@
-{% extends "admin/base_site.html" %}
-{% load i18n %}
-{% block content %}
-  <h1>Медиа библиотека</h1>
+{# templates/admin/media_library.html #}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Media Library</title>
+  <link rel="stylesheet" href="{% static 'admin/css/admin-fixes.css' %}">
+  <style>
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+    .thumb{background:#fff;border-radius:8px;padding:8px;box-shadow:0 6px 18px rgba(2,6,23,0.04);text-align:center}
+    .thumb img{max-width:100%;height:120px;object-fit:cover;border-radius:6px}
+    .meta{font-size:12px;color:#6b7280;margin-top:6px}
+  </style>
+</head>
+<body>
+  <div style="max-width:1100px;margin:18px auto;">
+    <h1>Медиа библиотека</h1>
+    <form id="uploadForm" enctype="multipart/form-data" method="post">
+      {% csrf_token %}
+      <input type="file" name="file" required />
+      <input type="text" name="title" placeholder="Название (необязательно)" />
+      <button type="submit" class="button button-primary">Загрузить</button>
+    </form>
+    <div id="uploadResult" style="margin-top:8px"></div>
 
-  <form id="uploadForm" enctype="multipart/form-data" method="post">
-    {% csrf_token %}
-    <input type="file" name="file" id="fileInput" />
-    <input type="text" name="title" placeholder="Название (опционально)" />
-    <button type="submit">Загрузить</button>
-  </form>
+    <hr/>
 
-  <hr/>
-  <div id="attachments">
-    {% for a in attachments %}
-      <div class="attachment" data-url="{{ a.file.url }}">
-        <img src="{{ a.file.url }}" style="max-width:200px;max-height:120px" alt="{{ a.title }}" />
-        <div>{{ a.title }}</div>
-        <button onclick="insertToEditor('{{ a.file.url }}')">Вставить в редактор</button>
-      </div>
-    {% empty %}
-      <div>Нет файлов</div>
-    {% endfor %}
+    <div class="grid" style="margin-top:12px">
+      {% for a in attachments %}
+        <div class="thumb">
+          {% if a.file and a.file.url %}
+            <img src="{{ a.file.url }}" alt="{{ a.title|default:'file' }}" />
+          {% else %}
+            <div style="height:120px;display:flex;align-items:center;justify-content:center">Файл</div>
+          {% endif %}
+          <div class="meta">{{ a.title|default:"(без названия)" }}</div>
+          <div class="meta">{{ a.uploaded_at|default:a.uploaded|default:"-" }}</div>
+          <div style="margin-top:8px">
+            <a href="{{ a.file.url }}" target="_blank" class="button button-secondary">Открыть</a>
+          </div>
+        </div>
+      {% empty %}
+        <div>Нет файлов</div>
+      {% endfor %}
+    </div>
   </div>
 
   <script>
-    const uploadForm = document.getElementById('uploadForm');
-    uploadForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const f = document.getElementById('fileInput').files[0];
-      if (!f) return alert('Выберите файл');
-      const fd = new FormData(uploadForm);
-      const resp = await fetch("", { method: "POST", body: fd, headers: {'X-Requested-With': 'XMLHttpRequest'}});
-      const data = await resp.json();
-      if (data.success) {
-        alert('Загружено');
-        location.reload();
-      } else {
-        alert('Ошибка: ' + (data.error || 'unknown'));
-      }
-    });
-
-    function insertToEditor(url) {
-      // Try to find common fields to insert (featured_image input or content textarea)
-      // This function expects you to have opened media library in a popup from post change form.
-      if (window.opener) {
+    (function(){
+      const form = document.getElementById('uploadForm');
+      const result = document.getElementById('uploadResult');
+      form.addEventListener('submit', async function(e){
+        e.preventDefault();
+        const fd = new FormData(form);
+        const resp = await fetch("", {method:"POST", body: fd, credentials: 'same-origin'});
         try {
-          // вставить в поле featured_image, если есть
-          const fg = window.opener.document.querySelector('input[name="featured_image"]');
-          if (fg) {
-            fg.value = url;
-            window.close();
-            return;
+          const data = await resp.json();
+          if (data.success) {
+            result.textContent = "Загружено";
+            setTimeout(()=>location.reload(), 600);
+          } else {
+            result.textContent = "Ошибка: " + (data.message || JSON.stringify(data));
           }
-          // вставить в поле content (textarea) — добавляем простой <img>
-          const cnt = window.opener.document.querySelector('textarea[name="content"]');
-          if (cnt) {
-            cnt.value = (cnt.value || '') + "\\n<img src='" + url + "' />\\n";
-            window.close();
-            return;
-          }
-        } catch (e) {
-          console.error(e);
+        } catch(e){
+          result.textContent = "Ошибка ответа сервера";
         }
-      }
-      alert('Нельзя вставить: откройте медиа-библиотеку из формы поста');
-    }
+      });
+    })();
   </script>
-{% endblock %}
+</body>
+</html>

@@ -1,157 +1,51 @@
-/* admin-fixes.css
-   Фокусы:
-   - Кнопки: читаемые, крупные, контрастные
-   - Общая адаптивность: контейнеры не выходят за границу
-   - Простая система переменных для быстрой настройки цвета
-*/
-
-/* CSS Variables (easy theming) */
-:root {
-  --admin-bg: #ffffff;
-  --admin-foreground: #111827;
-  --admin-accent: #0b5fff; /* primary accent */
-  --admin-accent-contrast: #ffffff;
-  --admin-muted: #6b7280;
-  --admin-border: #e5e7eb;
-  --admin-success: #10b981;
-  --admin-warning: #f59e0b;
+/* backend/blog/static/admin/css/admin-fixes.css */
+:root{
+  --accent:#0b5fff;
+  --accent-contrast:#ffffff;
+  --muted:#6b7280;
+  --border:#e5e7eb;
 }
 
-html, body {
-  background: var(--admin-bg);
-  color: var(--admin-foreground);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+body{font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #111; background:#f6f8fb; margin:0; padding:0;}
+a{color:var(--accent); text-decoration:none;}
+
+.button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:.4rem;
+  padding:.5rem .9rem;
+  border-radius:8px;
+  border:1px solid var(--border);
+  background:var(--accent);
+  color:var(--accent-contrast);
+  font-weight:600;
+  min-height:40px;
+  box-sizing:border-box;
 }
 
-/* Prevent horizontal overflow from long content or pre tags */
-.wrapper, .module, .fieldset, .grp-module, .grp-row, .changeform, .object-tools, .module form {
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow-wrap: break-word;
-  word-wrap: break-word;
+.button-secondary{
+  background:#fff;
+  color:#111;
+  border:1px solid var(--border);
 }
 
-/* Buttons - make them bigger, high-contrast and non-white-on-white */
-.button, .button.default, .submit-row .default, .inline-related .add-row a {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: .4rem;
-  padding: .45rem .75rem;
-  border-radius: 8px;
-  border: 1px solid var(--admin-border);
-  background: var(--admin-accent);
-  color: var(--admin-accent-contrast) !important;
-  text-decoration: none;
-  font-weight: 600;
-  min-height: 38px;
-  white-space: nowrap;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+input, textarea, select{box-sizing:border-box; max-width:100%;}
+
+/* Editor / textarea fixes */
+.admin-rich-textarea, textarea, .simple-editor-container{ width:100% !important; min-height:220px; box-sizing:border-box; padding:.6rem; border-radius:8px; border:1px solid var(--border); background:#fff; color:#111; }
+
+/* Prevent horizontal overflow */
+*{word-wrap:break-word;overflow-wrap:break-word;}
+html, body {overflow-x:hidden;}
+
+/* Buttons in small screens stack */
+@media (max-width:900px){
+  .button{width:100%;}
+  .actions{display:flex;flex-direction:column;}
 }
 
-/* Danger / secondary buttons */
-.button-danger, .deletelink {
-  background: transparent;
-  color: #b91c1c;
-  border: 1px solid rgba(185,28,28,0.12);
-  padding: .35rem .6rem;
-  border-radius: 8px;
+/* Firefox specific */
+@-moz-document url-prefix(){
+  textarea, .admin-rich-textarea{ -moz-box-sizing:border-box; box-sizing:border-box; }
 }
-
-/* Ensure admin save buttons area is responsive */
-.submit-row {
-  display: flex;
-  gap: .5rem;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-/* Status badge */
-.status-badge {
-  display: inline-block;
-  padding: .15rem .5rem;
-  border-radius: 999px;
-  font-weight: 600;
-  font-size: .85rem;
-  text-transform: none;
-}
-
-/* status colors */
-.status-green { background: #ecfdf5; color: var(--admin-success); border: 1px solid #bbf7d0; }
-.status-gray { background: #f3f4f6; color: var(--admin-muted); border: 1px solid #e5e7eb; }
-.status-orange { background: #fff7ed; color: var(--admin-warning); border: 1px solid #fed7aa; }
-
-/* Action buttons in list display */
-.action-buttons .button {
-  padding: .25rem .45rem;
-  min-height: 34px;
-  border-radius: 6px;
-  font-size: .95rem;
-}
-
-/* Editor container fixes */
-.admin-rich-textarea, textarea.vLargeTextField, .admin-advanced-editor {
-  min-height: 220px;
-  width: 100% !important;
-  box-sizing: border-box;
-  padding: .6rem;
-  border: 1px solid var(--admin-border);
-  border-radius: 8px;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--admin-foreground);
-  background: #fff;
-}
-
-/* Simple editor toolbar & buttons */
-.simple-editor-container { margin-bottom: .5rem; width: 100%; }
-.simple-editor-toolbar { display:flex; gap:.35rem; flex-wrap:wrap; margin-bottom:.35rem; }
-.simple-editor-btn {
-  background: #f3f4f6;
-  color: #111827;
-  border: 1px solid #e5e7eb;
-  padding: .35rem .6rem;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  min-height: 36px;
-}
-.simple-editor-btn:hover { background: #e6eefc; }
-
-/* Preview */
-.simple-editor-preview {
-  border: 1px dashed var(--admin-border);
-  padding: .6rem;
-  border-radius: 6px;
-  background: #fafafa;
-  margin-top: .5rem;
-  max-height: 40vh;
-  overflow: auto;
-}
-
-/* Fix long tables/images inside admin content area to avoid overflow */
-.change-form, .module, .field-box {
-  overflow: visible;
-}
-.module table, .module img, .field-box img {
-  max-width: 100%;
-  height: auto;
-}
-
-/* Responsive: ensure columns stack on small screens */
-@media (max-width: 900px) {
-  .submit-row { flex-direction: column-reverse; align-items: stretch; }
-  .action-buttons { display:flex; gap:8px; }
-  .action-buttons .button { width: 100%; }
-}
-
-/* Specific Firefox improvements */
-@-moz-document url-prefix() {
-  /* Force consistent box-sizing rendering in Firefox */
-  .admin-rich-textarea, textarea.vLargeTextField { -moz-box-sizing: border-box; box-sizing: border-box; }
-}
-
-/* Small utility */
-.badge { padding: .15rem .45rem; border-radius: 6px; background: #f3f4f6; font-weight:600; }
