@@ -34,8 +34,8 @@ class CustomAdminSite(django_admin.AdminSite):
                 custom_urls.append(path("", self.admin_view(admin_dashboard_view), name="index"))
             if admin_stats_api:
                 custom_urls.append(path("dashboard/stats-data/", self.admin_view(admin_stats_api), name="dashboard-stats-data"))
-            if admin_media_library_view:
-                custom_urls.append(path("media-library/", self.admin_view(admin_media_library_view), name="admin-media-library"))
+            #if admin_media_library_view:
+            #    custom_urls.append(path("media-library/", self.admin_view(admin_media_library_view), name="admin-media-library"))
             if admin_post_update_view:
                 custom_urls.append(path("post/update/", self.admin_view(admin_post_update_view), name="admin-post-update"))
             if admin_autosave_view:

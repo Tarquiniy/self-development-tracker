@@ -508,7 +508,7 @@ def get_extra_admin_urls():
     try:
         extra = [
             path('admin/dashboard/', admin_dashboard_view, name='admin-dashboard'),
-            path('admin/media-library/', admin_media_library_view, name='admin-media-library'),
+            #path('admin/media-library/', admin_media_library_view, name='admin-media-library'),
         ]
     except Exception as e:
         logger.exception("Failed building extra admin urls: %s", e)
