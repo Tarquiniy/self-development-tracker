@@ -6,84 +6,66 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Медиа библиотека</title>
 
-  <link rel="stylesheet" href="{% static 'admin/css/admin-fixes.css' %}">
-  <link rel="stylesheet" href="{% static 'admin/css/admin-modern.css' %}">
-
   <style>
-    .media-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-    .media-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:14px}
-    .media-item{background:var(--card,#fff);padding:10px;border-radius:10px;box-shadow:var(--shadow,0 6px 18px rgba(2,6,23,0.06));display:flex;flex-direction:column;gap:8px;align-items:stretch}
-    .media-thumb{height:120px;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#fafafa}
-    .media-thumb img{max-width:100%;max-height:100%;object-fit:cover}
-    .media-meta{font-size:12px;color:var(--muted,#6b7280)}
-    .media-actions{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+    :root{ --accent:#0b5fff; --muted:#6b7280; --bg:#f6f8fb; --card:#fff; --border:#e6eef6; --radius:10px; --shadow:0 8px 20px rgba(2,6,23,0.06) }
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:#111}
+    .topbar{background:linear-gradient(90deg,#061226,#082033);color:#fff;padding:12px}
+    .topbar-inner{max-width:1100px;margin:0 auto;padding:0 16px;display:flex;justify-content:space-between;align-items:center}
+    .container{max-width:1100px;margin:18px auto;padding:0 16px}
+    .card{background:var(--card);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);border:1px solid var(--border)}
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;border:1px solid transparent;cursor:pointer;background:#fff}
+    .btn-primary{background:var(--accent);color:#fff}
+    .media-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:12px}
+    .media-item{padding:10px;border-radius:8px;background:#fff;border:1px solid var(--border)}
+    .media-thumb{height:120px;display:flex;align-items:center;justify-content:center;background:#fafafa;border-radius:6px;overflow:hidden}
+    .media-thumb img{max-width:100%;height:100%;object-fit:cover}
+    .muted{color:var(--muted)}
+    @media (max-width:700px){ .topbar-inner{flex-direction:column;align-items:flex-start} }
   </style>
+
 </head>
-<body class="admin-page">
+<body>
   <header class="topbar">
     <div class="topbar-inner">
-      <div class="brand">
-        <div class="brand-title">Медиа библиотека</div>
-        <div class="brand-sub">Загружай и вставляй файлы</div>
+      <div style="font-weight:700">Медиа библиотека</div>
+      <div>
+        <a class="btn" href="{% url 'admin:index' %}">Админка</a>
+        <a class="btn btn-primary" href="{% url 'admin:blog_post_add' %}">Создать пост</a>
       </div>
-      <nav class="top-actions">
-        <a href="{% url 'admin:index' %}" class="btn btn-ghost">Админка</a>
-        <a href="{% url 'admin:blog_post_add' %}" class="btn">Создать пост</a>
-      </nav>
     </div>
   </header>
 
   <main class="container">
-    <section class="card media-header">
-      <div style="min-width:220px">
-        <form id="mediaUploadForm" enctype="multipart/form-data" method="post" class="upload-form" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          {% csrf_token %}
-          <input type="file" name="file" id="fileInput" accept="image/*,video/*,application/pdf" required />
-          <input type="text" name="title" placeholder="Название (необязательно)" class="form-control" />
-          <button class="btn btn-primary" type="submit">Загрузить</button>
-        </form>
-        <div id="uploadStatus" style="margin-top:8px" aria-live="polite"></div>
-      </div>
-
-      <div style="display:flex;gap:8px;align-items:center">
-        <input id="searchInput" placeholder="Поиск файлов..." class="form-control" style="min-width:220px" />
-        <button id="refreshBtn" class="btn btn-ghost">Обновить</button>
-      </div>
+    <section class="card">
+      <form id="mediaUploadForm" enctype="multipart/form-data" method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        {% csrf_token %}
+        <input type="file" name="file" required />
+        <input type="text" name="title" placeholder="Название (необязательно)" />
+        <button class="btn btn-primary" type="submit">Загрузить</button>
+      </form>
     </section>
 
     <section class="card">
-      <div id="mediaGrid" class="media-grid">
+      <div class="media-grid">
         {% for a in attachments %}
-          <div class="media-item" data-title="{{ a.title|default:'' }}">
+          <div class="media-item">
             <div class="media-thumb">
               {% if a.file and a.file.url %}
-                <img src="{{ a.file.url }}" alt="{{ a.title|default:'file' }}" loading="lazy" />
+                <img src="{{ a.file.url }}" alt="{{ a.title|default:'file' }}" loading="lazy"/>
               {% else %}
-                <div style="padding:12px;color:var(--muted)">Нет превью</div>
+                <div class="muted">Нет превью</div>
               {% endif %}
             </div>
-            <div>
-              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-                <div style="font-weight:700">{{ a.title|default:"(без названия)" }}</div>
-                <div class="media-meta">{{ a.uploaded_at|default:a.uploaded|default:"-" }}</div>
-              </div>
-              <div class="media-actions">
-                <a href="{{ a.file.url }}" target="_blank" class="btn btn-outline">Открыть</a>
-                <button class="btn" data-insert-url="{{ a.file.url }}" onclick="copyUrlToClipboard(event)">Копировать ссылку</button>
-              </div>
+            <div style="margin-top:8px">
+              <div style="font-weight:700">{{ a.title|default:"(без названия)" }}</div>
+              <div class="muted">{{ a.uploaded_at|default:a.uploaded|default:"-" }}</div>
             </div>
           </div>
         {% empty %}
-          <div>Файлов не найдено</div>
+          <div>Файлов нет</div>
         {% endfor %}
       </div>
     </section>
   </main>
-
-  <footer class="site-footer">
-    <div>Positive Theta — Media Library</div>
-  </footer>
-
-  <script src="{% static 'admin/js/media-library.js' %}"></script>
 </body>
 </html>

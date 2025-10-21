@@ -6,116 +6,97 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Админ — Дашборд</title>
 
-  <!-- Базовые стили фиксами + тема -->
-  <link rel="stylesheet" href="{% static 'admin/css/admin-fixes.css' %}">
-  <link rel="stylesheet" href="{% static 'admin/css/admin-modern.css' %}">
-
+  <!-- Inline critical CSS: делает страницу приличной, даже если static недоступен -->
   <style>
-    /* Small page-specific tweaks */
-    .hero { display:flex; gap:18px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:18px; }
-    .hero .left { min-width: 260px; }
-    .hero .right { display:flex; gap:8px; align-items:center; flex-wrap:wrap }
-    .stat-grid { margin-top: 12px; }
-    .quick-actions a { min-width:140px; }
+    :root{ --accent:#0b5fff; --muted:#6b7280; --bg:#f6f8fb; --card:#fff; --text:#0f172a; --border:#e6eef6; --radius:10px; --shadow:0 8px 20px rgba(2,6,23,0.06); }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+    a{color:var(--accent);}
+    header.topbar{background:linear-gradient(90deg,#061226,#082033);color:#fff;padding:12px 0}
+    .topbar-inner{max-width:1200px;margin:0 auto;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand-title{font-weight:700;font-size:1.05rem}
+    .container{max-width:1200px;margin:18px auto;padding:0 16px}
+    .card{background:var(--card);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);border:1px solid var(--border);margin-bottom:12px}
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;border:1px solid transparent;cursor:pointer;font-weight:600;background:#fff;color:var(--text)}
+    .btn-primary{background:var(--accent);color:#fff}
+    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+    .stat{padding:12px;border-radius:8px;background:linear-gradient(180deg,#fff,#fbfdff);text-align:left}
+    .stat-title{font-size:13px;color:var(--muted);margin-bottom:8px}
+    .stat-value{font-size:20px;font-weight:800;color:var(--accent)}
+    .actions-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+    .action-card{display:flex;gap:12px;align-items:center;padding:12px;border-radius:8px;border:1px dashed var(--border);background:#fff}
+    .muted{color:var(--muted)}
+    footer.site-footer{max-width:1200px;margin:12px auto;padding:8px 16px;color:var(--muted);text-align:center}
+    @media (max-width:700px){ .topbar-inner{flex-direction:column;align-items:flex-start} .actions-grid{grid-template-columns:1fr} }
   </style>
+
 </head>
-<body class="admin-page">
+<body>
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <img src="{% static 'admin/logo.png' %}" alt="logo" class="brand-logo" onerror="this.style.display='none'"/>
-        <div>
-          <div class="brand-title">Positive Theta — Admin</div>
-          <div class="brand-sub">Управление контентом и медиа</div>
-        </div>
+        <div class="brand-title">Positive Theta — Admin</div>
+        <div class="muted" style="font-size:12px">Управление контентом и медиа</div>
       </div>
-      <nav class="top-actions">
-        <a href="{% url 'admin:index' %}" class="btn btn-ghost">Админка</a>
-        <a href="{% url 'media-library' %}" class="btn">Медиа</a>
-        <a href="{% url 'admin:blog_post_add' %}" class="btn btn-primary">Создать пост</a>
+      <nav style="display:flex;gap:8px;align-items:center">
+        <a class="btn" href="{% url 'admin:index' %}">Админка</a>
+        <a class="btn" href="{% url 'media-library' %}">Медиа</a>
+        <a class="btn btn-primary" href="{% url 'admin:blog_post_add' %}">Создать пост</a>
       </nav>
     </div>
   </header>
 
   <main class="container">
-    <section class="hero card">
-      <div class="left">
-        <h1 style="margin:0 0 6px 0">Панель управления</h1>
-        <p class="muted">Краткая сводка по проекту — быстрый доступ к созданию постов и медиа.</p>
-      </div>
-      <div class="right quick-actions">
-        <a href="{% url 'admin:blog_post_add' %}" class="btn btn-primary">Новый пост</a>
-        <a href="{% url 'media-library' %}" class="btn">Медиа библиотека</a>
-        <a href="{% url 'admin:auth_user_changelist' %}" class="btn btn-ghost">Пользователи</a>
-      </div>
+    <section class="card">
+      <h1 style="margin:0 0 6px 0">Панель управления</h1>
+      <p class="muted">Краткая сводка по проекту — быстрый доступ к созданию постов и медиа.</p>
     </section>
 
-    <section class="stat-grid card">
-      <div class="grid stats-grid">
-        <div class="stat">
-          <div class="stat-title">Постов</div>
-          <div class="stat-value">{{ posts_count|default:"—" }}</div>
-          <div class="stat-sub">Всего</div>
-        </div>
-
-        <div class="stat">
-          <div class="stat-title">Опубликовано</div>
-          <div class="stat-value">{{ published_count|default:"—" }}</div>
-          <div class="stat-sub">Доступно на сайте</div>
-        </div>
-
-        <div class="stat">
-          <div class="stat-title">Черновиков</div>
-          <div class="stat-value">{{ drafts_count|default:"—" }}</div>
-          <div class="stat-sub">Требует доработки</div>
-        </div>
-
-        <div class="stat">
-          <div class="stat-title">Медиа</div>
-          <div class="stat-value">{{ media_count|default:"—" }}</div>
-          <div class="stat-sub">Файлы в библиотеке</div>
-        </div>
-
-        <div class="stat">
-          <div class="stat-title">Комментарии</div>
-          <div class="stat-value">{{ comments_count|default:"—" }}</div>
-          <div class="stat-sub">Новых/всего</div>
-        </div>
+    <section class="card stats-grid">
+      <div class="stat">
+        <div class="stat-title">Постов</div>
+        <div class="stat-value">{{ posts_count|default:"—" }}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">Опубликовано</div>
+        <div class="stat-value">{{ published_count|default:"—" }}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">Черновиков</div>
+        <div class="stat-value">{{ drafts_count|default:"—" }}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">Медиа</div>
+        <div class="stat-value">{{ media_count|default:"—" }}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">Комментарии</div>
+        <div class="stat-value">{{ comments_count|default:"—" }}</div>
       </div>
     </section>
 
     <section class="card">
-      <h2 style="margin-top:0">Быстрые действия</h2>
-      <div class="grid actions-grid" style="margin-top:12px">
+      <h2 style="margin:0 0 8px 0">Быстрые действия</h2>
+      <div class="actions-grid">
         <a class="action-card" href="{% url 'admin:blog_post_add' %}">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <div>
-            <div class="action-title">Создать пост</div>
-            <div class="muted">Новый материал</div>
-          </div>
+          <div style="font-weight:700">Создать пост</div>
+          <div class="muted">Новый материал</div>
         </a>
-
         <a class="action-card" href="{% url 'media-library' %}">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/></svg>
-          <div>
-            <div class="action-title">Открыть медиа</div>
-            <div class="muted">Загрузить изображения</div>
-          </div>
+          <div style="font-weight:700">Медиа библиотека</div>
+          <div class="muted">Загрузки и превью</div>
         </a>
-
         <a class="action-card" href="{% url 'admin:blog_post_changelist' %}">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 7h18M7 11h10M3 17h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          <div>
-            <div class="action-title">Все посты</div>
-            <div class="muted">Управление контентом</div>
-          </div>
+          <div style="font-weight:700">Все посты</div>
+          <div class="muted">Управление контентом</div>
         </a>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <div>Positive Theta — Admin • {{"now"|date:"Y"}}</div>
+    Positive Theta — Admin • {{ "now"|date:"Y" }}
   </footer>
 </body>
 </html>
