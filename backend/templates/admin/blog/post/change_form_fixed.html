@@ -4,405 +4,165 @@
 
 {% block extrahead %}
   {{ block.super }}
-  <style>
-    /* Clean modern editor styles */
-    :root{
-      --bg: #f6f8fb;
-      --card: #ffffff;
-      --muted: #6b7280;
-      --primary: #2563eb;
-      --accent: #7c3aed;
-      --radius: 10px;
-      --shadow: 0 6px 20px rgba(15,23,42,0.06);
-    }
-    body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background: var(--bg); }
-    .post-editor-modern { max-width: 1200px; margin: 18px auto; padding: 0 18px; color: #0f172a; }
-    .editor-header { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
-    .header-title h1 { margin:0; font-size:1.15rem; font-weight:700; }
-    .header-sub { color: var(--muted); font-size:0.95rem; margin-top:4px; }
-    .header-actions { display:flex; gap:10px; align-items:center; }
-    .btn { padding: 0.6rem 1rem; border-radius:8px; font-weight:700; border: none; cursor:pointer; display:inline-flex; gap:8px; align-items:center; text-decoration:none; }
-    .btn-primary { background:var(--primary); color:#fff; }
-    .btn-secondary { background:#374151; color:#fff; }
-    .btn-outline { background:transparent; border:1px solid #e6eef6; color:#0f172a; }
-    .editor-main { display:grid; grid-template-columns: 1fr 360px; gap: 20px; margin-top:18px; align-items:start; }
-    .content-area, .sidebar-area { display:flex; flex-direction:column; gap:14px; }
-    .editor-card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:14px; }
-    .card-header { font-weight:700; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
-    .form-label { display:block; margin-bottom:8px; font-weight:700; color:#374151; }
-    .form-input, .form-textarea, .form-select { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #e6eef6; background:#fff; font-size:0.95rem; box-sizing:border-box; }
-    .title-field { font-size:1.25rem; font-weight:700; padding:12px 14px; }
-    .char-counter { text-align:right; font-size:0.85rem; color:var(--muted); margin-top:6px; }
-    .metric { display:flex; justify-content:space-between; align-items:center; padding:8px; border-radius:8px; background:#fbfdff; border:1px solid #eaf2ff; }
-    .small-muted { color:var(--muted); font-size:0.92rem; }
-    @media (max-width: 980px) {
-      .editor-main { grid-template-columns: 1fr; }
-      .sidebar-area { order: 2; }
-      .content-area { order: 1; }
-    }
-  </style>
+  <!-- Inter font (optional, fallback included) -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'admin/css/change-form.css' %}">
 {% endblock %}
 
 {% block content %}
-  <div class="post-editor-modern">
-    <!-- Header -->
-    <header class="editor-header" role="banner" aria-label="post editor header">
-      <div>
-        <div class="header-title">
-          <h1>
-            {% if original %}
-              {% if original.title %}
-                {{ original.title|truncatechars:60 }}
-              {% else %}
-                {% trans "Редактирование" %}
-              {% endif %}
-            {% else %}
-              📝 {% trans "Создание нового поста" %}
-            {% endif %}
-          </h1>
-        </div>
-        <div class="header-sub">
-          {% if original and original.pk %}
-            {% trans "ID" %}: {{ original.pk }} • {% trans "Последнее изменение" %}: {% if original.updated_at %}{{ original.updated_at|date:"SHORT_DATETIME_FORMAT" }}{% else %}—{% endif %}
+<div class="pt-editor-page">
+  <form method="post" id="post_form" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+
+    <!-- Topbar -->
+    <div class="pt-topbar">
+      <div class="pt-topbar-left">
+        <div class="pt-title">
+          {% if original and original.title %}
+            {{ original.title|truncatechars:80 }}
           {% else %}
-            <span class="small-muted">{% trans "Новый черновик" %}</span>
+            📝 {% trans "Новый пост" %}
+          {% endif %}
+        </div>
+        <div class="pt-sub muted">
+          {% if original and original.pk %}
+            {% trans "ID" %}: {{ original.pk }} • {% trans "Обновлён" %}: {{ original.updated_at|default:"—" }}
           {% endif %}
         </div>
       </div>
 
-      <div class="header-actions" role="toolbar" aria-label="editor actions">
-        <button type="submit" name="_save" form="post_form" class="btn btn-primary" title="{% trans 'Сохранить' %}">💾 {% trans "Сохранить" %}</button>
-        <button type="submit" name="_continue" form="post_form" class="btn btn-secondary" title="{% trans 'Сохранить и продолжить' %}">🔁 {% trans "Сохранить и продолжить" %}</button>
-        <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-outline" title="{% trans 'Назад к списку' %}">← {% trans "Назад" %}</a>
+      <div class="pt-topbar-right">
+        <button type="submit" name="_save" class="pt-btn pt-btn-primary">💾 {% trans "Сохранить" %}</button>
+        <button type="submit" name="_continue" class="pt-btn">🔁 {% trans "Сохранить и продолжить" %}</button>
+        <a href="{% url 'admin:blog_post_changelist' %}" class="pt-btn pt-btn-ghost">{% trans "Назад" %}</a>
       </div>
-    </header>
+    </div>
 
-    <form method="post" id="post_form" enctype="multipart/form-data" novalidate>
-      {% csrf_token %}
-      <div class="editor-main">
-        <!-- Left column (content) -->
-        <div class="content-area">
-          <!-- Main info -->
-          <div class="editor-card" role="region" aria-labelledby="main-info-heading">
-            <div class="card-header"><div id="main-info-heading">📌 {% trans "Основная информация" %}</div></div>
-            <div>
-              <div class="form-group">
-                <label class="form-label" for="id_title">{% trans "Заголовок" %} *</label>
-                <input id="id_title" name="title" type="text" class="form-input title-field" maxlength="255"
-                       value="{{ adminform.form.title.value|default_if_none:'' }}">
-                {% if adminform.form.title.errors %}
-                  <div class="error" style="color:#ef4444; margin-top:6px;">{{ adminform.form.title.errors }}</div>
-                {% endif %}
+    <!-- Main grid -->
+    <div class="pt-editor-grid">
+      <!-- LEFT: main content -->
+      <main class="pt-main">
+        <!-- Primary card: title + slug -->
+        <section class="pt-card">
+          <div class="pt-card-header">📌 {% trans "Основное" %}</div>
+          <div class="pt-card-body">
+            <div class="pt-field">
+              <label class="pt-label" for="{{ adminform.form.title.auto_id }}">{{ adminform.form.title.label }}</label>
+              {{ adminform.form.title }}
+              {% if adminform.form.title.errors %}<div class="pt-error">{{ adminform.form.title.errors|join:", " }}</div>{% endif %}
+            </div>
+
+            <div class="pt-split">
+              <div style="flex:1" class="pt-field">
+                <label class="pt-label" for="{{ adminform.form.slug.auto_id }}">{{ adminform.form.slug.label }}</label>
+                {{ adminform.form.slug }}
+                {% if adminform.form.slug.errors %}<div class="pt-error">{{ adminform.form.slug.errors|join:", " }}</div>{% endif %}
               </div>
-
-              <div class="form-group">
-                <label class="form-label" for="id_slug">{% trans "URL Slug" %}</label>
-                <input id="id_slug" name="slug" type="text" class="form-input" value="{{ adminform.form.slug.value|default_if_none:'' }}">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                  <span class="small-muted">{% trans "Используется в URL" %}</span>
-                  <button type="button" id="generate-slug" class="btn btn-outline" style="padding:6px 8px; font-size:0.85rem;">🔄 {% trans "Сгенерировать" %}</button>
-                </div>
-                {% if adminform.form.slug.errors %}
-                  <div class="error" style="color:#ef4444; margin-top:6px;">{{ adminform.form.slug.errors }}</div>
-                {% endif %}
+              <div style="width:140px;display:flex;align-items:flex-end;justify-content:flex-end">
+                <button type="button" id="pt-gen-slug" class="pt-btn pt-btn-outline">🔄 {% trans "Сгенерировать" %}</button>
               </div>
             </div>
           </div>
+        </section>
 
-          <!-- Content -->
-          <div class="editor-card" role="region" aria-labelledby="content-heading">
-            <div class="card-header"><div id="content-heading">📝 {% trans "Содержание" %}</div></div>
-            <div>
-              <div class="form-group">
-                {# Render content widget as provided by adminform #}
-                {{ adminform.form.content }}
-                {% if adminform.form.content.errors %}
-                  <div class="error" style="color:#ef4444; margin-top:6px;">{{ adminform.form.content.errors }}</div>
-                {% endif %}
-              </div>
+        <!-- Content card (CKEditor) -->
+        <section class="pt-card">
+          <div class="pt-card-header">📝 {% trans "Содержание" %}</div>
+          <div class="pt-card-body">
+            <div class="pt-field">
+              {{ adminform.form.content }}
+              {% if adminform.form.content.errors %}<div class="pt-error">{{ adminform.form.content.errors|join:", " }}</div>{% endif %}
             </div>
           </div>
+        </section>
 
-          <!-- Excerpt -->
-          <div class="editor-card" role="region" aria-labelledby="excerpt-heading">
-            <div class="card-header"><div id="excerpt-heading">📋 {% trans "Краткое описание" %}</div></div>
-            <div>
-              <div class="form-group">
-                <textarea id="id_excerpt" name="excerpt" rows="3" class="form-textarea" placeholder="{% trans 'Краткое описание поста...' %}">{{ adminform.form.excerpt.value|default_if_none:'' }}</textarea>
-                <div class="char-counter"><span id="excerpt-counter">0</span> / 320</div>
-                {% if adminform.form.excerpt.errors %}
-                  <div class="error" style="color:#ef4444; margin-top:6px;">{{ adminform.form.excerpt.errors }}</div>
-                {% endif %}
-              </div>
+        <!-- Excerpt -->
+        <section class="pt-card">
+          <div class="pt-card-header">📋 {% trans "Краткое описание" %}</div>
+          <div class="pt-card-body">
+            <div class="pt-field">
+              {{ adminform.form.excerpt }}
+              <div class="pt-charcounter"><span id="pt-excerpt-count">0</span> / 320</div>
+              {% if adminform.form.excerpt.errors %}<div class="pt-error">{{ adminform.form.excerpt.errors|join:", " }}</div>{% endif %}
             </div>
           </div>
+        </section>
 
-          {# Hidden fields (Django admin expects them) #}
-          {% for field in adminform.form.hidden_fields %}
-            {{ field }}
-          {% endfor %}
-        </div>
+        {# Any additional fieldsets that are not in sidebar: render them here #}
+        {% for fieldset in adminform %}
+          {% if fieldset.name and fieldset not in None %}
+            {# We already rendered many fields; this loop keeps compatibility but avoids duplicates #}
+          {% endif %}
+        {% endfor %}
+      </main>
 
-        <!-- Right column (sidebar) -->
-        <aside class="sidebar-area" role="complementary">
-          <!-- Publication -->
-          <div class="editor-card" role="region" aria-labelledby="pub-heading">
-            <div class="card-header"><div id="pub-heading">🚀 {% trans "Публикация" %}</div></div>
-            <div>
-              {% if adminform.form.status %}
-                <div class="form-group">
-                  <label class="form-label" for="id_status">{% trans "Статус" %}</label>
-                  {{ adminform.form.status }}
-                  {% if adminform.form.status.errors %}
-                    <div class="error" style="color:#ef4444; margin-top:6px;">{{ adminform.form.status.errors }}</div>
-                  {% endif %}
-                </div>
-              {% endif %}
+      <!-- RIGHT: sidebar -->
+      <aside class="pt-sidebar">
+        <section class="pt-card">
+          <div class="pt-card-header">🚀 {% trans "Публикация" %}</div>
+          <div class="pt-card-body">
+            {% if adminform.form.status %}
+              <div class="pt-field">{{ adminform.form.status }}</div>
+            {% endif %}
+            {% if adminform.form.published_at %}
+              <div class="pt-field">{{ adminform.form.published_at }}</div>
+            {% endif %}
+            {% if adminform.form.author %}
+              <div class="pt-field">{{ adminform.form.author }}</div>
+            {% endif %}
+          </div>
+        </section>
 
-              <div class="form-group">
-                <label class="form-label" for="id_published_at">{% trans "Дата публикации" %}</label>
-                {% if adminform.form.published_at %}
-                  {{ adminform.form.published_at }}
-                {% else %}
-                  <input id="id_published_at" name="published_at" type="datetime-local" class="form-input" value="">
-                {% endif %}
-                <div class="small-muted" style="margin-top:6px;">{% trans "Оставьте пустым для автоматической установки при публикации" %}</div>
-                {% if adminform.form.published_at and adminform.form.published_at.errors %}
-                  <div class="error" style="color:#ef4444; margin-top:6px;">{{ adminform.form.published_at.errors }}</div>
-                {% endif %}
-              </div>
+        <section class="pt-card">
+          <div class="pt-card-header">🏷️ {% trans "Классификация" %}</div>
+          <div class="pt-card-body">
+            {% if adminform.form.categories %}<div class="pt-field">{{ adminform.form.categories }}</div>{% endif %}
+            {% if adminform.form.tags %}<div class="pt-field">{{ adminform.form.tags }}</div>{% endif %}
+          </div>
+        </section>
 
-              {% if adminform.form.author %}
-                <div class="form-group">
-                  <label class="form-label" for="id_author">{% trans "Автор" %}</label>
-                  {{ adminform.form.author }}
-                  {% if adminform.form.author.errors %}
-                    <div class="error" style="color:#ef4444; margin-top:6px;">{{ adminform.form.author.errors }}</div>
-                  {% endif %}
-                </div>
-              {% endif %}
+        <section class="pt-card">
+          <div class="pt-card-header">🔎 {% trans "SEO" %}</div>
+          <div class="pt-card-body">
+            {% if adminform.form.meta_title %}<div class="pt-field">{{ adminform.form.meta_title }}</div>{% endif %}
+            {% if adminform.form.meta_description %}
+              <div class="pt-field">{{ adminform.form.meta_description }}<div class="pt-charcounter"><span id="pt-meta-count">0</span> / 160</div></div>
+            {% endif %}
+            <div style="margin-top:8px">
+              <button type="button" id="pt-fill-seo" class="pt-btn pt-btn-outline">📝 {% trans "Заполнить SEO" %}</button>
             </div>
           </div>
+        </section>
 
-          <!-- Categories & Tags -->
-          <div class="editor-card" role="region" aria-labelledby="class-heading">
-            <div class="card-header"><div id="class-heading">🏷️ {% trans "Классификация" %}</div></div>
-            <div>
-              {% if adminform.form.categories %}
-                <div class="form-group">
-                  <label class="form-label" for="id_categories">{% trans "Категории" %}</label>
-                  {{ adminform.form.categories }}
-                  {% if adminform.form.categories.errors %}
-                    <div class="error" style="color:#ef4444; margin-top:6px;">{{ adminform.form.categories.errors }}</div>
-                  {% endif %}
-                </div>
-              {% endif %}
-
-              {% if adminform.form.tags %}
-                <div class="form-group">
-                  <label class="form-label" for="id_tags">{% trans "Теги" %}</label>
-                  {{ adminform.form.tags }}
-                  {% if adminform.form.tags.errors %}
-                    <div class="error" style="color:#ef4444; margin-top:6px;">{{ adminform.form.tags.errors }}</div>
-                  {% endif %}
-                </div>
-              {% endif %}
+        <section class="pt-card">
+          <div class="pt-card-header">🖼️ {% trans "Медиа" %}</div>
+          <div class="pt-card-body">
+            {% if adminform.form.featured_image %}<div class="pt-field">{{ adminform.form.featured_image }}</div>{% endif %}
+            {% if adminform.form.og_image %}<div class="pt-field">{{ adminform.form.og_image }}</div>{% endif %}
+            <div class="pt-field">
+              <a href="{% url 'media-library' %}" class="pt-btn pt-btn-ghost" target="_blank">{% trans "Открыть медиатеку" %}</a>
             </div>
           </div>
+        </section>
+      </aside>
+    </div>
 
-          <!-- Quick actions -->
-          <div class="editor-card" role="region" aria-labelledby="quick-actions-heading">
-            <div class="card-header"><div id="quick-actions-heading">⚡ {% trans "Быстрые действия" %}</div></div>
-            <div>
-              <div style="display:flex; flex-direction:column; gap:8px;">
-                <button type="button" id="preview-btn" class="btn btn-outline">{% trans "👁️ Предпросмотр" %}</button>
-                <button type="button" id="fill-meta" class="btn btn-outline">{% trans "📝 Заполнить SEO" %}</button>
-                <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-outline" target="_blank">{% trans "🗂️ Медиатека" %}</a>
-              </div>
-            </div>
-          </div>
-        </aside>
-      </div>
-    </form>
-  </div>
+    {# Keep hidden fields and default submit area to preserve admin behaviour #}
+    <div style="display:none;">
+      {% for field in adminform.form.hidden_fields %}{{ field }}{% endfor %}
+      {% block submit_buttons_bottom %}{% endblock %}
+    </div>
+  </form>
+</div>
 {% endblock %}
-
 
 {% block footer %}
   {{ block.super }}
+  <script src="https://cdn.ckeditor.com/ckeditor5/40.2.0/classic/ckeditor.js"></script>
+  <script src="{% static 'admin/js/change-form.js' %}"></script>
+
   <script>
-    (function(){
-      // Safely expose templated values
-      const POST_ID = {% if original and original.pk %}{{ original.pk }}{% else %}null{% endif %};
-      const PREVIEW_URL = "{{ original.get_absolute_url|default:''|escapejs }}";
-
-      // DOM helpers
-      const qs = s => document.querySelector(s);
-      const qsa = s => Array.from(document.querySelectorAll(s));
-
-      // Notifications
-      function showNotification(message, type='info', duration=3000){
-        try {
-          const existing = document.querySelector('.custom-notification');
-          if (existing) existing.remove();
-
-          const el = document.createElement('div');
-          el.className = 'custom-notification';
-          el.textContent = message;
-          el.style.cssText = [
-            'position:fixed',
-            'top:20px',
-            'right:20px',
-            'padding:10px 14px',
-            'border-radius:8px',
-            'box-shadow:0 8px 22px rgba(2,6,23,0.12)',
-            'z-index:20000',
-            'background:#fff',
-            'font-weight:600',
-            'max-width:320px',
-            'white-space:pre-wrap'
-          ].join(';');
-
-          const borderColor = type === 'success' ? '#10b981' : type === 'warning' ? '#f59e0b' : type === 'error' ? '#ef4444' : '#2563eb';
-          el.style.borderLeft = '4px solid ' + borderColor;
-
-          document.body.appendChild(el);
-          setTimeout(()=> { if (el.parentNode) el.parentNode.removeChild(el); }, duration);
-        } catch(e){ console.warn('notify error', e); }
-      }
-
-      // Slug generation
-      function generateSlug(text){
-        return text.toLowerCase()
-                   .replace(/[^\w\s-]/g,'')
-                   .trim()
-                   .replace(/\s+/g,'-')
-                   .replace(/-+/g,'-')
-                   .substring(0, 80);
-      }
-
-      function initSlugGeneration(){
-        try {
-          const generateBtn = qs('#generate-slug');
-          const titleField = qs('#id_title');
-          const slugField = qs('#id_slug');
-          if (!generateBtn || !titleField || !slugField) return;
-
-          generateBtn.addEventListener('click', function(){
-            const t = titleField.value.trim();
-            if (!t) { showNotification('{% trans "Введите заголовок сначала" %}', 'warning'); return; }
-            slugField.value = generateSlug(t);
-            showNotification('{% trans "Slug сгенерирован" %}', 'success');
-          });
-
-          titleField.addEventListener('blur', function(){
-            if (slugField && !slugField.value.trim()){
-              const t = titleField.value.trim();
-              if (t) slugField.value = generateSlug(t);
-            }
-          });
-        } catch(e){ console.warn('slug init', e); }
-      }
-
-      // Excerpt counter
-      function initCharacterCounters(){
-        try {
-          const excerptField = qs('#id_excerpt');
-          const counter = qs('#excerpt-counter');
-          const MAX = 320;
-          if (!excerptField || !counter) return;
-          function update(){
-            const len = excerptField.value.length;
-            counter.textContent = len.toString();
-            if (len > MAX) counter.style.color = '#ef4444';
-            else if (len > MAX * 0.9) counter.style.color = '#f59e0b';
-            else counter.style.color = 'inherit';
-          }
-          update();
-          excerptField.addEventListener('input', update);
-        } catch(e){ console.warn('counter init', e); }
-      }
-
-      // DateTime default (only set when field exists and empty)
-      function initDateTimeFields(){
-        try {
-          const publishedAt = qs('#id_published_at');
-          if (!publishedAt) return;
-          if (!publishedAt.value) {
-            const now = new Date();
-            const tzOffset = now.getTimezoneOffset() * 60000;
-            const localISO = new Date(now - tzOffset).toISOString().slice(0,16);
-            publishedAt.value = localISO;
-          }
-        } catch(e){ console.warn('datetime init', e); }
-      }
-
-      // Quick actions: preview / fill meta
-      function initQuickActions(){
-        try {
-          const previewBtn = qs('#preview-btn');
-          if (previewBtn){
-            previewBtn.addEventListener('click', function(){
-              if (PREVIEW_URL){
-                window.open(PREVIEW_URL, '_blank');
-                return;
-              }
-              if (POST_ID){
-                // if preview URL isn't available, try admin change-view preview route pattern
-                const guess = window.location.origin + '/blog/post/' + POST_ID + '/';
-                window.open(guess, '_blank');
-                return;
-              }
-              showNotification('{% trans "Сохраните пост для предпросмотра" %}', 'warning');
-            });
-          }
-
-          const fillMeta = qs('#fill-meta');
-          if (fillMeta){
-            fillMeta.addEventListener('click', function(){
-              const title = (qs('#id_title') && qs('#id_title').value.trim()) || '';
-              const excerpt = (qs('#id_excerpt') && qs('#id_excerpt').value.trim()) || '';
-              // Try filling meta fields if exist
-              const metaTitle = qs('#id_meta_title');
-              const metaDesc = qs('#id_meta_description');
-              if (!title && !excerpt) { showNotification('{% trans "Введите заголовок сначала" %}', 'warning'); return; }
-              if (metaTitle && !metaTitle.value) metaTitle.value = title;
-              if (metaDesc && !metaDesc.value) metaDesc.value = excerpt.substring(0,160);
-              showNotification('{% trans "SEO данные заполнены" %}', 'success');
-            });
-          }
-        } catch(e){ console.warn('quick actions init', e); }
-      }
-
-      // Basic form validation and UX
-      function initFormValidation(){
-        try {
-          const form = qs('#post_form');
-          if (!form) return;
-          form.addEventListener('submit', function(e){
-            const title = (qs('#id_title') && qs('#id_title').value.trim()) || '';
-            if (!title){
-              e.preventDefault();
-              showNotification('{% trans "Заголовок обязателен для заполнения" %}', 'error');
-              const t = qs('#id_title'); if (t) t.focus();
-              return false;
-            }
-            // disable submit to avoid double submits
-            const submitBtn = form.querySelector('button[name="_save"], button[type="submit"]');
-            if (submitBtn) { submitBtn.disabled = true; submitBtn.setAttribute('aria-busy','true'); }
-          });
-        } catch(e){ console.warn('form validation init', e); }
-      }
-
-      // Init all
-      document.addEventListener('DOMContentLoaded', function(){
-        initSlugGeneration();
-        initCharacterCounters();
-        initDateTimeFields();
-        initQuickActions();
-        initFormValidation();
-      });
-
-    })();
+    // small inline safety: set preview url if available
+    window.__pt_post_preview = {% if original and original.get_absolute_url %}"{{ original.get_absolute_url|escapejs }}"{% else %}null{% endif %};
   </script>
 {% endblock %}
