@@ -82,7 +82,7 @@ urlpatterns += [
 
     # Media library aliases (both plain and admin- prefixed names)
     #path('admin/media-library/', admin_media_library_wrapper, name='media-library'),
-    path('admin/media-library/', admin_media_library_wrapper, name='admin-media-library'),
+    #path('admin/media-library/', admin_media_library_wrapper, name='admin-media-library'),
 ]
 
 # Health check + root redirect
