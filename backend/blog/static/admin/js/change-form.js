@@ -1,190 +1,244 @@
 // backend/blog/static/admin/js/change-form.js
 (function(){
   'use strict';
-  function qs(s){ return document.querySelector(s); }
-  function qsa(s){ return Array.from(document.querySelectorAll(s)); }
 
-  function getCSRF(){
-    var m = document.cookie.match(/csrftoken=([^;]+)/);
+  // safety stub for grp to avoid 'grp is not defined'
+  if (typeof window.grp === 'undefined') {
+    window.grp = { jQuery: window.jQuery || null };
+  }
+
+  const qs = s => document.querySelector(s);
+  const qsa = s => Array.from(document.querySelectorAll(s));
+
+  function getCSRF() {
+    const m = document.cookie.match(/csrftoken=([^;]+)/);
     if (m) return m[1];
-    var el = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    const el = document.querySelector('input[name="csrfmiddlewaretoken"]');
     return el ? el.value : '';
   }
 
-  function findField(names){
-    for (var i=0;i<names.length;i++){
-      var sel = '#'+names[i];
-      var el = document.querySelector(sel);
-      if (el) return el;
-      el = document.querySelector('input[name="'+names[i]+'"], textarea[name="'+names[i]+'"], select[name="'+names[i]+'"]');
-      if (el) return el;
-    }
-    return null;
-  }
-
+  // Slug helper
   function slugify(text){
     return (text||'').toString().normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
-      .replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'-').replace(/-+/g,'-').toLowerCase().slice(0,100);
+      .replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'-').replace(/-+/g,'-').toLowerCase().slice(0,120);
   }
 
-  // Upload adapter for CKEditor
-  function CKAdapter(loader){
+  // CKEditor upload adapter -> uploads file to server endpoint which stores to Supabase
+  function CKSupabaseAdapter(loader){
     this.loader = loader;
   }
-  CKAdapter.prototype.upload = function(){
-    var loader = this.loader;
-    return loader.file.then(function(file){
-      return new Promise(function(resolve, reject){
-        var fd = new FormData();
-        fd.append('file', file);
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/admin/media-library/', true);
-        xhr.setRequestHeader('X-Requested-With','XMLHttpRequest');
-        var csrftoken = getCSRF();
-        if (csrftoken) xhr.setRequestHeader('X-CSRFToken', csrftoken);
-        xhr.onreadystatechange = function(){
-          if (xhr.readyState !== 4) return;
-          if (xhr.status >= 200 && xhr.status < 300){
-            try {
-              var r = JSON.parse(xhr.responseText);
-              if (r && r.success && r.attachment && r.attachment.url) {
-                resolve({ default: r.attachment.url });
-              } else {
-                reject(r && r.message ? r.message : 'Invalid upload response');
-              }
-            } catch(e){
-              reject('Invalid JSON response');
+  CKSupabaseAdapter.prototype.upload = function(){
+    const loader = this.loader;
+    return loader.file.then(file => new Promise((resolve, reject) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/admin/supabase-upload/', true);
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      const csrftoken = getCSRF();
+      if (csrftoken) xhr.setRequestHeader('X-CSRFToken', csrftoken);
+      xhr.onload = function(){
+        if (xhr.status >= 200 && xhr.status < 300){
+          try {
+            const resp = JSON.parse(xhr.responseText);
+            if (resp.success && resp.attachment && resp.attachment.url){
+              resolve({ default: resp.attachment.url });
+            } else {
+              reject(resp.message || 'Upload failed');
             }
-          } else {
-            reject('Upload failed: ' + xhr.status);
+          } catch(e){
+            reject('Invalid JSON from upload endpoint');
           }
-        };
-        xhr.onerror = function(){ reject('Upload network error'); };
-        xhr.send(fd);
-      });
-    });
+        } else {
+          reject('Upload failed: ' + xhr.status);
+        }
+      };
+      xhr.onerror = () => reject('Network error');
+      xhr.send(fd);
+    }));
   };
-  CKAdapter.prototype.abort = function(){};
+  CKSupabaseAdapter.prototype.abort = function(){};
 
   function MyUploadPlugin(editor){
     editor.plugins.get('FileRepository').createUploadAdapter = function(loader){
-      return new CKAdapter(loader);
+      return new CKSupabaseAdapter(loader);
     };
   }
 
-  function initCKEditorIfAvailable() {
-    var textarea = findField(['id_content','content']);
-    if (!textarea) return Promise.resolve(null);
-    if (window.ClassicEditor) {
-      return ClassicEditor.create(textarea, {
-        extraPlugins: [ MyUploadPlugin ],
+  // Initialize CKEditor for content and excerpt (if you want WYSIWYG also in excerpt)
+  function initCKEditor() {
+    const contentEl = qs('#id_content') || qs('textarea[name="content"]');
+    const excerptEl = qs('#id_excerpt') || qs('textarea[name="excerpt"]');
+    if (window.ClassicEditor && contentEl) {
+      ClassicEditor.create(contentEl, {
+        extraPlugins: [MyUploadPlugin],
         toolbar: ['heading','|','bold','italic','link','bulletedList','numberedList','blockQuote','insertTable','imageUpload','undo','redo']
-      }).then(ed => { window.__pt_editor = ed; return ed; })
-        .catch(e => { console.error('CKEditor init error', e); return null; });
-    } else {
-      // Try to dynamically load CDN script and initialize
-      return new Promise(function(resolve){
-        var script = document.createElement('script');
-        script.src = 'https://cdn.ckeditor.com/ckeditor5/40.2.0/classic/ckeditor.js';
-        script.onload = function(){
-          try {
-            ClassicEditor.create(textarea, {
-              extraPlugins: [ MyUploadPlugin ],
-              toolbar: ['heading','|','bold','italic','link','bulletedList','numberedList','blockQuote','insertTable','imageUpload','undo','redo']
-            }).then(ed => { window.__pt_editor = ed; resolve(ed); }).catch(function(e){ console.error(e); resolve(null); });
-          } catch(e){ console.error(e); resolve(null); }
-        };
-        script.onerror = function(){ console.warn('CKEditor CDN failed to load'); resolve(null); };
-        document.head.appendChild(script);
-      });
+      }).then(ed => window.__pt_editor = ed).catch(e => console.error('CK init err', e));
     }
+    // Optional: small editor for excerpt (short HTML) - uncomment if desired
+    // if (window.ClassicEditor && excerptEl) { ... }
   }
 
-  // UI: robust bindings for multiple possible ids/names
-  function initUI(){
-    // title and slug
-    var title = findField(['id_title','title']);
-    var slug = findField(['id_slug','slug']);
-    var genBtn = qs('#pt-gen-slug') || qs('#generate-slug') || qs('[data-action="gen-slug"]');
-    if (genBtn && title && slug){
-      genBtn.addEventListener('click', function(){
-        slug.value = slugify(title.value || title.textContent || '');
-        showNotification('Slug сгенерирован', 'success');
+  // Media Library modal functions
+  function openMediaModal(){
+    const modal = qs('#pt-media-modal');
+    if (!modal) return;
+    modal.setAttribute('aria-hidden','false');
+    loadMediaGrid();
+  }
+  function closeMediaModal(){
+    const modal = qs('#pt-media-modal');
+    if (!modal) return;
+    modal.setAttribute('aria-hidden','true');
+  }
+
+  function loadMediaGrid(){
+    const grid = qs('#pt-media-grid');
+    if (!grid) return;
+    grid.innerHTML = '<div style="padding:16px">Загрузка...</div>';
+    fetch('/admin/supabase-attachments/').then(r => r.json()).then(data => {
+      if (!data.success){ grid.innerHTML = '<div style="padding:16px;color:#b00">Ошибка загрузки</div>'; return; }
+      const files = data.files || [];
+      if (!files.length) { grid.innerHTML = '<div style="padding:16px">Пусто</div>'; return; }
+      grid.innerHTML = '';
+      files.forEach(f => {
+        const el = document.createElement('div');
+        el.className = 'pt-thumb';
+        el.innerHTML = `<img src="${f.url}" alt="${f.name}" /><div style="font-size:12px;margin-top:6px;word-break:break-word">${f.name}</div><div style="margin-top:6px"><button class="pt-btn pt-insert" data-url="${f.url}">Вставить</button></div>`;
+        grid.appendChild(el);
       });
-      title.addEventListener('blur', function(){ if (!slug.value.trim()) slug.value = slugify(title.value || title.textContent || ''); });
+      // attach handlers
+      qsa('.pt-insert').forEach(b => b.addEventListener('click', function(){
+        const url = this.getAttribute('data-url');
+        // If CKEditor present, insert image; else copy to clipboard or fill featured image input if exists
+        if (window.__pt_editor){
+          window.__pt_editor.model.change( writer => {
+            const imageElement = writer.createElement( 'image', { src: url } );
+            window.__pt_editor.model.insertContent( imageElement, window.__pt_editor.model.document.selection );
+          } );
+        } else {
+          // try to set featured image field
+          const f = qs('#id_featured_image') || qs('input[name="featured_image"]');
+          if (f) f.value = url;
+        }
+        closeMediaModal();
+      }));
+    }).catch(err => { console.error(err); grid.innerHTML = '<div style="padding:16px;color:#b00">Ошибка</div>'; });
+  }
+
+  function uploadFilesToServer(files){
+    if (!files || !files.length) return;
+    const fd = new FormData();
+    // send first file only in CKEditor flow; our endpoint accepts 'file'
+    // but we support multiple uploads sequentially
+    const csrftoken = getCSRF();
+    Array.from(files).forEach(f => {
+      const xhr = new XMLHttpRequest();
+      const localFd = new FormData();
+      localFd.append('file', f);
+      xhr.open('POST', '/admin/supabase-upload/', true);
+      xhr.setRequestHeader('X-Requested-With','XMLHttpRequest');
+      if (csrftoken) xhr.setRequestHeader('X-CSRFToken', csrftoken);
+      xhr.onload = function(){
+        if (xhr.status >=200 && xhr.status < 300){
+          try {
+            const resp = JSON.parse(xhr.responseText);
+            if (resp.success && resp.attachment && resp.attachment.url){
+              // after success reload grid (or insert)
+              loadMediaGrid();
+            } else {
+              alert('Upload failed: ' + (resp.message || 'unknown'));
+            }
+          } catch(e){ console.error(e); }
+        } else {
+          console.error('Upload failed', xhr.status);
+        }
+      };
+      xhr.onerror = function(){ console.error('Upload network error'); };
+      xhr.send(localFd);
+    });
+  }
+
+  // Small helpers: slug button, seo fill, counters, modal wired to buttons
+  function initUI(){
+    const gen = qs('#pt-gen-slug') || qs('#generate-slug');
+    const title = qs('#id_title') || qs('input[name="title"]');
+    const slug = qs('#id_slug') || qs('input[name="slug"]');
+    if (gen && title && slug){
+      gen.addEventListener('click', () => { slug.value = slugify(title.value || ''); });
+      title.addEventListener('blur', () => { if (!slug.value.trim()) slug.value = slugify(title.value || ''); });
     }
 
-    // excerpt counter
-    var excerpt = findField(['id_excerpt','excerpt']);
-    var exCounter = qs('#pt-excerpt-count') || qs('#excerpt-counter');
-    if (excerpt && exCounter){
-      function upd(){ var l = (excerpt.value||'').length; exCounter.textContent = l; exCounter.style.color = l>320?'#ef4444':(l>288?'#f59e0b':'' ); }
-      excerpt.addEventListener('input', upd); upd();
+    const excerpt = qs('#id_excerpt');
+    const exCount = qs('#pt-excerpt-count') || qs('#excerpt-counter');
+    if (excerpt && exCount){
+      const MAX=320;
+      function up(){ const l=(excerpt.value||'').length; exCount.textContent=l; exCount.style.color = l>MAX? '#ef4444': (l>MAX*0.9? '#f59e0b' : ''); }
+      excerpt.addEventListener('input', up); up();
     }
 
-    // meta desc counter
-    var metaDesc = findField(['id_meta_description','meta_description']);
-    var metaCnt = qs('#pt-meta-count') || qs('#meta-count');
+    const metaDesc = qs('#id_meta_description');
+    const metaCnt = qs('#pt-meta-count');
     if (metaDesc && metaCnt){
-      function upm(){ var l = (metaDesc.value||'').length; metaCnt.textContent = l; metaCnt.style.color = l>160?'#ef4444':(l>144?'#f59e0b':''); }
+      const MAX=160;
+      function upm(){ const l=(metaDesc.value||'').length; metaCnt.textContent = l; metaCnt.style.color = l>MAX? '#ef4444': (l>MAX*0.9? '#f59e0b' : ''); }
       metaDesc.addEventListener('input', upm); upm();
     }
 
-    // fill SEO button
-    var fillBtn = qs('#pt-fill-seo') || qs('#fill-meta') || qs('[data-action="fill-seo"]');
-    if (fillBtn){
-      fillBtn.addEventListener('click', function(){
-        var t = title ? (title.value || title.textContent || '') : '';
-        var ex = excerpt ? (excerpt.value || '') : '';
-        var mt = findField(['id_meta_title','meta_title']);
-        var md = findField(['id_meta_description','meta_description']);
+    const fill = qs('#pt-fill-seo') || qs('#fill-meta');
+    if (fill){
+      fill.addEventListener('click', () => {
+        const t = title ? (title.value||'') : '';
+        const ex = excerpt ? (excerpt.value||'') : '';
+        const mt = qs('#id_meta_title') || qs('input[name="meta_title"]');
+        const md = qs('#id_meta_description') || qs('textarea[name="meta_description"]');
         if (mt && !mt.value && t) mt.value = t;
         if (md && !md.value && ex) md.value = ex.substring(0,160);
-        showNotification('SEO заполнено', 'success');
       });
     }
 
-    // preview button (if any)
-    var previewBtn = qs('#preview-btn');
-    if (previewBtn){
-      previewBtn.addEventListener('click', function(){
-        if (window.__pt_post_preview) window.open(window.__pt_post_preview,'_blank'); else showNotification('Сохраните пост для предпросмотра','warning');
+    // modal
+    qsa('#open-media-lib, #open-media-lib-2').forEach(b => { if (b) b.addEventListener('click', openMediaModal); });
+    const modal = qs('#pt-media-modal');
+    if (modal){
+      modal.addEventListener('click', e => {
+        if (e.target && e.target.dataset && e.target.dataset.close !== undefined) closeMediaModal();
+      });
+      qs('#pt-upload-btn').addEventListener('click', () => {
+        const input = qs('#pt-upload-input');
+        if (input && input.files && input.files.length) uploadFilesToServer(input.files);
+      });
+      qs('#pt-upload-input').addEventListener('change', () => {
+        // optionally auto upload on select
       });
     }
 
-    // prevent double submit
-    var form = qs('#post_form');
+    // form protection
+    const form = qs('#post_form');
     if (form){
-      form.addEventListener('submit', function(e){
-        var requiredTitle = title;
-        if (requiredTitle && !(requiredTitle.value||'').trim()){
-          e.preventDefault();
-          showNotification('Заголовок обязателен','error');
-          requiredTitle.focus();
-          return false;
-        }
-        var submit = form.querySelector('button[type="submit"], input[type="submit"]');
-        if (submit) submit.disabled = true;
+      form.addEventListener('submit', e => {
+        const t = title ? (title.value||'').trim() : '';
+        if (!t) { e.preventDefault(); alert('Заголовок обязателен'); title && title.focus(); return false; }
+        // disable buttons
+        qsa('button[type="submit"]').forEach(b => b.disabled = true);
       });
     }
   }
 
-  // small notification function
-  function showNotification(text,type='info',time=3000){
-    try {
-      var ex = document.querySelector('.pt-notify');
-      if (ex) ex.remove();
-      var el = document.createElement('div');
-      el.className = 'pt-notify';
-      el.style.cssText = 'position:fixed;top:18px;right:18px;background:#fff;padding:10px 12px;border-radius:8px;box-shadow:0 8px 22px rgba(2,6,23,0.12);z-index:99999;font-weight:700';
-      el.textContent = text;
-      document.body.appendChild(el);
-      setTimeout(()=>el.remove(),time);
-    } catch(e){ console.warn('notify',e); }
-  }
-
-  document.addEventListener('DOMContentLoaded', function(){
-    initCKEditorIfAvailable().then(function(){ initUI(); });
+  // Init flow
+  document.addEventListener('DOMContentLoaded', () => {
+    // try to init CKEditor, then UI
+    if (window.ClassicEditor) {
+      initCKEditor();
+      initUI();
+    } else {
+      // load CKEditor script and then init
+      const s = document.createElement('script');
+      s.src = 'https://cdn.ckeditor.com/ckeditor5/40.2.0/classic/ckeditor.js';
+      s.onload = () => { initCKEditor(); initUI(); };
+      s.onerror = () => { console.warn('CKEditor CDN failed'); initUI(); };
+      document.head.appendChild(s);
+    }
   });
 
 })();

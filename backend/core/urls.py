@@ -67,6 +67,12 @@ urlpatterns = [
     # path('preview/<str:token>/', MediaLibraryView.as_view(), name='post-preview'),
 ]
 
+try:
+    from blog.admin_extras import get_urls as get_blog_admin_urls
+    urlpatterns += get_blog_admin_urls()
+except Exception:
+    pass
+
 # Ensure both admin-prefixed and top-level media-library routes exist
 urlpatterns += [
     # explicit admin-prefixed route (same view as in admin namespace)

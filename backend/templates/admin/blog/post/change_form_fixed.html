@@ -1,3 +1,4 @@
+{# backend/templates/admin/blog/post/change_form_fixed.html #}
 {% extends "admin/change_form.html" %}
 {% load i18n static admin_urls %}
 
@@ -11,33 +12,28 @@
   <form method="post" id="post_form" enctype="multipart/form-data" novalidate>
     {% csrf_token %}
 
-    <div class="pt-topbar">
+    <header class="pt-topbar">
       <div class="pt-topbar-left">
         <div class="pt-title">{% if original and original.title %}{{ original.title|truncatechars:80 }}{% else %}📝 {% trans "Новый пост" %}{% endif %}</div>
         <div class="pt-sub muted">{% if original and original.pk %}{% trans "ID" %}: {{ original.pk }}{% endif %}</div>
       </div>
+
       <div class="pt-topbar-right">
         <button type="submit" name="_save" class="pt-btn pt-btn-primary">💾 {% trans "Сохранить" %}</button>
         <button type="submit" name="_continue" class="pt-btn">🔁 {% trans "Сохранить и продолжить" %}</button>
+        <button type="button" id="open-media-lib" class="pt-btn pt-btn-ghost">🗂 {% trans "Медиатека" %}</button>
         <a href="{% url 'admin:blog_post_changelist' %}" class="pt-btn pt-btn-ghost">{% trans "Назад" %}</a>
       </div>
-    </div>
+    </header>
 
     <div class="pt-editor-grid">
       <main class="pt-main">
         <section class="pt-card">
           <div class="pt-card-header">📌 {% trans "Основное" %}</div>
           <div class="pt-card-body">
-            <div class="pt-field">
-              {{ adminform.form.title }}
-              {% if adminform.form.title.errors %}<div class="pt-error">{{ adminform.form.title.errors|join:", " }}</div>{% endif %}
-            </div>
-
+            <div class="pt-field">{{ adminform.form.title }}</div>
             <div class="pt-split">
-              <div style="flex:1" class="pt-field">
-                {{ adminform.form.slug }}
-                {% if adminform.form.slug.errors %}<div class="pt-error">{{ adminform.form.slug.errors|join:", " }}</div>{% endif %}
-              </div>
+              <div style="flex:1" class="pt-field">{{ adminform.form.slug }}</div>
               <div style="width:140px;display:flex;align-items:flex-end;justify-content:flex-end">
                 <button type="button" id="pt-gen-slug" class="pt-btn pt-btn-outline">🔄 {% trans "Сгенерировать" %}</button>
               </div>
@@ -48,25 +44,17 @@
         <section class="pt-card">
           <div class="pt-card-header">📝 {% trans "Содержание" %}</div>
           <div class="pt-card-body">
-            <div class="pt-field">
-              {{ adminform.form.content }}
-              {% if adminform.form.content.errors %}<div class="pt-error">{{ adminform.form.content.errors|join:", " }}</div>{% endif %}
-            </div>
+            <div class="pt-field">{{ adminform.form.content }}</div>
           </div>
         </section>
 
         <section class="pt-card">
           <div class="pt-card-header">📋 {% trans "Краткое описание" %}</div>
           <div class="pt-card-body">
-            <div class="pt-field">
-              {{ adminform.form.excerpt }}
-              <div class="pt-charcounter"><span id="pt-excerpt-count">0</span> / 320</div>
-              {% if adminform.form.excerpt.errors %}<div class="pt-error">{{ adminform.form.excerpt.errors|join:", " }}</div>{% endif %}
-            </div>
+            <div class="pt-field">{{ adminform.form.excerpt }}<div class="pt-charcounter"><span id="pt-excerpt-count">0</span> / 320</div></div>
           </div>
         </section>
 
-        {# render hidden/other main fields if any #}
         {% for field in adminform.form.hidden_fields %}{{ field }}{% endfor %}
       </main>
 
@@ -91,37 +79,55 @@
         <section class="pt-card">
           <div class="pt-card-header">🔎 {% trans "SEO" %}</div>
           <div class="pt-card-body">
-            {% if adminform.form.meta_title %}{{ adminform.form.meta_title }}{% endif %}
-            {% if adminform.form.meta_description %}{{ adminform.form.meta_description }}<div class="pt-charcounter"><span id="pt-meta-count">0</span> / 160</div>{% endif %}
-            <div style="margin-top:8px">
-              <button type="button" id="pt-fill-seo" class="pt-btn pt-btn-outline">📝 {% trans "Заполнить SEO" %}</button>
-            </div>
+            {% if adminform.form.meta_title %}<div class="pt-field">{{ adminform.form.meta_title }}</div>{% endif %}
+            {% if adminform.form.meta_description %}<div class="pt-field">{{ adminform.form.meta_description }}<div class="pt-charcounter"><span id="pt-meta-count">0</span> / 160</div></div>{% endif %}
+            <div style="margin-top:8px"><button type="button" id="pt-fill-seo" class="pt-btn pt-btn-outline">📝 {% trans "Заполнить SEO" %}</button></div>
           </div>
         </section>
 
         <section class="pt-card">
-          <div class="pt-card-header">🖼️ {% trans "Медиа" %}</div>
+          <div class="pt-card-header">🖼️ {% trans "Изображение" %}</div>
           <div class="pt-card-body">
             {% if adminform.form.featured_image %}{{ adminform.form.featured_image }}{% endif %}
             {% if adminform.form.og_image %}{{ adminform.form.og_image }}{% endif %}
-            <div class="pt-field">
-              <a href="{% url 'media-library' %}" class="pt-btn pt-btn-ghost" target="_blank">{% trans "Открыть медиатеку" %}</a>
-            </div>
+            <div style="margin-top:8px"><button type="button" id="open-media-lib-2" class="pt-btn pt-btn-outline">🗂 {% trans "Открыть медиатеку" %}</button></div>
           </div>
         </section>
       </aside>
     </div>
-
-    <div style="display:none;">
-      {% block submit_buttons_bottom %}{% endblock %}
-    </div>
   </form>
+</div>
+
+{# Modal for media library #}
+<div id="pt-media-modal" class="pt-modal" aria-hidden="true">
+  <div class="pt-modal-backdrop" data-close></div>
+  <div class="pt-modal-dialog" role="dialog" aria-modal="true">
+    <div class="pt-modal-header">
+      <h3>{% trans "Медиатека" %}</h3>
+      <button class="pt-close" data-close>✕</button>
+    </div>
+    <div class="pt-modal-body">
+      <div class="pt-upload">
+        <input type="file" id="pt-upload-input" accept="image/*" multiple />
+        <button id="pt-upload-btn" class="pt-btn pt-btn-primary">{% trans "Загрузить" %}</button>
+      </div>
+      <div id="pt-media-grid" class="pt-media-grid"></div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block footer %}
   {{ block.super }}
+  <script>
+    // small safety stub to avoid 'grp is not defined' errors if any old script expects it
+    if (typeof window.grp === 'undefined') {
+      window.grp = { jQuery: window.jQuery || null };
+    }
+  </script>
   <script src="https://cdn.ckeditor.com/ckeditor5/40.2.0/classic/ckeditor.js"></script>
   <script src="{% static 'admin/js/change-form.js' %}"></script>
-  <script>window.__pt_post_preview = {% if original and original.get_absolute_url %}"{{ original.get_absolute_url|escapejs }}"{% else %}null{% endif %};</script>
+  <script>
+    window.__pt_post_preview = {% if original and original.get_absolute_url %}"{{ original.get_absolute_url|escapejs }}"{% else %}null{% endif %};
+  </script>
 {% endblock %}
