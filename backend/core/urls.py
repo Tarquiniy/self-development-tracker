@@ -9,35 +9,50 @@ from django.shortcuts import redirect
 
 logger = logging.getLogger(__name__)
 
+# --- Provide safe fallback views in this file so reverse() never fails ---
 def custom_404_view(request, exception=None):
     return HttpResponseNotFound("Страница не найдена")
 
-# --- Safe small handlers used as fallbacks ---
-def _redirect_to_admin(request: HttpRequest, *args, **kwargs) -> HttpResponse:
-    """Безопасный fallback: просто редирект в /admin/"""
-    return redirect('/admin/')
+def _simple_media_library_view(request: HttpRequest):
+    # simple fallback: GET returns a tiny HTML, POST returns JSON error
+    if request.method == "GET":
+        return HttpResponse("<html><body><h1>Media Library (fallback)</h1></body></html>")
+    return HttpResponseNotFound("No upload handler configured")
 
-# --- Patch admin site urls to include our names inside 'admin' namespace ---
-# This ensures reverse('admin:media-library') and reverse('admin:dashboard') succeed.
+def _simple_dashboard_view(request: HttpRequest):
+    return HttpResponse("<html><body><h1>Admin Dashboard (fallback)</h1></body></html>")
+
+# Try to import custom admin views from blog.admin_extras (recommended)
+admin_media_library_view = None
+admin_dashboard_view = None
+try:
+    from blog.admin_extras import admin_media_library_view as _amlv, admin_dashboard_view as _adb
+    admin_media_library_view = _amlv
+    admin_dashboard_view = _adb
+    logger.debug("Loaded admin_extras admin_media_library_view/admin_dashboard_view.")
+except Exception:
+    # fallback to local simple views
+    admin_media_library_view = _simple_media_library_view
+    admin_dashboard_view = _simple_dashboard_view
+    logger.debug("blog.admin_extras not available — using fallback media/dashboard views.")
+
+# --- Monkeypatch admin.site.get_urls BEFORE including admin.site.urls so admin namespace has these names ---
 try:
     _orig_get_urls = admin.site.get_urls  # type: ignore
 
     def _get_urls_with_extras():
-        extra = [
-            # These names will live *inside* admin.site.urls namespace,
-            # so templates resolving within current_app='admin' will find them.
-            #path('media-library/', _redirect_to_admin, name='media-library'),
-            path('dashboard/', _redirect_to_admin, name='dashboard'),
+        extras = [
+            path('media-library/', admin_media_library_view, name='media-library'),
+            path('dashboard/', admin_dashboard_view, name='dashboard'),
         ]
-        # add our extra admin urls before the default admin urls
-        return extra + _orig_get_urls()
+        return extras + _orig_get_urls()
 
-    admin.site.get_urls = _get_urls_with_extras  # monkeypatch
-    logger.debug("Patched admin.site.get_urls to include media-library/dashboard names.")
+    admin.site.get_urls = _get_urls_with_extras  # patch
+    logger.debug("Patched admin.site.get_urls to include admin:media-library and admin:dashboard")
 except Exception as e:
     logger.exception("Failed to patch admin.site.get_urls: %s", e)
 
-# --- Core urlpatterns ---
+# --- Main urlpatterns (global names as well) ---
 urlpatterns = [
     path('grappelli/', include('grappelli.urls')),
     path('admin/', admin.site.urls),
@@ -45,41 +60,35 @@ urlpatterns = [
     # Blog API
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
 
-    # Summernote
+    # Summernote (if used)
     path('summernote/', include('django_summernote.urls')),
+
+    # Optional preview view — try import; if fails, skip
+    # path('preview/<str:token>/', MediaLibraryView.as_view(), name='post-preview'),
 ]
 
-# Also provide top-level routes for compatibility (global names)
-from blog.admin_extras import admin_media_library_view
+# Ensure both admin-prefixed and top-level media-library routes exist
 urlpatterns += [
-    #path('admin/media-library/', _redirect_to_admin, name='admin-media-library'),
-    #path('media-library/', _redirect_to_admin, name='media-library'),
+    # explicit admin-prefixed route (same view as in admin namespace)
     path('admin/media-library/', admin_media_library_view, name='admin-media-library'),
+    # top-level (no admin namespace) route named 'media-library' for global reverse()
     path('media-library/', admin_media_library_view, name='media-library'),
-    path('admin/dashboard/', _redirect_to_admin, name='admin-dashboard'),
-    path('dashboard/', _redirect_to_admin, name='dashboard-plain'),
+    # admin dashboard explicit
+    path('admin/dashboard/', admin_dashboard_view, name='admin-dashboard'),
+    path('dashboard/', admin_dashboard_view, name='dashboard'),
 ]
 
-# Optional preview view
-try:
-    from blog.views import MediaLibraryView  # type: ignore
-    urlpatterns += [
-        path('preview/<str:token>/', MediaLibraryView.as_view(), name='post-preview'),
-    ]
-except Exception:
-    logger.debug("blog.views.MediaLibraryView not available; skipping preview route")
-
-# Health + root redirect
-urlpatterns += [
-    path('health/', lambda request: HttpResponseNotFound("OK"), name='health-check'),
-    path('', RedirectView.as_view(url='/admin/')),
-]
-
-# CKEditor5 optional urls
+# CKEditor 5 urls (optional)
 try:
     urlpatterns += [path('ckeditor5/', include('django_ckeditor_5.urls'))]
 except Exception:
-    logger.debug("django_ckeditor_5 not available; skipping ckeditor5 urls.")
+    logger.debug("django_ckeditor_5.urls not available; skipping.")
+
+# Health + root
+urlpatterns += [
+    path('health/', lambda request: HttpResponse("OK"), name='health-check'),
+    path('', RedirectView.as_view(url='/admin/')),
+]
 
 # Serve static/media in DEBUG
 if settings.DEBUG:
