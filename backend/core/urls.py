@@ -81,7 +81,7 @@ urlpatterns += [
     path('admin/dashboard/', admin_dashboard_wrapper, name='admin-dashboard'),
 
     # Media library aliases (both plain and admin- prefixed names)
-    path('admin/media-library/', admin_media_library_wrapper, name='media-library'),
+    #path('admin/media-library/', admin_media_library_wrapper, name='media-library'),
     path('admin/media-library/', admin_media_library_wrapper, name='admin-media-library'),
 ]
 
