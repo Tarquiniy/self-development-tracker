@@ -1,75 +1,159 @@
-{% load static i18n %}
-<!doctype html>
-<html lang="{{ LANGUAGE_CODE }}" class="admin-modern">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>{% block title %}{{ site_title|default:_('Django site admin') }}{% endblock %}</title>
-    {% block extrahead %}
-    <!-- Основные стили административной панели -->
-    <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
-    {% endblock %}
-    {% block extrastyle %}{% endblock %}
-</head>
-<body class="admin-theme">
-    <!-- Верхняя панель -->
-    <header class="admin-topbar">
-        <div class="admin-topbar-inner">
-            <div class="brand">
-                <a href="{% url 'admin:index' %}" class="brand-link">
-                    <img src="{% static 'admin/logo.png' %}" alt="logo" class="brand-logo">
-                    <span class="brand-title">{{ site_header|default:site_title|default:_('Site administration') }}</span>
-                </a>
-            </div>
-            <div class="top-actions">
-                <form action="{% url 'admin:index' %}" method="get" class="top-search-form">
-                    <input name="q" placeholder="{% trans 'Search admin...' %}" class="top-search-input"/>
-                </form>
-                <nav class="top-links">
-                    <a href="{% url 'admin:media-library' %}" class="top-link">Медиа</a>
-                    <a href="{% url 'admin:dashboard' %}" class="top-link">Dashboard</a>
-                    <a href="{% url 'admin:logout' %}" class="top-link">{% trans 'Log out' %}</a>
-                </nav>
-            </div>
-        </div>
-    </header>
+{% extends "admin/base.html" %}
+{% load i18n static %}
 
-    <div class="admin-container">
-        <!-- Боковая панель -->
-        <aside class="admin-sidebar">
-            <div class="sidebar-section">
-                <h4 class="sidebar-heading">{% trans "Management" %}</h4>
-                <ul class="sidebar-list">
-                    <li><a href="{% url 'admin:index' %}">{% trans "Home" %}</a></li>
-                    <li><a href="{% url 'admin:blog_post_changelist' %}">{% trans "Posts" %}</a></li>
-                    <li><a href="{% url 'admin:blog_category_changelist' %}">{% trans "Categories" %}</a></li>
-                    <li><a href="{% url 'admin:blog_tag_changelist' %}">{% trans "Tags" %}</a></li>
-                    <li><a href="{% url 'admin:blog_comment_changelist' %}">{% trans "Comments" %}</a></li>
-                    <li><a href="{% url 'admin:media-library' %}">{% trans "Media Library" %}</a></li>
-                </ul>
-            </div>
-            <div class="sidebar-section">
-                <h4 class="sidebar-heading">{% trans "Tools" %}</h4>
-                <ul class="sidebar-list">
-                    <li><a href="{% url 'admin:blog_post_add' %}">{% trans "Create Post" %}</a></li>
-                    <li><a href="{% url 'admin:auth_user_changelist' %}">{% trans "Users" %}</a></li>
-                </ul>
-            </div>
-        </aside>
+{% block extrahead %}
+  {# --- Очень ранний stub: предотвращаем ReferenceError: grp is not defined --- #}
+  <script>
+    // Safety: make grp defined for any legacy scripts that expect it.
+    window.grp = window.grp || {};
+    window.grp.jQuery = window.grp.jQuery || (window.jQuery || null);
+  </script>
 
-        <!-- Основной контент -->
-        <main class="admin-main">
-            <div class="admin-breadcrumbs">{% block breadcrumbs %}{% endblock %}</div>
-            <div class="admin-content">{% block content %}{% endblock %}</div>
-        </main>
-    </div>
+  {# --- Inline emergency UI script: загружает CKEditor и привязывает базовую логику сразу --- #}
+  <script>
+    (function(){
+      // minimal helper
+      function qs(s){ return document.querySelector(s); }
+      function onReady(fn){
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+        else fn();
+      }
 
-    <footer class="admin-footer">
-        <div>© {{ now|date:"Y" }} – {% trans "Admin Interface" %}</div>
-    </footer>
+      // Load CKEditor from CDN and initialize the editor(s)
+      function loadCKEditorThenInit(){
+        if (window.ClassicEditor) { initEditors(); return; }
+        var s = document.createElement('script');
+        s.src = 'https://cdn.ckeditor.com/ckeditor5/40.2.0/classic/ckeditor.js';
+        s.onload = function(){ try{ initEditors(); }catch(e){ console.error('CK init err', e); } };
+        s.onerror = function(){ console.warn('Failed to load CKEditor CDN'); };
+        document.head.appendChild(s);
+      }
 
-    {% block footer_extra %}
-    <script src="{% static 'admin/admin-core.js' %}"></script>
-    {% endblock %}
-</body>
-</html>
+      // init editors for content and excerpt if present
+      function initEditors(){
+        try {
+          var contentEl = qs('#id_content') || qs('textarea[name="content"]');
+          if (contentEl && window.ClassicEditor){
+            if (!window.__pt_editor_inited_content){
+              ClassicEditor.create(contentEl, {
+                toolbar: ['heading','|','bold','italic','link','bulletedList','numberedList','blockQuote','imageUpload','undo','redo']
+              }).then(function(ed){ window.__pt_editor = ed; window.__pt_editor_inited_content = true; console.info('CKEditor initialized'); })
+                .catch(function(e){ console.error('CKEditor error', e); });
+            }
+          }
+          // optional: small editor for excerpt (remove if you prefer plain textarea)
+          var excerptEl = qs('#id_excerpt') || qs('textarea[name="excerpt"]');
+          if (excerptEl && window.ClassicEditor){
+            if (!window.__pt_editor_inited_excerpt && excerptEl.offsetParent !== null){
+              // create inline lightweight editor only if desired
+              // If you don't want WYSIWYG in excerpt, comment next lines out.
+              ClassicEditor.create(excerptEl, {
+                toolbar: ['bold','italic','link']
+              }).then(function(){ window.__pt_editor_inited_excerpt = true; })
+                .catch(function(e){ /* ignore */ });
+            }
+          }
+        } catch(e){ console.error('initEditors', e); }
+      }
+
+      // Small utilities
+      function slugify(text){
+        return (text||'').toString().normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+          .replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'-').replace(/-+/g,'-').toLowerCase().slice(0,120);
+      }
+
+      // modal open/close helpers (will be used by page-level scripts too)
+      function openMediaModal(){
+        var m = qs('#pt-media-modal'); if (!m) return;
+        m.setAttribute('aria-hidden','false');
+        // lazy load attachments
+        fetch('/admin/supabase-attachments/').then(r=>r.json()).then(json=>{
+          var grid = qs('#pt-media-grid'); if(!grid) return;
+          grid.innerHTML = '';
+          if (!json.success || !json.files || !json.files.length){
+            grid.innerHTML = '<div style="padding:14px;color:#666">Нет файлов</div>'; return;
+          }
+          json.files.forEach(function(f){
+            var el = document.createElement('div');
+            el.className = 'pt-thumb';
+            el.innerHTML = '<img src="'+f.url+'" alt="'+f.name+'" /><div style="font-size:12px;margin-top:6px;word-break:break-word">'+f.name+'</div><div style="margin-top:6px"><button class="pt-btn pt-insert" data-url="'+f.url+'">Вставить</button></div>';
+            grid.appendChild(el);
+          });
+          Array.from(grid.querySelectorAll('.pt-insert')).forEach(function(b){
+            b.addEventListener('click', function(){
+              var url = this.getAttribute('data-url');
+              if (window.__pt_editor){
+                try {
+                  window.__pt_editor.model.change( writer => {
+                    const imageElement = writer.createElement( 'image', { src: url } );
+                    window.__pt_editor.model.insertContent( imageElement, window.__pt_editor.model.document.selection );
+                  } );
+                } catch(e){ console.warn('editor insert fail', e); }
+              } else {
+                // fallback: fill featured image input if present
+                var f = qs('#id_featured_image') || qs('input[name="featured_image"]');
+                if (f) f.value = url;
+              }
+              m.setAttribute('aria-hidden','true');
+            });
+          });
+        }).catch(function(e){ console.error('media list error', e); });
+      }
+      function closeMediaModal(){
+        var m = qs('#pt-media-modal'); if(!m) return;
+        m.setAttribute('aria-hidden','true');
+      }
+
+      // Attach immediate handlers to the DOM elements we know must exist:
+      onReady(function(){
+        // ensure grp stub exists (again)
+        window.grp = window.grp || {};
+        window.grp.jQuery = window.grp.jQuery || (window.jQuery || null);
+
+        // Buttons: try multiple selector options because templates vary.
+        var title = qs('#id_title') || qs('input[name="title"]');
+        var slug = qs('#id_slug') || qs('input[name="slug"]');
+        var gen = qs('#pt-gen-slug') || qs('#generate-slug') || qs('[data-action="gen-slug"]');
+        if (gen && title && slug){
+          gen.addEventListener('click', function(e){ e.preventDefault(); slug.value = slugify(title.value || ''); });
+        }
+
+        var fillSEO = qs('#pt-fill-seo') || qs('#fill-meta') || qs('[data-action="fill-seo"]');
+        if (fillSEO){
+          fillSEO.addEventListener('click', function(e){
+            e.preventDefault();
+            var excerpt = qs('#id_excerpt') || qs('textarea[name="excerpt"]');
+            var metaTitle = qs('#id_meta_title') || qs('input[name="meta_title"]');
+            var metaDesc = qs('#id_meta_description') || qs('textarea[name="meta_description"]');
+            var tval = title ? (title.value||'') : '';
+            var eval = excerpt ? (excerpt.value||'') : '';
+            if (metaTitle && !metaTitle.value && tval) metaTitle.value = tval;
+            if (metaDesc && !metaDesc.value && eval) metaDesc.value = eval.substring(0,160);
+          });
+        }
+
+        // Media modal buttons
+        Array.from(document.querySelectorAll('#open-media-lib, #open-media-lib-2, #open-media-library, .open-media-library')).forEach(function(b){
+          if (b) b.addEventListener('click', function(e){ e.preventDefault(); openMediaModal(); });
+        });
+
+        // modal close
+        var modal = qs('#pt-media-modal');
+        if (modal){
+          modal.addEventListener('click', function(e){
+            if (e.target && (e.target.dataset.close !== undefined || e.target.classList.contains('pt-modal-backdrop'))) closeMediaModal();
+          });
+        }
+
+        // Ensure CKEditor loads and initializes
+        loadCKEditorThenInit();
+      });
+
+      // expose helpers globally (for debug)
+      window.__pt_openMediaModal = openMediaModal;
+      window.__pt_closeMediaModal = closeMediaModal;
+    })();
+  </script>
+
+  {{ block.super }}
+{% endblock %}
