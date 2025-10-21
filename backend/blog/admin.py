@@ -76,35 +76,44 @@ class ModernPostAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
-        # Add CKEditor widget for content field
-        if HAS_CKEDITOR_WIDGET and 'content' in self.fields:
-            self.fields['content'].widget = CKEditor5Widget(
-                attrs={'class': 'ckeditor'},
-                config_name='extends'
-            )
-        elif 'content' in self.fields:
-            self.fields['content'].widget.attrs.update({
-                'class': 'modern-textarea large',
-                'rows': 20,
-                'placeholder': 'Start writing your amazing content here...'
-            })
-        
-        # Modern styling for all fields
-        for field_name, field in self.fields.items():
-            if isinstance(field.widget, (forms.TextInput, forms.URLInput)):
-                field.widget.attrs.update({
-                    'class': 'modern-input',
-                    'placeholder': f'Enter {field.label.lower()}...'
-                })
-            elif isinstance(field.widget, forms.Select):
-                field.widget.attrs.update({'class': 'modern-select'})
+    # Пропустить эти виджеты для placeholder
+        skip_widget_classes = (
+            forms.CheckboxInput,
+            forms.FileInput,            # обычный file input
+            forms.ClearableFileInput,   # django file widget
+            forms.MultipleHiddenInput,
+            forms.HiddenInput,
+        )
 
-        # Set initial published_at
-        if self.instance and self.instance.published_at:
-            self.fields['published_at'].initial = self.instance.published_at.strftime('%Y-%m-%dT%H:%M')
-        elif not self.instance.pk:
-            self.fields['published_at'].initial = timezone.now().strftime('%Y-%m-%dT%H:%M')
+        for field_name, form_field in list(self.fields.items()):
+            try:
+                widget = form_field.widget
+
+                # Пропускаем скрытые и неподходящие виджеты
+                if isinstance(widget, skip_widget_classes):
+                    continue
+
+                # Получаем понятную текстовую метку: fallback на имя поля
+                label_text = form_field.label if form_field.label is not None else field_name
+                # Если label всё ещё не строка — сделаем str() на всякий случай
+                if not isinstance(label_text, str):
+                    label_text = str(label_text)
+
+                # Сформируем placeholder (без перезаписи существующего)
+                placeholder = f"Enter {label_text.lower()}..."
+                existing_ph = widget.attrs.get('placeholder')
+                if not existing_ph:
+                    widget.attrs['placeholder'] = placeholder
+
+                # Можно установить ещё aria-label для доступности если нужно
+                if not widget.attrs.get('aria-label'):
+                    widget.attrs['aria-label'] = label_text
+
+            except Exception as exc:
+                # Не ломаем и не прячем причину — логируем для диагностики
+                logger.exception("Error setting placeholder for form field %s: %s", field_name, exc)
+                # не прерываем и идём дальше
+                continue
 
 # -----------------------
 # Modern Admin Classes
