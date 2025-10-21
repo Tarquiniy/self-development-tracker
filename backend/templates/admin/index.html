@@ -4,48 +4,118 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Admin Dashboard</title>
-  <!-- Подключаем наш CSS безопасно; если статик недоступен, браузер просто не загрузит файл -->
+  <title>Админ — Дашборд</title>
+
+  <!-- Базовые стили фиксами + тема -->
   <link rel="stylesheet" href="{% static 'admin/css/admin-fixes.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/css/admin-modern.css' %}">
+
   <style>
-    .dashboard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
-    .stat-card{background:#fff;padding:14px;border-radius:10px;box-shadow:0 6px 20px rgba(2,6,23,0.06);text-align:center}
-    .stat-title{font-size:13px;color:#6b7280;margin-bottom:8px}
-    .stat-value{font-size:20px;font-weight:700;color:#0b5fff}
-    .actions{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+    /* Small page-specific tweaks */
+    .hero { display:flex; gap:18px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:18px; }
+    .hero .left { min-width: 260px; }
+    .hero .right { display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+    .stat-grid { margin-top: 12px; }
+    .quick-actions a { min-width:140px; }
   </style>
 </head>
-<body>
-  <div style="max-width:1100px;margin:20px auto;padding:10px;">
-    <h1 style="margin:0 0 10px 0">Админ: Дашборд</h1>
-    <div class="actions">
-      <a class="button button-primary" href="{% url 'admin:blog_post_add' %}">Создать пост</a>
-      <a class="button" href="{% url 'media-library' %}">Медиа библиотека</a>
-      <a class="button" href="{% url 'admin:index' %}">Админка</a>
+<body class="admin-page">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <img src="{% static 'admin/logo.png' %}" alt="logo" class="brand-logo" onerror="this.style.display='none'"/>
+        <div>
+          <div class="brand-title">Positive Theta — Admin</div>
+          <div class="brand-sub">Управление контентом и медиа</div>
+        </div>
+      </div>
+      <nav class="top-actions">
+        <a href="{% url 'admin:index' %}" class="btn btn-ghost">Админка</a>
+        <a href="{% url 'media-library' %}" class="btn">Медиа</a>
+        <a href="{% url 'admin:blog_post_add' %}" class="btn btn-primary">Создать пост</a>
+      </nav>
     </div>
+  </header>
 
-    <div class="dashboard-grid" style="margin-top:16px">
-      <div class="stat-card">
-        <div class="stat-title">Постов</div>
-        <div class="stat-value">{{ posts_count }}</div>
+  <main class="container">
+    <section class="hero card">
+      <div class="left">
+        <h1 style="margin:0 0 6px 0">Панель управления</h1>
+        <p class="muted">Краткая сводка по проекту — быстрый доступ к созданию постов и медиа.</p>
       </div>
-      <div class="stat-card">
-        <div class="stat-title">Опубликовано</div>
-        <div class="stat-value">{{ published_count }}</div>
+      <div class="right quick-actions">
+        <a href="{% url 'admin:blog_post_add' %}" class="btn btn-primary">Новый пост</a>
+        <a href="{% url 'media-library' %}" class="btn">Медиа библиотека</a>
+        <a href="{% url 'admin:auth_user_changelist' %}" class="btn btn-ghost">Пользователи</a>
       </div>
-      <div class="stat-card">
-        <div class="stat-title">Черновиков</div>
-        <div class="stat-value">{{ drafts_count }}</div>
+    </section>
+
+    <section class="stat-grid card">
+      <div class="grid stats-grid">
+        <div class="stat">
+          <div class="stat-title">Постов</div>
+          <div class="stat-value">{{ posts_count|default:"—" }}</div>
+          <div class="stat-sub">Всего</div>
+        </div>
+
+        <div class="stat">
+          <div class="stat-title">Опубликовано</div>
+          <div class="stat-value">{{ published_count|default:"—" }}</div>
+          <div class="stat-sub">Доступно на сайте</div>
+        </div>
+
+        <div class="stat">
+          <div class="stat-title">Черновиков</div>
+          <div class="stat-value">{{ drafts_count|default:"—" }}</div>
+          <div class="stat-sub">Требует доработки</div>
+        </div>
+
+        <div class="stat">
+          <div class="stat-title">Медиа</div>
+          <div class="stat-value">{{ media_count|default:"—" }}</div>
+          <div class="stat-sub">Файлы в библиотеке</div>
+        </div>
+
+        <div class="stat">
+          <div class="stat-title">Комментарии</div>
+          <div class="stat-value">{{ comments_count|default:"—" }}</div>
+          <div class="stat-sub">Новых/всего</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <div class="stat-title">Медиа</div>
-        <div class="stat-value">{{ media_count }}</div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin-top:0">Быстрые действия</h2>
+      <div class="grid actions-grid" style="margin-top:12px">
+        <a class="action-card" href="{% url 'admin:blog_post_add' %}">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div>
+            <div class="action-title">Создать пост</div>
+            <div class="muted">Новый материал</div>
+          </div>
+        </a>
+
+        <a class="action-card" href="{% url 'media-library' %}">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/></svg>
+          <div>
+            <div class="action-title">Открыть медиа</div>
+            <div class="muted">Загрузить изображения</div>
+          </div>
+        </a>
+
+        <a class="action-card" href="{% url 'admin:blog_post_changelist' %}">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 7h18M7 11h10M3 17h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <div>
+            <div class="action-title">Все посты</div>
+            <div class="muted">Управление контентом</div>
+          </div>
+        </a>
       </div>
-      <div class="stat-card">
-        <div class="stat-title">Комментарии</div>
-        <div class="stat-value">{{ comments_count }}</div>
-      </div>
-    </div>
-  </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div>Positive Theta — Admin • {{"now"|date:"Y"}}</div>
+  </footer>
 </body>
 </html>
