@@ -5,44 +5,62 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import RedirectView
-from django.http import HttpResponseNotFound
+from django.http import HttpResponseNotFound, HttpRequest, HttpResponse
+from django.shortcuts import redirect
 
 logger = logging.getLogger(__name__)
 
-# Try to import admin views from blog.admin in a safe way.
-admin_dashboard_view = None
-admin_media_library_view = None
-try:
-    # Preferred: import explicit views (so we can name them as needed)
-    from blog.admin import admin_dashboard_view, admin_media_library_view  # type: ignore
-except Exception as e:
-    logger.warning("Could not import admin_dashboard_view/admin_media_library_view from blog.admin: %s", e)
-    # Try a helper that provides URL patterns (fallback)
-    try:
-        from blog.admin import get_extra_admin_urls  # type: ignore
-        # We'll call get_extra_admin_urls() later if needed
-    except Exception as e2:
-        logger.debug("blog.admin.get_extra_admin_urls not available: %s", e2)
-        # leave views as None
-
-# Try to import MediaLibraryView used by preview route (safe)
-try:
-    from blog.views import MediaLibraryView  # type: ignore
-except Exception as e:
-    logger.warning("Could not import MediaLibraryView from blog.views: %s", e)
-    MediaLibraryView = None
 
 def custom_404_view(request, exception=None):
     return HttpResponseNotFound("Страница не найдена")
 
+
+# --- Wrappers for optional admin views (safe: they won't crash at import time) ---
+def admin_media_library_wrapper(request: HttpRequest, *args, **kwargs) -> HttpResponse:
+    """
+    Wrapper that tries to call blog.admin.admin_media_library_view(request).
+    If that view is unavailable or raises, redirects to /admin/ to avoid 500.
+    This wrapper is deliberately defensive because templates may call reverse('media-library').
+    """
+    try:
+        from blog.admin import admin_media_library_view  # type: ignore
+        return admin_media_library_view(request, *args, **kwargs)
+    except Exception as e:
+        logger.debug("admin_media_library_wrapper: blog.admin.admin_media_library_view not available or failed: %s", e)
+        # safe fallback: redirect to admin index
+        return redirect('/admin/')
+
+
+def admin_dashboard_wrapper(request: HttpRequest, *args, **kwargs) -> HttpResponse:
+    """
+    Wrapper for blog.admin.admin_dashboard_view with safe fallback.
+    """
+    try:
+        from blog.admin import admin_dashboard_view  # type: ignore
+        return admin_dashboard_view(request, *args, **kwargs)
+    except Exception as e:
+        logger.debug("admin_dashboard_wrapper: blog.admin.admin_dashboard_view not available or failed: %s", e)
+        return redirect('/admin/')
+
+
+# --- Try to import preview view from blog.views (safe) ---
+MediaLibraryView = None
+try:
+    from blog.views import MediaLibraryView  # type: ignore
+except Exception as e:
+    logger.debug("MediaLibraryView not available: %s", e)
+    MediaLibraryView = None
+
+
+# --- Build urlpatterns robustly ---
 urlpatterns = [
     path('grappelli/', include('grappelli.urls')),
     path('admin/', admin.site.urls),
 
-    # Blog API
+    # Blog API (namespace kept)
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
 
-    # Summernote
+    # Summernote (optional)
     path('summernote/', include('django_summernote.urls')),
 ]
 
@@ -54,61 +72,32 @@ if MediaLibraryView is not None:
 else:
     logger.debug("Skipping preview route because MediaLibraryView is not available.")
 
-# If explicit views imported, register them under *two* names:
-# - the 'admin-...' name we used earlier (admin-media-library / admin-dashboard)
-# - and the legacy/simple name templates might expect (media-library / dashboard)
-if admin_dashboard_view and admin_media_library_view:
-    urlpatterns += [
-        # Dashboard (two names)
-        path('admin/dashboard/', admin_dashboard_view, name='admin-dashboard'),
-        path('admin/dashboard/', admin_dashboard_view, name='dashboard'),
-        # Media library (two names)
-        path('admin/media-library/', admin_media_library_view, name='admin-media-library'),
-        path('admin/media-library/', admin_media_library_view, name='media-library'),
-    ]
-else:
-    # If explicit views not available, try get_extra_admin_urls() from blog.admin if present
-    try:
-        from blog.admin import get_extra_admin_urls  # type: ignore
-        extra = get_extra_admin_urls() or []
-        # If get_extra_admin_urls returned patterns, include them.
-        if extra:
-            urlpatterns += extra
-            # Also add quick aliases for common names if we can discover them:
-            # We'll attempt to map patterns named 'admin-media-library' -> 'media-library' etc.
-            # But since we cannot introspect easily here, add safe fallback alias routes if functions exist in module.
-            try:
-                # If functions exist in module, register aliases
-                import blog.admin as blog_admin_mod  # type: ignore
-                if hasattr(blog_admin_mod, 'admin_dashboard_view'):
-                    urlpatterns += [
-                        path('admin/dashboard/', getattr(blog_admin_mod, 'admin_dashboard_view'), name='dashboard'),
-                        path('admin/dashboard/', getattr(blog_admin_mod, 'admin_dashboard_view'), name='admin-dashboard'),
-                    ]
-                if hasattr(blog_admin_mod, 'admin_media_library_view'):
-                    urlpatterns += [
-                        path('admin/media-library/', getattr(blog_admin_mod, 'admin_media_library_view'), name='media-library'),
-                        path('admin/media-library/', getattr(blog_admin_mod, 'admin_media_library_view'), name='admin-media-library'),
-                    ]
-            except Exception as e_inner:
-                logger.debug("Could not add alias admin URLs from blog.admin module: %s", e_inner)
-    except Exception:
-        # nothing we can do safely — skip adding extra admin urls
-        logger.debug("No extra admin URLs added from blog.admin.")
+# --- Admin custom views / aliases ---
+# We always register the wrappers under the common names so reverse('media-library') and reverse('dashboard')
+# will resolve even if blog.admin doesn't provide the real handlers yet.
+urlpatterns += [
+    # Dashboard aliases (both plain and admin- prefixed names)
+    path('admin/dashboard/', admin_dashboard_wrapper, name='dashboard'),
+    path('admin/dashboard/', admin_dashboard_wrapper, name='admin-dashboard'),
 
-# Health check and root redirect
+    # Media library aliases (both plain and admin- prefixed names)
+    path('admin/media-library/', admin_media_library_wrapper, name='media-library'),
+    path('admin/media-library/', admin_media_library_wrapper, name='admin-media-library'),
+]
+
+# Health check + root redirect
 urlpatterns += [
     path('health/', lambda request: HttpResponseNotFound("OK"), name='health-check'),
     path('', RedirectView.as_view(url='/admin/')),
 ]
 
-# CKEditor 5 (optional)
+# CKEditor 5 optional URLs
 try:
     urlpatterns += [path('ckeditor5/', include('django_ckeditor_5.urls'))]
 except Exception:
     logger.debug("django_ckeditor_5 not available; skipping ckeditor5 urls.")
 
-# Static serving in DEBUG
+# Serve static/media in DEBUG
 if settings.DEBUG:
     from django.conf.urls.static import static
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
