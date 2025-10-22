@@ -1,102 +1,58 @@
-{% load static %}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Админ — Дашборд</title>
+\
+        {% extends 'admin/base_site.html' %}
+        {% load i18n %}
 
-  <!-- Inline critical CSS: делает страницу приличной, даже если static недоступен -->
-  <style>
-    :root{ --accent:#0b5fff; --muted:#6b7280; --bg:#f6f8fb; --card:#fff; --text:#0f172a; --border:#e6eef6; --radius:10px; --shadow:0 8px 20px rgba(2,6,23,0.06); }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
-    a{color:var(--accent);}
-    header.topbar{background:linear-gradient(90deg,#061226,#082033);color:#fff;padding:12px 0}
-    .topbar-inner{max-width:1200px;margin:0 auto;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-    .brand{display:flex;align-items:center;gap:12px}
-    .brand-title{font-weight:700;font-size:1.05rem}
-    .container{max-width:1200px;margin:18px auto;padding:0 16px}
-    .card{background:var(--card);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);border:1px solid var(--border);margin-bottom:12px}
-    .btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;border:1px solid transparent;cursor:pointer;font-weight:600;background:#fff;color:var(--text)}
-    .btn-primary{background:var(--accent);color:#fff}
-    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
-    .stat{padding:12px;border-radius:8px;background:linear-gradient(180deg,#fff,#fbfdff);text-align:left}
-    .stat-title{font-size:13px;color:var(--muted);margin-bottom:8px}
-    .stat-value{font-size:20px;font-weight:800;color:var(--accent)}
-    .actions-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
-    .action-card{display:flex;gap:12px;align-items:center;padding:12px;border-radius:8px;border:1px dashed var(--border);background:#fff}
-    .muted{color:var(--muted)}
-    footer.site-footer{max-width:1200px;margin:12px auto;padding:8px 16px;color:var(--muted);text-align:center}
-    @media (max-width:700px){ .topbar-inner{flex-direction:column;align-items:flex-start} .actions-grid{grid-template-columns:1fr} }
-  </style>
+        {% block title %}Панель администратора{% endblock %}
 
-</head>
-<body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="brand">
-        <div class="brand-title">Positive Theta — Admin</div>
-        <div class="muted" style="font-size:12px">Управление контентом и медиа</div>
-      </div>
-      <nav style="display:flex;gap:8px;align-items:center">
-        <a class="btn" href="{% url 'admin:index' %}">Админка</a>
-        <a class="btn" href="{% url 'media-library' %}">Медиа</a>
-        <a class="btn btn-primary" href="{% url 'admin:blog_post_add' %}">Создать пост</a>
-      </nav>
-    </div>
-  </header>
+        {% block content %}
+          <div class="dashboard-grid">
+            <section class="card">
+              <h2>Статистика</h2>
+              <div class="stats-grid">
+                <div class="stat">
+                  <div class="stat-value">{{ total_posts|default:0 }}</div>
+                  <div class="stat-label">Постов</div>
+                </div>
+                <div class="stat">
+                  <div class="stat-value">{{ total_users|default:0 }}</div>
+                  <div class="stat-label">Пользователей</div>
+                </div>
+                <div class="stat">
+                  <div class="stat-value">{{ pending_comments|default:0 }}</div>
+                  <div class="stat-label">Ожидает модерации</div>
+                </div>
+              </div>
+            </section>
 
-  <main class="container">
-    <section class="card">
-      <h1 style="margin:0 0 6px 0">Панель управления</h1>
-      <p class="muted">Краткая сводка по проекту — быстрый доступ к созданию постов и медиа.</p>
-    </section>
+            <section class="card">
+              <h2>Быстрые действия</h2>
+              <div class="quick-actions">
+                <a class="btn" href="{% url 'admin:blog_post_add' %}">Создать пост</a>
+                <a class="btn btn-ghost" href="{% url 'admin:blog_post_changelist' %}">Все посты</a>
+              </div>
+            </section>
 
-    <section class="card stats-grid">
-      <div class="stat">
-        <div class="stat-title">Постов</div>
-        <div class="stat-value">{{ posts_count|default:"—" }}</div>
-      </div>
-      <div class="stat">
-        <div class="stat-title">Опубликовано</div>
-        <div class="stat-value">{{ published_count|default:"—" }}</div>
-      </div>
-      <div class="stat">
-        <div class="stat-title">Черновиков</div>
-        <div class="stat-value">{{ drafts_count|default:"—" }}</div>
-      </div>
-      <div class="stat">
-        <div class="stat-title">Медиа</div>
-        <div class="stat-value">{{ media_count|default:"—" }}</div>
-      </div>
-      <div class="stat">
-        <div class="stat-title">Комментарии</div>
-        <div class="stat-value">{{ comments_count|default:"—" }}</div>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2 style="margin:0 0 8px 0">Быстрые действия</h2>
-      <div class="actions-grid">
-        <a class="action-card" href="{% url 'admin:blog_post_add' %}">
-          <div style="font-weight:700">Создать пост</div>
-          <div class="muted">Новый материал</div>
-        </a>
-        <a class="action-card" href="{% url 'media-library' %}">
-          <div style="font-weight:700">Медиа библиотека</div>
-          <div class="muted">Загрузки и превью</div>
-        </a>
-        <a class="action-card" href="{% url 'admin:blog_post_changelist' %}">
-          <div style="font-weight:700">Все посты</div>
-          <div class="muted">Управление контентом</div>
-        </a>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    Positive Theta — Admin • {{ "now"|date:"Y" }}
-  </footer>
-</body>
-</html>
+            <section class="card wide">
+              <h2>Последние посты</h2>
+              <div class="table-responsive">
+                <table class="list-table">
+                  <thead>
+                    <tr><th>Заголовок</th><th>Автор</th><th>Дата</th><th>Статус</th></tr>
+                  </thead>
+                  <tbody>
+                    {% for post in recent_posts %}
+                    <tr>
+                      <td><a href="{% url 'admin:blog_post_change' post.pk %}">{{ post.title }}</a></td>
+                      <td>{{ post.author }}</td>
+                      <td>{{ post.published_at }}</td>
+                      <td>{{ post.status }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4">Нет постов</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        {% endblock %}
