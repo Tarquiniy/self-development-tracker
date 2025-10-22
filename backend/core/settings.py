@@ -9,7 +9,7 @@ load_dotenv()
 
 env = os.environ.get
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ========== SUPABASE / S3 ==========
 SUPABASE_USE_PROXY = True
@@ -83,8 +83,8 @@ CSRF_COOKIE_SECURE = not DEBUG
 # ========== STATIC ==========
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-STATICFILES_DIRS = [BASE_DIR / 'blog' / 'static']
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+STATICFILES_DIRS = [ os.path.join(BASE_DIR, 'static') ]
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # ========== DATABASE ==========
 DATABASES = {
