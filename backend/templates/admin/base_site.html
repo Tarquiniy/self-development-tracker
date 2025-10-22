@@ -1,68 +1,85 @@
-\
-        {% load static i18n %}
-        <!doctype html>
-        <html lang="ru">
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width,initial-scale=1">
-          <title>{% block title %}Админка — {{ site_title|default:_('Django administration') }}{% endblock %}</title>
+{% load static i18n %}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Админка — {{ site_title|default:_('Django administration') }}{% endblock %}</title>
 
-          <!-- Основной CSS -->
-          <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
+  <!-- Основной CSS -->
+  <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
 
-          <!-- Подсказка: если хочешь использовать Tailwind (prototype) - раскомментируй:
-          <script src="https://cdn.tailwindcss.com"></script>
-          -->
+  {% block extrahead %}{% endblock %}
+</head>
+<body class="admin-root">
+  <div class="admin-shell">
+    <header class="admin-header">
+      <div class="brand">
+        <button id="sidebar-toggle" aria-label="Toggle menu" class="hamburger">☰</button>
+        <a href="{% url 'admin:index' %}" class="brand-link">{{ site_header|default:_('Site administration') }}</a>
+      </div>
+      <div class="header-actions">
+        <!-- action оставляем пустым (отправка на текущую страницу) -->
+        <form method="get" action="" class="search-form" role="search" onsubmit="return handleAdminSearch(event)">
+          <input name="q" placeholder="Поиск..." aria-label="Поиск" class="search-input">
+        </form>
+        <div class="user-menu">
+          <a href="{% url 'admin:logout' %}">{% trans "Выйти" %}</a>
+        </div>
+      </div>
+    </header>
 
-          {% block extrahead %}{% endblock %}
-        </head>
-        <body class="admin-root">
-          <div class="admin-shell">
-            <header class="admin-header">
-              <div class="brand">
-                <button id="sidebar-toggle" aria-label="Toggle menu" class="hamburger">☰</button>
-                <a href="{% url 'admin:index' %}" class="brand-link">{{ site_header|default:_('Site administration') }}</a>
-              </div>
-              <div class="header-actions">
-                <form method="get" action="{% url 'admin:search' %}" class="search-form" role="search">
-                  <input name="q" placeholder="Поиск..." aria-label="Поиск" class="search-input">
-                </form>
-                <div class="user-menu">
-                  <a href="{% url 'admin:logout' %}">{% trans "Выйти" %}</a>
-                </div>
-              </div>
-            </header>
+    <aside id="admin-sidebar" class="admin-sidebar" aria-label="Навигация администратора">
+      <nav>
+        <ul class="sidebar-list">
+          <li class="sidebar-section">Главное</li>
+          <li><a href="{% url 'admin:index' %}">Панель</a></li>
+          <li class="sidebar-section">Контент</li>
+          <li><a href="{% url 'admin:blog_post_changelist' %}">Посты</a></li>
+          <li><a href="{% url 'admin:blog_category_changelist' %}">Категории</a></li>
+          <li class="sidebar-section">Пользователи</li>
+          <li><a href="{% url 'admin:auth_user_changelist' %}">Пользователи</a></li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <small>Версия UI — 2025</small>
+      </div>
+    </aside>
 
-            <aside id="admin-sidebar" class="admin-sidebar" aria-label="Навигация администратора">
-              <nav>
-                <ul class="sidebar-list">
-                  <li class="sidebar-section">Главное</li>
-                  <li><a href="{% url 'admin:index' %}">Панель</a></li>
-                  <li class="sidebar-section">Контент</li>
-                  <li><a href="{% url 'admin:blog_post_changelist' %}">Посты</a></li>
-                  <li><a href="{% url 'admin:blog_category_changelist' %}">Категории</a></li>
-                  <li class="sidebar-section">Пользователи</li>
-                  <li><a href="{% url 'admin:auth_user_changelist' %}">Пользователи</a></li>
-                </ul>
-              </nav>
-              <div class="sidebar-footer">
-                <small>Версия UI — 2025</small>
-              </div>
-            </aside>
+    <main id="admin-main" class="admin-main">
+      <div class="container">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
 
-            <main id="admin-main" class="admin-main">
-              <div class="container">
-                {% block content %}{% endblock %}
-              </div>
-            </main>
+    <footer class="admin-footer">
+      <div class="container">© {{ now|date:"Y" }} — Административная панель</div>
+    </footer>
+  </div>
 
-            <footer class="admin-footer">
-              <div class="container">© {{ now|date:"Y" }} — Административная панель</div>
-            </footer>
-          </div>
+  <script src="{% static 'admin/js/admin-fixes.js' %}"></script>
+  <script src="{% static 'admin/js/main.js' %}"></script>
 
-          <script src="{% static 'admin/js/admin-fixes.js' %}"></script>
-          <script src="{% static 'admin/js/main.js' %}"></script>
-          {% block extra_js %}{% endblock %}
-        </body>
-        </html>
+  <script>
+    // Простая обработка поиска: перенаправляет на список постов с q в GET (настраиваемо)
+    function handleAdminSearch(e){
+      // получаем query
+      const q = (document.querySelector('.search-input') || {}).value || '';
+      if(!q) return false; // не отправляем если пусто
+
+      // Вариант 1 (универсальный): остаёмся на текущей странице (позволяем браузеру отправить GET)
+      // return true;
+
+      // Вариант 2 (по умолчанию) — перенаправить в changelist постов с параметром q
+      // Измени URL ниже, если хочешь искать по другому списку
+      const target = "{% url 'admin:blog_post_changelist' %}";
+      // Если хочешь универсальнее — можно отправить на admin:index или на любую свою view.
+      window.location.href = target + '?q=' + encodeURIComponent(q);
+      e.preventDefault();
+      return false;
+    }
+  </script>
+
+  {% block extra_js %}{% endblock %}
+</body>
+</html>
