@@ -138,12 +138,18 @@ body{margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe
 .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));border:0;color:#fff}
 .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.03)}
 
+/* Tiptap editor styles (light concrete touch) */
+.tiptap-editor-wrapper { margin: 8px 0; }
+.tiptap-toolbar .button { background: rgba(255,255,255,0.02); border: none; padding: 6px 10px; border-radius: 6px; color: var(--text); }
+.tiptap-fallback { min-height: 200px; padding: 12px; background: #fff; color: #111; border-radius: 6px; border: 1px solid #e6edf3; }
+
 /* Responsive tweaks */
 @media (max-width:1000px){
   .dashboard-grid{grid-template-columns:1fr}
   .admin-sidebar{position:fixed;left:-320px;top:0;height:100%;z-index:80}
   .admin-sidebar.open{left:0}
   .form-grid{grid-template-columns:1fr}
+  .admin-shell{grid-template-columns: 1fr !important; grid-template-areas: "header" "main" "footer" !important;}
 }
 
 /* Accessibility helpers */

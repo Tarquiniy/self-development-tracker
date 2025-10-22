@@ -1,221 +1,287 @@
-{% extends "admin/change_form.html" %}."
-".{% load static %}
+{% extends "admin/base_site.html" %}
+{% load i18n static admin_urls %}
 
-
-{% load static i18n %}
+{# Change form with CKEditor5 integration + media-library hook #}
+{% block title %}{% if is_popup %}{% trans 'Изменить элемент' %}{% else %}{% trans 'Редактировать пост' %}{% endif %}{% endblock %}
 
 {% block extrahead %}
   {{ block.super }}
-  <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
-<script src="{% static 'admin/vendor/tiptap/tiptap-umd.js' %}"></script>
-<script src="{% static 'admin/js/sdr_tiptap_admin_extra.js' %}"></script>
-<link rel="stylesheet" href="{% static 'admin/css/sdr_tiptap_admin.css' %}">
+  {{ adminform.media }} {# подключаем media виджетов если есть #}
 
-  <script src="{% static 'admin/vendor/tiptap/tiptap-umd.js' %}"></script>
-<script src="{% static 'admin/js/sdr_tiptap_admin_extra.js' %}"></script>
-<link rel="stylesheet" href="{% static 'admin/css/sdr_tiptap_admin.css' %}">
+  {# CKEditor 5 Classic build (CDN). Если хочешь локально — замени на статический файл. #}
+  <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
 
   <style>
-    .tiptap-editor-container { border: 1px solid #e6edf3; border-radius: 6px; padding: 12px; min-height: 240px; background: #fff; }
-    .tiptap-toolbar { margin-bottom: 8px; }
-    .admin-media-btn { margin-left: .5rem; }
-    textarea[name="content"] { min-height: 220px; }
+    /* небольшие правки стилей для админ-формы */
+    .ck-editor__editable_inline { min-height: 260px; background: #fff; color: #111; border-radius:6px; padding:12px; }
+    .editor-wrapper { margin: 8px 0 16px 0; }
+    .media-button { margin-left: .5rem; }
   </style>
 {% endblock %}
 
-{% block submit_buttons_top %}
-  {{ block.super }}
-  <a href="{% url 'admin-media-library' %}" class="button admin-media-btn" onclick="openMediaLibrary(event)">
-    {% trans "Медиа библиотека" %}
-  </a>
+{% block content %}
+  <div class="change-form">
+    <div class="form-header">
+      <h1>{{ original|default:_('Новый пост') }}</h1>
+      <div class="form-actions">
+        <button type="button" class="btn" id="preview-btn">Предпросмотр</button>
+        <a class="btn btn-ghost" href="{% url 'admin:blog_post_changelist' %}">Отмена</a>
+        <a href="{% url 'admin-media-library' %}" class="btn btn-ghost media-button" id="open-media-lib" onclick="return openMediaLibrary(event)">Медиатека</a>
+      </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" novalidate class="nice-form">{% csrf_token %}
+      <div class="form-grid">
+        <div class="panel main-panel">
+          {% for fieldset in adminform %}
+            <fieldset class="fieldset">
+              {% if fieldset.name %}<legend>{{ fieldset.name }}</legend>{% endif %}
+              <div class="fieldset-grid">
+                {% for line in fieldset %}
+                  <div class="form-row">{{ line }}</div>
+                {% endfor %}
+              </div>
+            </fieldset>
+          {% endfor %}
+        </div>
+
+        <aside class="panel side-panel">
+          <div class="meta">
+            <h3>Опубликовать</h3>
+            {{ adminform.form.publish_status }}
+            <div class="field">
+              <label>Изображение</label>
+              {{ adminform.form.image }}
+              <div id="image-preview" class="image-preview"></div>
+            </div>
+            <div class="field">
+              {{ adminform.form.categories }}
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="form-footer">
+        <input type="submit" value="Сохранить" class="btn-primary">
+        <input type="submit" name="_continue" value="Сохранить и продолжить" class="btn">
+        <a class="btn btn-ghost" href="{% url 'admin:blog_post_changelist' %}">Вернуться</a>
+      </div>
+    </form>
+  </div>
 {% endblock %}
 
-{% block content %}
-  {{ block.super }}
+{% block extra_js %}
+<script>
+(function(){
+  // Конфигируемые endpoints (передайте в контекст шаблона если они другие)
+  const MEDIA_UPLOAD_URL = "{{ media_upload_url|default:'/api/media/upload/' }}";
+  const MEDIA_LIST_URL   = "{{ media_list_url|default:'/api/media/list/' }}";
 
-  <script>
-  (function () {
-    function qs(sel, root) { root = root || document; return root.querySelector(sel); }
+  // CSRF helper
+  function getCSRF() {
+    const el = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    return el ? el.value : null;
+  }
 
-    window.openMediaLibrary = function (e) {
-      try {
-        if (e && e.preventDefault) e.preventDefault();
-        var url = "{% url 'admin-media-library' %}";
-        window.open(url, "media_library", "width=1000,height=700,scrollbars=yes");
-      } catch (err) {
-        console.error('openMediaLibrary error', err);
-        alert("{% trans 'Не удалось открыть медиа библиотеку' %}");
-      }
-      return false;
+  // Мап редакторов, доступен глобально
+  window.editorMap = window.editorMap || {};
+
+  // Популярные имена полей, которые мы попытаемся превратить в CKEditor
+  const CANDIDATES = ['content', 'short_description', 'body', 'description', 'summary'];
+
+  // UploadAdapter для CKEditor (загружает файл на MEDIA_UPLOAD_URL и ожидает JSON {url: "..."})
+  class SupabaseUploadAdapter {
+    constructor(loader){
+      this.loader = loader;
+    }
+    upload() {
+      return this.loader.file.then(file => new Promise((resolve, reject) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        // Если требуется, можно добавить bucket/params здесь: fd.append('bucket', '...')
+
+        fetch(MEDIA_UPLOAD_URL, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'X-CSRFToken': getCSRF() || ''
+          },
+          body: fd
+        }).then(async res => {
+          if(!res.ok){
+            let text;
+            try { text = await res.text(); } catch(e){ text = res.statusText; }
+            reject(text || 'Upload failed');
+            return;
+          }
+          const json = await res.json();
+          // ожидаем { url: "https://..." }
+          if(json && json.url){
+            resolve({ default: json.url });
+          } else {
+            reject('Invalid upload response');
+          }
+        }).catch(err => reject(err.message || String(err)));
+      }));
+    }
+    abort() {
+      // optional: поддержка отмены
+    }
+  }
+
+  function SupabaseAdapterPlugin(editor) {
+    editor.plugins.get('FileRepository').createUploadAdapter = (loader) => {
+      return new SupabaseUploadAdapter(loader);
     };
+  }
 
-    window.__insertMediaToEditor = function (url) {
-      try {
-        var feat = qs('input[name="featured_image"]');
-        if (feat) { feat.value = url; }
-        var container = qs('.tiptap-editor-container');
-        if (container && container._tiptap_editor) {
-          try {
-            var editor = container._tiptap_editor;
-            if (editor && editor.chain) {
-              editor.chain().focus().setImage({ src: url }).run();
-              return true;
-            }
-          } catch (e) { }
+  // Инициализация CKEditor для найденных textarea
+  function initEditors() {
+    CANDIDATES.forEach(name => {
+      const ta = document.querySelector('textarea[name="' + name + '"]');
+      if(!ta) return;
+      // Если редактор уже инициализирован, пропустить
+      if(window.editorMap[name]) return;
+
+      ClassicEditor.create(ta, {
+        extraPlugins: [SupabaseAdapterPlugin],
+        toolbar: [
+          'heading','|',
+          'bold','italic','underline','strikethrough','|',
+          'link','bulletedList','numberedList','blockQuote','|',
+          'insertTable','mediaEmbed','imageUpload','|',
+          'undo','redo'
+        ],
+        language: 'ru',
+        image: {
+          toolbar: ['imageTextAlternative','imageStyle:inline','imageStyle:block','imageStyle:side']
         }
-        var ta = qs('textarea[name="content"]');
-        if (ta) {
-          ta.value = (ta.value || '') + "\n<img src='" + url + "' alt='' />\n";
+      }).then(editor => {
+        window.editorMap[name] = editor;
+        // при необходимости можно экспортировать для других скриптов
+      }).catch(err => console.error('CKEditor init error for', name, err));
+    });
+  }
+
+  // Попытаться инициализировать на DOMContentLoaded (админка может подгружать формы асинхронно)
+  document.addEventListener('DOMContentLoaded', initEditors);
+  // Также вызов через setTimeout + ready, на случай динамического рендера
+  setTimeout(initEditors, 600);
+
+  // Функция, которую медиабиблиотека вызывает для вставки изображения в активный редактор
+  window.__insertMediaToEditor = function(url, preferField){
+    try {
+      preferField = preferField || 'content';
+      if(window.editorMap && window.editorMap[preferField]){
+        const editor = window.editorMap[preferField];
+        // вставка изображения через модель (CKEditor5)
+        editor.model.change(writer => {
+          const imageElement = writer.createElement('image', { src: url });
+          editor.model.insertContent(imageElement, editor.model.document.selection);
+        });
+        return true;
+      }
+      // fallback: найдем любой редактор
+      for(const k in window.editorMap){
+        const ed = window.editorMap[k];
+        if(ed){
+          ed.model.change(writer => {
+            const imageElement = writer.createElement('image', { src: url });
+            ed.model.insertContent(imageElement, ed.model.document.selection);
+          });
           return true;
         }
-        return false;
-      } catch (err) {
-        console.error('insertMediaToEditor error', err);
-        return false;
       }
-    };
-
-    window.initAdminTipTap = function () {
-      try {
-        var textarea = qs('textarea[name="content"]');
-        if (!textarea) return;
-        if (textarea.dataset.tiptapInitialized) return;
-        textarea.dataset.tiptapInitialized = '1';
-        textarea.style.display = 'none';
-        var wrapper = document.createElement('div');
-        wrapper.className = 'tiptap-editor-wrapper';
-        var toolbar = document.createElement('div');
-        toolbar.className = 'tiptap-toolbar';
-        var editorContainer = document.createElement('div');
-        editorContainer.className = 'tiptap-editor-container';
-        wrapper.appendChild(toolbar);
-        wrapper.appendChild(editorContainer);
-        textarea.parentNode.insertBefore(wrapper, textarea.nextSibling);
-
-        var contentJson = qs('input[name="content_json"]');
-        if (!contentJson) {
-          contentJson = document.createElement('input');
-          contentJson.type = 'hidden';
-          contentJson.name = 'content_json';
-          textarea.parentNode.insertBefore(contentJson, wrapper.nextSibling);
-        }
-
-        var TipTapCore = window['@tiptap/core'] || window.tiptapCore || window.tiptap || null;
-        var StarterKit = window['@tiptap/starter-kit'] || window.tiptapStarterKit || null;
-        var Editor = null, Starter = null;
-        try {
-          if (TipTapCore && (TipTapCore.Editor || (TipTapCore.default && TipTapCore.default.Editor))) {
-            Editor = TipTapCore.Editor || (TipTapCore.default && TipTapCore.default.Editor);
-          }
-          if (StarterKit && (StarterKit.StarterKit || StarterKit.default || typeof StarterKit === 'function')) {
-            Starter = StarterKit.StarterKit || StarterKit.default || StarterKit;
-          }
-        } catch (e) {}
-
-        if (!Editor || !Starter) {
-          console.warn('TipTap not available — falling back to simple contentEditable');
-          textarea.style.display = '';
-          try {
-            var fallback = document.createElement('div');
-            fallback.className = 'tiptap-fallback';
-            fallback.contentEditable = true;
-            fallback.innerHTML = textarea.value || '';
-            fallback.addEventListener('input', function () { textarea.value = fallback.innerHTML; });
-            editorContainer.appendChild(fallback);
-          } catch (err) { console.error('fallback editor init failed', err); }
-          return;
-        }
-
-        var extensions = [];
-        try {
-          var ImgExt = window['@tiptap/extension-image'] || window.tiptapImage || null;
-          if (ImgExt && (ImgExt.Image || ImgExt.default || typeof ImgExt === 'function')) {
-            extensions.push(ImgExt.Image || ImgExt.default || ImgExt);
-          }
-        } catch (e) {}
-        try {
-          var LinkExt = window['@tiptap/extension-link'] || window.tiptapLink || null;
-          if (LinkExt && (LinkExt.Link || LinkExt.default || typeof LinkExt === 'function')) {
-            extensions.push(LinkExt.Link || LinkExt.default || LinkExt);
-          }
-        } catch (e) {}
-
-        var editor = null;
-        try {
-          editor = new Editor({
-            element: editorContainer,
-            extensions: [ (Starter.configure ? Starter.configure() : Starter) ].concat(extensions),
-            content: textarea.value || '',
-            onUpdate: function (props) {
-              try {
-                if (props && props.editor && typeof props.editor.getHTML === 'function') {
-                  editorContainer._current_html = props.editor.getHTML();
-                }
-              } catch (e) { }
-            }
-          });
-          editorContainer._tiptap_editor = editor;
-        } catch (err) {
-          console.error('Failed to instantiate TipTap editor', err);
-          textarea.style.display = '';
-          return;
-        }
-
-        function makeBtn(label, onClick) {
-          var b = document.createElement('button');
-          b.type = 'button';
-          b.className = 'button';
-          b.style.marginRight = '6px';
-          b.textContent = label;
-          b.addEventListener('click', onClick);
-          toolbar.appendChild(b);
-          return b;
-        }
-
-        makeBtn('B', function () { try { editor.chain().focus().toggleBold().run(); } catch (e) {} });
-        makeBtn('I', function () { try { editor.chain().focus().toggleItalic().run(); } catch (e) {} });
-        makeBtn('H2', function () { try { editor.chain().focus().toggleHeading({ level: 2 }).run(); } catch (e) {} });
-        makeBtn('{code}', function () { try { editor.chain().focus().toggleCodeBlock().run(); } catch (e) {} });
-        makeBtn('Image', function () { openMediaLibrary(); });
-        makeBtn('Preview', function () {
-          try {
-            var w = window.open('', '_blank');
-            if (w) {
-              w.document.write('<!doctype html><meta charset="utf-8"><title>Preview</title>');
-              w.document.body.innerHTML = editor.getHTML();
-              w.document.close();
-            } else { alert('{% trans "Пожалуйста, разрешите всплывающие окна для предпросмотра" %}'); }
-          } catch (e) { console.error(e); }
-        });
-
-        var form = textarea.closest('form');
-        if (form) {
-          form.addEventListener('submit', function () {
-            try {
-              var html = (editor && typeof editor.getHTML === 'function') ? editor.getHTML() : (editorContainer._current_html || '');
-              var json = (editor && typeof editor.getJSON === 'function') ? editor.getJSON() : null;
-              textarea.value = html || textarea.value;
-              try { contentJson.value = JSON.stringify(json || {}); } catch (e) { contentJson.value = ''; }
-            } catch (e) { console.error('Sync on submit failed', e); }
-          }, { passive: true });
-        }
-
-      } catch (err) {
-        console.error('initAdminTipTap error', err);
-        try { var ta = qs('textarea[name="content"]'); if (ta) ta.style.display = ''; } catch (_) {}
+      // fallback: вставка в textarea
+      const ta = document.querySelector('textarea[name="'+preferField+'"]') || document.querySelector('textarea');
+      if(ta){
+        ta.value = (ta.value || '') + "\\n<img src='" + url + "' alt=''/>\\n";
+        return true;
       }
-    };
+    } catch(e){
+      console.warn('insertMediaToEditor failed', e);
+    }
+    return false;
+  };
 
-    document.addEventListener('DOMContentLoaded', function () {
-      try {
-        if (typeof window.initAdminTipTap === 'function') {
-          window.initAdminTipTap();
-        } else {
-          if (window.initAdminTipTap) try { window.initAdminTipTap(); } catch (e) { console.error(e); }
-        }
-      } catch (e) { console.error(e); }
+  // Кнопка "Медиатека" (открывает твой маршрут admin-media-library в popup)
+  window.openMediaLibrary = function(e){
+    try {
+      if(e && e.preventDefault) e.preventDefault();
+      const url = "{% url 'admin-media-library' %}";
+      window.open(url, "media_library", "width=1000,height=700,scrollbars=yes");
+    } catch(err){
+      console.error('openMediaLibrary error', err);
+      alert("{% trans 'Не удалось открыть медиа библиотеку' %}");
+    }
+    return false;
+  };
+
+  // Предпросмотр: собираем данные из редакторов (если есть) и открываем новое окно с HTML
+  const previewBtn = document.getElementById('preview-btn');
+  if(previewBtn){
+    previewBtn.addEventListener('click', function(){
+      const form = document.querySelector('form.nice-form');
+      if(!form) return;
+      const title = (form.querySelector('[name=title]') || {}).value || '';
+      // соберём контент: prefer 'content'
+      let content = '';
+      if(window.editorMap['content']) content = window.editorMap['content'].getData();
+      else {
+        const ta = form.querySelector('textarea[name="content"]');
+        content = ta ? ta.value : '';
+      }
+      let short = '';
+      if(window.editorMap['short_description']) short = window.editorMap['short_description'].getData();
+      else {
+        const ta2 = form.querySelector('textarea[name="short_description"]');
+        short = ta2 ? ta2.value : '';
+      }
+
+      const w = window.open('', '_blank');
+      const html = `
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Предпросмотр — ${escapeHtml(title)}</title>
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
+          </head>
+          <body>
+            <article class="container preview-article">
+              <h1>${escapeHtml(title)}</h1>
+              <section class="preview-short">${short}</section>
+              <section class="preview-content">${content}</section>
+            </article>
+          </body>
+        </html>`;
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
     });
+  }
 
-  })();
-  </script>
+  function escapeHtml(s){
+    return (s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+  }
+
+  // Перед отправкой формы — синхронизируем содержимое редакторов в соответствующие textarea
+  document.addEventListener('submit', function(e){
+    const form = e.target;
+    if(!(form && form.matches && form.matches('form.nice-form'))) return;
+    try {
+      for(const name of CANDIDATES){
+        if(window.editorMap[name]){
+          const ta = form.querySelector('textarea[name="'+name+'"]');
+          if(ta){
+            ta.value = window.editorMap[name].getData();
+          }
+        }
+      }
+    } catch(err){ console.warn('sync editors before submit failed', err); }
+  }, true);
+
+})();
+</script>
 {% endblock %}
