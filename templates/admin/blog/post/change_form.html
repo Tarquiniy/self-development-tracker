@@ -1,213 +1,270 @@
-{% extends "admin/base_site.html" %}
+{% extends "admin/change_form.html" %}
 {% load i18n static admin_urls %}
 
-{# Clean CKEditor5 integration for Post change form #}
-{% block title %}{% if is_popup %}{% trans 'Изменить элемент' %}{% else %}{% trans 'Редактировать пост' %}{% endif %}{% endblock %}
+{# 
+  Чистая интеграция CKEditor5 в стандартную форму админки.
+  - Расширяем стандартный admin/change_form.html (чтобы поля корректно рендерились).
+  - Подключаем CKEditor Classic (CDN). Если CDN запрещён — скажите, подготовлю локальный билд.
+  - Инициализируем редакторы для популярных имён полей: content, short_description и т.д.
+  - Реализуем контракт: window.__insertMediaToEditor(url) — медиапопап должен вызвать window.opener.__insertMediaToEditor(url)
+#}
 
 {% block extrahead %}
   {{ block.super }}
-  {{ adminform.media }} {# подключим media из формы, если есть #}
+  {{ adminform.media }}
 
-  {# CKEditor5 Classic (CDN). Если у тебя запрещён CDN, скажи — подготовлю локальную сборку. #}
+  <!-- CKEditor 5 Classic (CDN) -->
   <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
 
   <style>
-    .ck-editor__editable_inline { min-height: 260px; background: #fff; color: #111; border-radius:6px; padding:12px; }
-    .editor-wrapper { margin: 8px 0 16px 0; }
-    .media-button { margin-left: .5rem; }
-    .preview-article { padding: 24px; max-width: 900px; margin: 0 auto; }
+    /* Light theme adjustments for admin change form */
+    :root{
+      --ui-bg:#ffffff;
+      --panel:#ffffff;
+      --muted:#6b7280;
+      --accent:#2563eb;
+      --surface:#f8fafc;
+      --text:#0f1724;
+      --card-border:#e6eef3;
+      --radius:8px;
+      --gap:16px;
+    }
+
+    /* override some admin layout pieces to match our layout */
+    body {
+      background: var(--ui-bg);
+      color: var(--text);
+    }
+
+    /* main container padding */
+    .container {
+      padding: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* ensure admin header/sidebar stay visible but light */
+    .admin-header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--card-border);
+      color: var(--text);
+    }
+    .admin-sidebar {
+      background: #fafafa;
+      border-right: 1px solid var(--card-border);
+      color: var(--text);
+    }
+
+    /* Form panels (light cards) */
+    .panel, .module, .fieldset {
+      background: var(--panel);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 12px;
+      box-shadow: none;
+      color: var(--text);
+    }
+
+    /* field rows */
+    .form-row, .form-row * {
+      color: var(--text);
+    }
+
+    /* inputs, selects, textarea */
+    input, textarea, select {
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+
+    /* CKEditor editable area (light) */
+    .ck-editor__editable_inline {
+      min-height: 260px;
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    /* buttons */
+    .btn, input[type="submit"], .button {
+      border-radius: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--card-border);
+      background: #fff;
+      color: var(--text);
+    }
+    .btn-primary {
+      background: linear-gradient(90deg, var(--accent), #06b6d4);
+      color: #fff;
+      border: none;
+    }
+
+    /* misc small helpers */
+    .image-preview img { max-width: 100%; height: auto; display:block; border-radius:6px; }
+    .fieldset-grid { display: grid; gap: 12px; }
+    @media (max-width: 1000px) {
+      .form-grid { grid-template-columns: 1fr !important; }
+    }
   </style>
 {% endblock %}
 
 {% block content %}
-  <div class="change-form">
-    <div class="form-header">
-      <h1>{{ original|default:_('Новый пост') }}</h1>
-      <div class="form-actions">
-        <button type="button" class="btn" id="preview-btn">Предпросмотр</button>
-        <a class="btn btn-ghost" href="{% url 'admin:blog_post_changelist' %}">Отмена</a>
-        <a href="{% url 'admin-media-library' %}" class="btn btn-ghost media-button" id="open-media-lib" onclick="return openMediaLibrary(event)">Медиатека</a>
-      </div>
-    </div>
-
-    <form method="post" enctype="multipart/form-data" novalidate class="nice-form">{% csrf_token %}
-      <div class="form-grid">
-        <div class="panel main-panel">
-          {% for fieldset in adminform %}
-            <fieldset class="fieldset">
-              {% if fieldset.name %}<legend>{{ fieldset.name }}</legend>{% endif %}
-              <div class="fieldset-grid">
-                {% for line in fieldset %}
-                  <div class="form-row">{{ line }}</div>
-                {% endfor %}
-              </div>
-            </fieldset>
-          {% endfor %}
-        </div>
-
-        <aside class="panel side-panel">
-          <div class="meta">
-            <h3>Опубликовать</h3>
-            {{ adminform.form.publish_status }}
-            <div class="field">
-              <label>Изображение</label>
-              {{ adminform.form.image }}
-              <div id="image-preview" class="image-preview"></div>
-            </div>
-            <div class="field">
-              {{ adminform.form.categories }}
-            </div>
-          </div>
-        </aside>
-      </div>
-
-      <div class="form-footer">
-        <input type="submit" value="Сохранить" class="btn-primary">
-        <input type="submit" name="_continue" value="Сохранить и продолжить" class="btn">
-        <a class="btn btn-ghost" href="{% url 'admin:blog_post_changelist' %}">Вернуться</a>
-      </div>
-    </form>
-  </div>
+  {# Используем стандартный рендер формы админки — это гарантирует, что поля будут показываться корректно #}
+  {{ block.super }}
 {% endblock %}
 
 {% block extra_js %}
-<script>
-(function(){
-  // значения можно подставить из extra_context в admin.py (мы добавили media_upload_url/media_list_url туда)
-  const MEDIA_UPLOAD_URL = "{{ media_upload_url|default:'/api/media/upload/' }}";
-  const MEDIA_LIST_URL   = "{{ media_list_url|default:'/api/media/list/' }}";
+  {{ block.super }}
 
-  function getCSRF(){
-    const el = document.querySelector('input[name="csrfmiddlewaretoken"]');
-    return el ? el.value : null;
-  }
+  <script>
+  (function(){
+    // Подстраиваемые URLs (если хотите — можете передавать из admin.changeform_view)
+    const MEDIA_UPLOAD_URL = "{{ media_upload_url|default:'/api/media/upload/' }}";
+    const MEDIA_LIST_URL   = "{{ media_list_url|default:'/api/media/list/' }}";
 
-  // карта редакторов
-  window.editorMap = window.editorMap || {};
-  let lastFocusedEditorName = null;
+    // CSRF token getter
+    function getCSRF(){
+      const el = document.querySelector('input[name="csrfmiddlewaretoken"]');
+      return el ? el.value : null;
+    }
 
-  // имена полей, которые будем превращать в CKEditor
-  const CANDIDATES = ['content','short_description','body','description','summary'];
+    // глобальная карта редакторов (имя поля -> instance)
+    window.editorMap = window.editorMap || {};
+    let lastFocusedEditorName = null;
 
-  // Инициализация CKEditor для найденных textarea
-  function initCKEditors(){
-    CANDIDATES.forEach(name => {
-      const ta = document.querySelector('textarea[name="'+name+'"]');
-      if(!ta) return;
-      if(window.editorMap[name]) return; // уже инициализирован
+    // имена полей, для которых надо подключить CKEditor
+    const CANDIDATES = ['content','short_description','body','description','summary'];
 
-      // Создаём редактор **без** встроенного imageUpload, чтобы не требовать upload-endpoint.
-      ClassicEditor.create(ta, {
-        toolbar: [
-          'heading','|','bold','italic','underline','strikethrough','|',
-          'link','bulletedList','numberedList','blockQuote','|',
-          'insertTable','mediaEmbed','|','undo','redo'
-        ],
-        language: 'ru'
-      }).then(editor => {
-        window.editorMap[name] = editor;
-        // track focus
-        editor.model.document.on('change:data', () => {
-          // nothing — data changed
-        });
-        editor.editing.view.document.on('focus', () => { lastFocusedEditorName = name; });
-      }).catch(err => console.error('CKEditor init error for', name, err));
-    });
-  }
+    // инициализация редакторов для найденных textarea
+    function initEditors(){
+      CANDIDATES.forEach(function(name){
+        const ta = document.querySelector('textarea[name="'+name+'"]');
+        if(!ta) return;
+        if(window.editorMap[name]) return; // уже создан
 
-  // init on DOM ready and shortly after (admin may render fields late)
-  document.addEventListener('DOMContentLoaded', initCKEditors);
-  setTimeout(initCKEditors, 600);
+        ClassicEditor
+          .create(ta, {
+            toolbar: [
+              'heading','|','bold','italic','underline','strikethrough','|',
+              'link','bulletedList','numberedList','blockQuote','|',
+              'insertTable','mediaEmbed','imageUpload','|','undo','redo'
+            ],
+            language: 'ru'
+          })
+          .then(editor => {
+            window.editorMap[name] = editor;
+            editor.editing.view.document.on('focus', () => { lastFocusedEditorName = name; });
+          })
+          .catch(error => {
+            console.error('CKEditor init error for', name, error);
+          });
+      });
+    }
 
-  // контракт: медиапопап вызывает эту функцию у opener'а
-  // window.opener.__insertMediaToEditor(url) — popup должен вызвать так
-  window.__insertMediaToEditor = function(url, preferField){
-    try {
-      preferField = preferField || lastFocusedEditorName || 'content';
-      // preferred by name
-      if(window.editorMap && window.editorMap[preferField]){
-        const editor = window.editorMap[preferField];
-        editor.model.change(writer => {
-          const imageElement = writer.createElement('image', { src: url });
-          editor.model.insertContent(imageElement, editor.model.document.selection);
-        });
-        return true;
-      }
-      // fallback: any editor
-      for(const k in window.editorMap){
-        const ed = window.editorMap[k];
-        if(ed){
+    // вызовы инициализации
+    document.addEventListener('DOMContentLoaded', initEditors);
+    // На случай, если админка подгружает форму динамически
+    setTimeout(initEditors, 700);
+
+    // Контракт с медиатекой: popup вызывает window.opener.__insertMediaToEditor(url)
+    window.__insertMediaToEditor = function(url, preferField){
+      try {
+        preferField = preferField || lastFocusedEditorName || 'content';
+        // если есть editor по имени — вставим туда
+        if(window.editorMap && window.editorMap[preferField]){
+          const ed = window.editorMap[preferField];
           ed.model.change(writer => {
             const imageElement = writer.createElement('image', { src: url });
             ed.model.insertContent(imageElement, ed.model.document.selection);
           });
           return true;
         }
+        // иначе вставим в любой доступный редактор
+        for(const k in window.editorMap){
+          const ed = window.editorMap[k];
+          if(ed){
+            ed.model.change(writer => {
+              const imageElement = writer.createElement('image', { src: url });
+              ed.model.insertContent(imageElement, ed.model.document.selection);
+            });
+            return true;
+          }
+        }
+        // fallback: вставим тэг в textarea
+        const ta = document.querySelector('textarea[name="'+preferField+'"]') || document.querySelector('textarea');
+        if(ta){
+          ta.value = (ta.value || '') + "\\n<img src='" + url + "' alt=''/>\\n";
+          return true;
+        }
+      } catch(e){ console.warn('insertMediaToEditor failed', e); }
+      return false;
+    };
+
+    // Открыть медиабиблиотеку (popup)
+    window.openMediaLibrary = function(e){
+      try {
+        if(e && e.preventDefault) e.preventDefault();
+        const url = "{% url 'admin-media-library' %}";
+        window.open(url, "media_library", "width=1000,height=700,scrollbars=yes");
+      } catch(err){
+        console.error('openMediaLibrary error', err);
+        alert("{% trans 'Не удалось открыть медиа библиотеку' %}");
       }
-      // fallback: plain textarea
-      const ta = document.querySelector('textarea[name="'+(preferField||'content')+'"]') || document.querySelector('textarea');
-      if(ta){ ta.value = (ta.value || '') + "\\n<img src='" + url + "' alt=''/>\\n"; return true; }
-    } catch(e){ console.warn('insertMediaToEditor failed', e); }
-    return false;
-  };
+      return false;
+    };
 
-  // open media library popup
-  window.openMediaLibrary = function(e){
-    try {
-      if(e && e.preventDefault) e.preventDefault();
-      const url = "{% url 'admin-media-library' %}";
-      window.open(url, "media_library", "width=1000,height=700,scrollbars=yes");
-    } catch(err) {
-      console.error('openMediaLibrary error', err);
-      alert("{% trans 'Не удалось открыть медиа библиотеку' %}");
+    // Предпросмотр: собираем данные (из CKEditor или textarea) и открываем новое окно
+    function getEditorDataOrTextarea(form, name){
+      if(window.editorMap[name]) return window.editorMap[name].getData();
+      const ta = form.querySelector('textarea[name="'+name+'"]');
+      return ta ? ta.value : '';
     }
-    return false;
-  };
 
-  // preview — собираем данные и показываем
-  const previewBtn = document.getElementById('preview-btn');
-  if(previewBtn){
-    previewBtn.addEventListener('click', function(){
-      const form = document.querySelector('form.nice-form');
+    document.addEventListener('click', function(e){
+      const previewBtn = e.target.closest('#preview-btn, .preview-btn, .button-preview');
+      if(!previewBtn) return;
+      const form = document.querySelector('form');
       if(!form) return;
       const title = (form.querySelector('[name=title]') || {}).value || '';
-      let content = '';
-      if(window.editorMap['content']) content = window.editorMap['content'].getData();
-      else { const t = form.querySelector('textarea[name="content"]'); content = t ? t.value : ''; }
-      let short = '';
-      if(window.editorMap['short_description']) short = window.editorMap['short_description'].getData();
-      else { const s = form.querySelector('textarea[name="short_description"]'); short = s ? s.value : ''; }
+      const content = getEditorDataOrTextarea(form, 'content');
+      const short = getEditorDataOrTextarea(form, 'short_description');
 
       const w = window.open('', '_blank');
       const html = `
-        <!doctype html><html><head><meta charset="utf-8"><title>Предпросмотр — ${escapeHtml(title)}</title>
+        <!doctype html>
+        <html>
+        <head><meta charset="utf-8"><title>Предпросмотр — ${escapeHtml(title)}</title>
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
-        </head><body><article class="container preview-article">
+        </head>
+        <body><article class="container preview-article">
         <h1>${escapeHtml(title)}</h1>
         <section class="preview-short">${short}</section>
         <section class="preview-content">${content}</section>
         </article></body></html>`;
       w.document.open(); w.document.write(html); w.document.close();
-    });
-  }
+      e.preventDefault();
+    }, true);
 
-  function escapeHtml(s){ return (s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+    function escapeHtml(s){ return (s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
 
-  // Перед отправкой формы — синхронизируем содержимое редакторов в textarea
-  document.addEventListener('submit', function(e){
-    const form = e.target;
-    if(!(form && form.matches && form.matches('form.nice-form'))) return;
-    try {
-      for(const name of CANDIDATES){
-        if(window.editorMap[name]){
-          const ta = form.querySelector('textarea[name="'+name+'"]');
-          if(ta){ ta.value = window.editorMap[name].getData(); }
-        }
-      }
-    } catch(err){ console.warn('sync editors before submit failed', err); }
-  }, true);
-
-})();
-</script>
+    // Перед submit синхронизируем редакторы -> textarea, чтобы Django получил html
+    document.addEventListener('submit', function(e){
+      const form = e.target;
+      if(!(form && form.matches && form.matches('form'))) return;
+      try {
+        CANDIDATES.forEach(name => {
+          if(window.editorMap[name]){
+            const ta = form.querySelector('textarea[name="'+name+'"]');
+            if(ta) ta.value = window.editorMap[name].getData();
+          }
+        });
+      } catch(err){ console.warn('sync editors before submit failed', err); }
+    }, true);
+  })();
+  </script>
 {% endblock %}
