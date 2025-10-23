@@ -1,85 +1,25 @@
 {% extends "admin/change_form.html" %}
-{% load static i18n %}
+{% load i18n static admin_urls %}
 
 {% block extrahead %}
   {{ block.super }}
-  <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
+  {{ adminform.media }}
+  <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
   <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
   <style>
-    /* Локальные критичные правки для корректного рендеринга страницы редактирования */
-    :root { --pt-maxw:1200px; --pt-sidebar-w:360px; --pt-gap:18px; }
-
-    /* Центрируем содержимое и запрещаем горизонтальный скролл */
-    .post-editor-modern {
-      max-width: var(--pt-maxw);
-      margin: 12px auto;
-      padding: 0 16px;
-      box-sizing: border-box;
-      overflow-x: hidden;
-    }
-
-    /* Header: разделяем заголовок и панель действий на разные зоны */
-    .editor-header { margin-bottom: 16px; }
-    .header-content {
-      display:flex;
-      align-items:center;
-      gap:12px;
-      width:100%;
-      box-sizing:border-box;
-    }
-    .header-title { flex: 1 1 auto; min-width: 0; }
-    .header-actions {
-      flex: 0 0 auto;
-      display:flex;
-      gap:10px;
-      align-items:center;
-      justify-content:flex-end;
-      white-space:nowrap;
-      box-sizing:border-box;
-    }
-
-    /* Если кнопки не помещаются — они переносятся и не наслаиваются */
-    .header-actions { flex-wrap:wrap; }
-    .header-actions .btn { margin:0; }
-
-    /* Сетка: основная колонка + правая панель фиксированной ширины */
-    .editor-main {
-      display:grid;
-      grid-template-columns: 1fr var(--pt-sidebar-w);
-      gap: var(--pt-gap);
-      align-items:start;
-      width:100%;
-      box-sizing:border-box;
-    }
-
-    /* Защита от выхода правой колонки за экран */
-    aside { width: var(--pt-sidebar-w); min-width: 240px; box-sizing:border-box; }
-
-    /* Карточки: фиксируем padding и бордер */
-    .editor-card { background:#fff; border-radius:10px; padding:14px; box-sizing:border-box; border:1px solid rgba(11,17,32,0.04); }
-
-    /* Поля: гарантируем видимость текста и фон */
-    input, textarea, select { background:#fff !important; color:#0f172a !important; }
-
-    /* Кнопки: явный стиль, чтобы не наследовался белый текст на белом фоне */
-    .btn { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:8px; border:1px solid rgba(11,17,32,0.06); background:#f8fafc; color:#0f172a; font-weight:600; cursor:pointer; text-decoration:none; }
-    .btn-primary { background:#0b5fff; color:#fff; border-color:#0846d8; box-shadow:0 6px 18px rgba(11,85,255,0.12); }
-
-    /* Принудительно не даём элементам выходить за контейнер */
-    .post-editor-modern *, .post-editor-modern img, .post-editor-modern iframe { max-width:100%; }
-
-    /* Мелкие утилиты */
-    .char-counter { text-align:right; font-size:12px; color:#6b7280; margin-top:6px; }
-
-    /* Responsive: на маленьких экранах правая панель переходит под контент */
-    @media (max-width: 1024px) {
-      .editor-main { grid-template-columns: 1fr; }
-      aside { width:100%; }
-      .header-actions { justify-content:flex-start; }
-    }
-
-    /* Если админский JS/виджеты задают position:fixed для кнопок — понижаем приоритет */
-    .submit-row, .header-actions { position:relative !important; z-index:2; }
+    /* локальные правки — оставляем вашу стилистику */
+    :root{ --pt-maxw:1200px; --pt-sidebar-w:360px; --pt-gap:18px; }
+    .post-editor-modern { max-width:var(--pt-maxw); margin:12px auto; padding:0 16px; box-sizing:border-box; overflow-x:hidden; color:#0f1724; }
+    .header-content{display:flex;align-items:center;gap:12px;width:100%}
+    .header-title{flex:1 1 auto;min-width:0}
+    .header-actions{display:flex;gap:10px;align-items:center;justify-content:flex-end;white-space:nowrap;flex-wrap:wrap}
+    .editor-main{display:grid;grid-template-columns:1fr var(--pt-sidebar-w);gap:var(--pt-gap);align-items:start;width:100%}
+    aside{width:var(--pt-sidebar-w);min-width:240px;box-sizing:border-box}
+    .editor-card{background:#fff;border-radius:10px;padding:14px;box-sizing:border-box;border:1px solid rgba(11,17,32,0.04)}
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;border:1px solid rgba(11,17,32,0.06);background:#f8fafc;color:#0f172a;font-weight:600;cursor:pointer;text-decoration:none}
+    .btn-primary{background:#0b5fff;color:#fff;border-color:#0846d8;box-shadow:0 6px 18px rgba(11,85,255,0.12)}
+    .char-counter{ text-align:right;font-size:12px;color:#6b7280;margin-top:6px; }
+    @media (max-width:1024px){ .editor-main{grid-template-columns:1fr} aside{width:100%} .header-actions{justify-content:flex-start} }
   </style>
 {% endblock %}
 
@@ -94,10 +34,9 @@
       </div>
 
       <div class="header-actions" role="toolbar" aria-label="Действия">
-        {# кнопки располагаются в header-actions; не используем отдельную форму, чтобы избежать дублирования POST #}
         <button type="button" class="btn btn-primary" id="pt-save-btn">💾 Сохранить</button>
         <button type="button" class="btn" id="pt-continue-btn">🔄 Сохранить и продолжить</button>
-        <a href="{% url 'admin:app_list' 'blog' %}" class="btn" title="Назад">← Назад</a>
+        <a href="{% url 'admin:blog_post_changelist' %}" class="btn" title="Назад">← Назад</a>
       </div>
     </div>
   </header>
@@ -148,18 +87,19 @@
         <div class="editor-card" style="margin-bottom:14px;">
           <h3 style="margin:0 0 8px 0;">🏷️ Классификация</h3>
           <div style="margin-bottom:8px;">{{ adminform.form.categories.label_tag }}{{ adminform.form.categories }}</div>
-          <div style="margin-bottom:8px;">{{ adminform.form.tags.label_tag }}{{ adminform.form.tags }}</div>
+          <div style="margin:0 0 8px 0;">{{ adminform.form.tags.label_tag }}{{ adminform.form.tags }}</div>
         </div>
 
         <div class="editor-card">
           <h3 style="margin:0 0 8px 0;">⚡ Быстрые действия</h3>
           <button type="button" id="preview-btn" class="btn" style="width:100%;margin-bottom:8px;">👁️ Предпросмотр</button>
           <button type="button" id="fill-meta" class="btn" style="width:100%;">📝 Заполнить SEO</button>
+          <a href="{% url 'admin-media-library' %}" class="btn" onclick="return openMediaLibrary(event)" style="width:100%;margin-top:8px;">🖼️ Медиатека</a>
         </div>
       </aside>
     </div>
 
-    {# Скрытые поля Django #}
+    {# Скрытые поля Django и inline-формы — обязательно рендерим #}
     {% for field in adminform.form.hidden_fields %}{{ field }}{% endfor %}
     {% for inline in inline_admin_formsets %}{{ inline }}{% endfor %}
   </form>
@@ -170,52 +110,112 @@
 {{ block.super }}
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-  var form = document.getElementById('post_form');
-  if (!form) return;
+  const CANDIDATES = ['content','excerpt','short_description','body','description','summary'];
+  const MEDIA_UPLOAD_URL = "{{ media_upload_url|default:'' }}";
+  window.editorMap = window.editorMap || {};
 
-  function submitWithFlag(name){
-    var inp = document.createElement('input'); inp.type='hidden'; inp.name=name; inp.value='1';
+  function initEditors(){
+    CANDIDATES.forEach(name=>{
+      const ta = document.querySelector('textarea[name="'+name+'"]');
+      if(!ta) return;
+      if(window.editorMap[name]) return;
+      const config = { language: 'ru', toolbar: [ 'heading','|','bold','italic','link','bulletedList','numberedList','blockQuote','insertTable','imageUpload','mediaEmbed','undo','redo' ] };
+      if(MEDIA_UPLOAD_URL){
+        class SimpleUploadAdapter { constructor(loader){ this.loader = loader } upload(){ return this.loader.file.then(file=>new Promise((resolve,reject)=>{ const fd=new FormData(); fd.append('file',file); fetch(MEDIA_UPLOAD_URL,{ method:'POST', credentials:'same-origin', headers:{ 'X-CSRFToken': (document.querySelector('input[name=csrfmiddlewaretoken]')||{}).value||'' }, body: fd }).then(async r=>{ if(!r.ok){ reject(await r.text().catch(()=>r.statusText)); return } const j=await r.json().catch(()=>null); if(j && j.url) resolve({ default: j.url }); else reject('Invalid upload response'); }).catch(err=>reject(err.message||String(err))); })) } abort(){} }
+        config.extraPlugins = [ editor => { editor.plugins.get('FileRepository').createUploadAdapter = loader => new SimpleUploadAdapter(loader); } ];
+      }
+      ClassicEditor.create(ta, config).then(editor=>{ window.editorMap[name] = editor; editor.editing.view.document.on('focus', ()=> window._last_focused_editor = name ); }).catch(e=>console.error('CKEditor init error', e));
+    });
+  }
+  initEditors();
+  setTimeout(initEditors, 800);
+
+  window.__insertMediaToEditor = function(url, preferField){
+    try {
+      preferField = preferField || window._last_focused_editor || 'content';
+      if(window.editorMap[preferField]){
+        const ed = window.editorMap[preferField];
+        ed.model.change(writer => {
+          const imageElem = writer.createElement('image', { src: url });
+          ed.model.insertContent(imageElem, ed.model.document.selection);
+        });
+        return true;
+      }
+      for(const k in window.editorMap){
+        const ed = window.editorMap[k];
+        if(ed){ ed.model.change(writer=>{ const imageElem = writer.createElement('image', { src: url }); ed.model.insertContent(imageElem, ed.model.document.selection); }); return true; }
+      }
+      const ta = document.querySelector('textarea[name="'+preferField+'"]') || document.querySelector('textarea');
+      if(ta){ ta.value = (ta.value||'') + "\\n<img src='" + url + "' alt=''/>\\n"; return true; }
+    } catch(e){ console.warn(e); }
+    return false;
+  };
+
+  window.openMediaLibrary = function(e){ try{ if(e && e.preventDefault) e.preventDefault(); window.open("{% url 'admin-media-library' %}", "media_library", "width=1000,height=700,scrollbars=yes"); } catch(e){ console.error(e); alert('{% trans "Не удалось открыть медиатеку" %}'); } return false; };
+
+  function syncEditorsToTextarea(){
+    const form = document.getElementById('post_form');
+    if(!form) return;
+    try {
+      for(const name of CANDIDATES){
+        if(window.editorMap[name]){
+          const ta = form.querySelector('textarea[name="'+name+'"]');
+          if(ta) ta.value = window.editorMap[name].getData();
+        }
+      }
+    } catch(e){ console.warn('sync failed', e); }
+  }
+
+  function submitWithFlag(flagName){
+    syncEditorsToTextarea();
+    const form = document.getElementById('post_form');
+    if(!form) return;
+    const inp = document.createElement('input'); inp.type='hidden'; inp.name=flagName; inp.value='1';
     form.appendChild(inp);
     form.submit();
   }
 
-  var saveBtn = document.getElementById('pt-save-btn');
-  var contBtn = document.getElementById('pt-continue-btn');
-  if (saveBtn) saveBtn.addEventListener('click', function(){ submitWithFlag('_save'); });
-  if (contBtn) contBtn.addEventListener('click', function(){ submitWithFlag('_continue'); });
+  const saveBtn = document.getElementById('pt-save-btn');
+  const contBtn = document.getElementById('pt-continue-btn');
+  if(saveBtn) saveBtn.addEventListener('click', ()=> submitWithFlag('_save'));
+  if(contBtn) contBtn.addEventListener('click', ()=> submitWithFlag('_continue'));
 
-  var gen = document.getElementById('generate-slug');
-  var title = document.getElementById('id_title');
-  var slug = document.getElementById('id_slug');
-  if (gen && title && slug) gen.addEventListener('click', function(){
-    var s = title.value.toLowerCase().replace(/[^\w\s-]/g,'').replace(/[\s_-]+/g,'-').replace(/^-+|-+$/g,'').substring(0,60);
-    slug.value = s;
+  const gen = document.getElementById('generate-slug');
+  const titleEl = document.getElementById('id_title');
+  const slugEl = document.getElementById('id_slug');
+  if(gen && titleEl && slugEl) gen.addEventListener('click', function(){
+    const s = titleEl.value.toLowerCase().replace(/[^\w\s-]/g,'').replace(/[\s_-]+/g,'-').replace(/^-+|-+$/g,'').substring(0,60);
+    slugEl.value = s;
   });
 
-  var excerpt = document.getElementById('id_excerpt');
-  var counter = document.getElementById('excerpt-counter');
-  if (excerpt && counter){
-    function upd(){ counter.textContent = excerpt.value.length + ' символов'; }
+  const excerpt = document.getElementById('id_excerpt');
+  const counter = document.getElementById('excerpt-counter');
+  if(excerpt && counter){
+    const upd = ()=> counter.textContent = excerpt.value.length + ' символов';
     upd(); excerpt.addEventListener('input', upd);
   }
 
-  var previewBtn = document.getElementById('preview-btn');
-  if (previewBtn) previewBtn.addEventListener('click', function(){
-    var m = window.location.pathname.match(/\/admin\/.+\/post\/(\d+)\/change/);
-    if (m && m[1]) window.open('/preview/' + m[1], '_blank'); else alert('Сохраните пост для предпросмотра');
+  const previewBtn = document.getElementById('preview-btn');
+  if(previewBtn) previewBtn.addEventListener('click', function(){
+    syncEditorsToTextarea();
+    const m = window.location.pathname.match(/\/admin\/.+\/post\/(\d+)\/change/);
+    if(m && m[1]) window.open('/preview/' + m[1], '_blank'); else alert('Сохраните пост для предпросмотра');
   });
 
-  var fillMeta = document.getElementById('fill-meta');
-  if (fillMeta) fillMeta.addEventListener('click', function(){
-    var t = title ? title.value.trim() : '';
-    var e = excerpt ? excerpt.value.trim() : '';
-    if (!t) { alert('Введите заголовок'); return; }
-    var metaTitle = document.getElementById('id_meta_title');
-    var metaDesc = document.getElementById('id_meta_description');
-    if (metaTitle && !metaTitle.value) metaTitle.value = t;
-    if (metaDesc && !metaDesc.value) metaDesc.value = e.substring(0,160);
+  const fillMeta = document.getElementById('fill-meta');
+  if(fillMeta) fillMeta.addEventListener('click', function(){
+    const t = titleEl ? titleEl.value.trim() : '';
+    const e = excerpt ? excerpt.value.trim() : '';
+    if(!t) { alert('Введите заголовок'); return; }
+    const mt = document.getElementById('id_meta_title');
+    const md = document.getElementById('id_meta_description');
+    if(mt && !mt.value) mt.value = t;
+    if(md && !md.value) md.value = e.substring(0,160);
     alert('SEO заполнено');
   });
+
+  const nativeForm = document.getElementById('post_form');
+  if(nativeForm) nativeForm.addEventListener('submit', function(){ syncEditorsToTextarea(); }, true);
 });
 </script>
 {% endblock %}

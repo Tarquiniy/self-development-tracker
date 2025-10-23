@@ -1,51 +1,22 @@
-// Main admin JS: sidebar, keyboard shortcuts, small progressive enhancements
-(function(){
+// main.js - admin UI helpers
+document.addEventListener('DOMContentLoaded', function(){
+  // sidebar toggle
+  const btn = document.getElementById('sidebar-toggle');
   const sidebar = document.getElementById('admin-sidebar');
-  const toggle = document.getElementById('sidebar-toggle');
-  if(toggle && sidebar){
-    toggle.addEventListener('click', ()=>{
-      sidebar.classList.toggle('open');
+  if(btn && sidebar){
+    btn.addEventListener('click', ()=> {
+      sidebar.style.display = sidebar.style.display === 'none' ? 'block' : 'none';
+      document.getElementById('admin-main').style.marginLeft = sidebar.style.display === 'none' ? '20px' : '240px';
     });
   }
+});
 
-  // keyboard shortcut: ? opens help overlay
-  document.addEventListener('keydown', function(e){
-    if(e.key === '?'){
-      alert('Клавиши:\n? — помощь\nCtrl+K — фокус на поиск');
-    }
-    if(e.ctrlKey && e.key.toLowerCase()==='k'){
-      const s = document.querySelector('.search-input');
-      if(s){ e.preventDefault(); s.focus(); }
-    }
-  });
-
-  // enhance admin related object lookups: make popup links open in modal when possible
-  document.addEventListener('click', function(e){
-    const target = e.target;
-    if(target.matches('.related-lookup')){
-      // fallback to original behaviour; more advanced modal can be implemented
-      return;
-    }
-  });
-
-  // improve file input preview (generic)
-  document.addEventListener('change', function(e){
-    const el = e.target;
-    if(el.matches('input[type=file]')){
-      const preview = document.getElementById('image-preview');
-      if(!preview) return;
-      preview.innerHTML = '';
-      const file = el.files && el.files[0];
-      if(!file) return;
-      if(file.type.startsWith('image/')){
-        const img = document.createElement('img');
-        img.src = URL.createObjectURL(file);
-        img.alt = file.name;
-        img.onload = () => URL.revokeObjectURL(img.src);
-        preview.appendChild(img);
-      } else {
-        preview.textContent = file.name;
-      }
-    }
-  });
-})();
+function showToast(message, type='success', timeout=3000){
+  const existing = document.querySelector('.notification');
+  if(existing) existing.remove();
+  const n = document.createElement('div');
+  n.className = `notification ${type}`;
+  n.innerHTML = message;
+  document.body.appendChild(n);
+  setTimeout(()=> n.remove(), timeout);
+}

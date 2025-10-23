@@ -1,17 +1,18 @@
-// Небольшие фиксы для стандартной админки: предотвращаем ошибки, сглаживаем поведение
-(function(){
-  // fix: grp/RelatedObjectLookups undefined in some bundles
-  if(typeof grp === 'undefined'){
-    window.grp = {};
-  }
+// admin-fixes.js
+if(typeof window.grp === 'undefined') window.grp = { jQuery: window.jQuery || null };
 
-  // safe wrapper for django popup responses
-  window.dismissRelatedLookupPopup = function(win, chosenId, chosenRepr){
-    try{
-      // оригинальное поведение — если окно открыто как popup
-      if(win && win.opener && win.opener.dismissRelatedLookupPopup){
-        win.opener.dismissRelatedLookupPopup(win, chosenId, chosenRepr);
-      }
-    }catch(e){ console.warn('dismissRelatedLookupPopup fallback', e); }
-  }
+(function(){
+  // Fix for RelatedObjectLookups in some older browsers
+  document.addEventListener('DOMContentLoaded', function(){
+    // Remove duplicate tiptap vendor loads if any (defensive)
+    const scripts = Array.from(document.querySelectorAll('script')).map(s => s.src||'');
+    const seen = new Set();
+    scripts.forEach(src => {
+      if(!src) return;
+      if(seen.has(src)) {
+        // do nothing (we can't remove external scripts safely), but log
+        console.debug('duplicate script', src);
+      } else seen.add(src);
+    });
+  });
 })();

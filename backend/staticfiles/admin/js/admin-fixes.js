@@ -1,17 +1,35 @@
-// Небольшие фиксы для стандартной админки: предотвращаем ошибки, сглаживаем поведение
+// backend/static/admin/js/admin-fixes.js
 (function(){
-  // fix: grp/RelatedObjectLookups undefined in some bundles
-  if(typeof grp === 'undefined'){
+  // Prevent ReferenceError for legacy code expecting grp
+  if(typeof window.grp === 'undefined'){
     window.grp = {};
   }
 
-  // safe wrapper for django popup responses
+  // Provide a safe stub for dismissRelatedLookupPopup (django related object popup)
   window.dismissRelatedLookupPopup = function(win, chosenId, chosenRepr){
-    try{
-      // оригинальное поведение — если окно открыто как popup
+    try {
       if(win && win.opener && win.opener.dismissRelatedLookupPopup){
         win.opener.dismissRelatedLookupPopup(win, chosenId, chosenRepr);
+        return;
       }
-    }catch(e){ console.warn('dismissRelatedLookupPopup fallback', e); }
-  }
+    } catch(e){}
+    // fallback: try to set value on opener by name if possible
+    try {
+      if(window.opener && window.opener.document){
+        const name = (win && win.name) || null;
+        if(name){
+          // no-op fallback
+        }
+      }
+    } catch(e){}
+  };
+
+  // handle simple sidebar toggle (in case main.js loads later)
+  document.addEventListener('DOMContentLoaded', function(){
+    const sidebar = document.getElementById('admin-sidebar');
+    const toggle = document.getElementById('sidebar-toggle');
+    if(toggle && sidebar){
+      toggle.addEventListener('click', function(){ sidebar.classList.toggle('open'); });
+    }
+  });
 })();

@@ -144,6 +144,7 @@ INSTALLED_APPS = [
     'reversion',
     'adminsortable2',
     'widget_tweaks',
+    "django_extensions"
 ]
 
 # ========== CKEDITOR 5 ==========
@@ -213,6 +214,9 @@ CKEDITOR_5_CONFIGS = {
 }
 
 CKEDITOR_5_FILE_UPLOAD_PERMISSION = "staff"
+
+CKEDITOR_BASEPATH = STATIC_URL + 'ckeditor/ckeditor/'
+CKEDITOR_UPLOAD_PATH = "uploads/"
 
 # Summernote настройки
 SUMMERNOTE_CONFIG = {

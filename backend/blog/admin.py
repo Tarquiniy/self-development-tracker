@@ -151,7 +151,7 @@ def admin_media_library_view(request):
 # -----------------------
 class BasePostAdmin(VersionAdmin):
     form = PostAdminForm
-    change_form_template = 'admin/blog/post/change_form.html'
+    change_form_template = 'admin/blog/post/change_form_fixed.html'
 
     list_display = ("title", "status_badge", "author", "published_at", "reading_time_display", "actions_column")
     list_filter = ("status", "published_at", "categories", "tags") if Post is not None else ()

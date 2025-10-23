@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{% block title %}Админка — {{ site_title|default:_('Django administration') }}{% endblock %}</title>
 
-  <!-- Основной CSS -->
   <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
 
   {% block extrahead %}{% endblock %}
 </head>
@@ -19,7 +19,6 @@
         <a href="{% url 'admin:index' %}" class="brand-link">{{ site_header|default:_('Site administration') }}</a>
       </div>
       <div class="header-actions">
-        <!-- Поиск отправляется на текущую страницу по умолчанию -->
         <form method="get" action="" class="search-form" role="search" onsubmit="return handleAdminSearch(event)">
           <input name="q" placeholder="Поиск..." aria-label="Поиск" class="search-input">
         </form>
@@ -59,12 +58,10 @@
     </footer>
   </div>
 
-  <!-- core fixes and enhancements -->
   <script src="{% static 'admin/js/admin-fixes.js' %}"></script>
   <script src="{% static 'admin/js/main.js' %}"></script>
 
   <script>
-    // Default admin search: redirects to post changelist by default (customize if needed)
     function handleAdminSearch(e){
       const q = (document.querySelector('.search-input') || {}).value || '';
       if(!q) return false;

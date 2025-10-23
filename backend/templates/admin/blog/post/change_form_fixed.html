@@ -1,133 +1,72 @@
-{# backend/templates/admin/blog/post/change_form_fixed.html #}
-{% extends "admin/change_form.html" %}
-{% load i18n static admin_urls %}
-
-{% block extrahead %}
-  {{ block.super }}
-  <link rel="stylesheet" href="{% static 'admin/css/change-form.css' %}">
-{% endblock %}
-
-{% block content %}
-<div class="pt-editor-page">
-  <form method="post" id="post_form" enctype="multipart/form-data" novalidate>
-    {% csrf_token %}
-
-    <header class="pt-topbar">
-      <div class="pt-topbar-left">
-        <div class="pt-title">{% if original and original.title %}{{ original.title|truncatechars:80 }}{% else %}📝 {% trans "Новый пост" %}{% endif %}</div>
-        <div class="pt-sub muted">{% if original and original.pk %}{% trans "ID" %}: {{ original.pk }}{% endif %}</div>
-      </div>
-
-      <div class="pt-topbar-right">
-        <button type="submit" name="_save" class="pt-btn pt-btn-primary">💾 {% trans "Сохранить" %}</button>
-        <button type="submit" name="_continue" class="pt-btn">🔁 {% trans "Сохранить и продолжить" %}</button>
-        <button type="button" id="open-media-lib" class="pt-btn pt-btn-ghost">🗂 {% trans "Медиатека" %}</button>
-        <a href="{% url 'admin:blog_post_changelist' %}" class="pt-btn pt-btn-ghost">{% trans "Назад" %}</a>
-      </div>
-    </header>
-
-    <div class="pt-editor-grid">
-      <main class="pt-main">
-        <section class="pt-card">
-          <div class="pt-card-header">📌 {% trans "Основное" %}</div>
-          <div class="pt-card-body">
-            <div class="pt-field">{{ adminform.form.title }}</div>
-            <div class="pt-split">
-              <div style="flex:1" class="pt-field">{{ adminform.form.slug }}</div>
-              <div style="width:140px;display:flex;align-items:flex-end;justify-content:flex-end">
-                <button type="button" id="pt-gen-slug" class="pt-btn pt-btn-outline">🔄 {% trans "Сгенерировать" %}</button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="pt-card">
-          <div class="pt-card-header">📝 {% trans "Содержание" %}</div>
-          <div class="pt-card-body">
-            <div class="pt-field">{{ adminform.form.content }}</div>
-          </div>
-        </section>
-
-        <section class="pt-card">
-          <div class="pt-card-header">📋 {% trans "Краткое описание" %}</div>
-          <div class="pt-card-body">
-            <div class="pt-field">{{ adminform.form.excerpt }}<div class="pt-charcounter"><span id="pt-excerpt-count">0</span> / 320</div></div>
-          </div>
-        </section>
-
-        {% for field in adminform.form.hidden_fields %}{{ field }}{% endfor %}
-      </main>
-
-      <aside class="pt-sidebar">
-        <section class="pt-card">
-          <div class="pt-card-header">🚀 {% trans "Публикация" %}</div>
-          <div class="pt-card-body">
-            {% if adminform.form.status %}{{ adminform.form.status }}{% endif %}
-            {% if adminform.form.published_at %}{{ adminform.form.published_at }}{% endif %}
-            {% if adminform.form.author %}{{ adminform.form.author }}{% endif %}
-          </div>
-        </section>
-
-        <section class="pt-card">
-          <div class="pt-card-header">🏷️ {% trans "Классификация" %}</div>
-          <div class="pt-card-body">
-            {% if adminform.form.categories %}{{ adminform.form.categories }}{% endif %}
-            {% if adminform.form.tags %}{{ adminform.form.tags }}{% endif %}
-          </div>
-        </section>
-
-        <section class="pt-card">
-          <div class="pt-card-header">🔎 {% trans "SEO" %}</div>
-          <div class="pt-card-body">
-            {% if adminform.form.meta_title %}<div class="pt-field">{{ adminform.form.meta_title }}</div>{% endif %}
-            {% if adminform.form.meta_description %}<div class="pt-field">{{ adminform.form.meta_description }}<div class="pt-charcounter"><span id="pt-meta-count">0</span> / 160</div></div>{% endif %}
-            <div style="margin-top:8px"><button type="button" id="pt-fill-seo" class="pt-btn pt-btn-outline">📝 {% trans "Заполнить SEO" %}</button></div>
-          </div>
-        </section>
-
-        <section class="pt-card">
-          <div class="pt-card-header">🖼️ {% trans "Изображение" %}</div>
-          <div class="pt-card-body">
-            {% if adminform.form.featured_image %}{{ adminform.form.featured_image }}{% endif %}
-            {% if adminform.form.og_image %}{{ adminform.form.og_image }}{% endif %}
-            <div style="margin-top:8px"><button type="button" id="open-media-lib-2" class="pt-btn pt-btn-outline">🗂 {% trans "Открыть медиатеку" %}</button></div>
-          </div>
-        </section>
-      </aside>
-    </div>
-  </form>
-</div>
-
-{# Modal for media library #}
-<div id="pt-media-modal" class="pt-modal" aria-hidden="true">
-  <div class="pt-modal-backdrop" data-close></div>
-  <div class="pt-modal-dialog" role="dialog" aria-modal="true">
-    <div class="pt-modal-header">
-      <h3>{% trans "Медиатека" %}</h3>
-      <button class="pt-close" data-close>✕</button>
-    </div>
-    <div class="pt-modal-body">
-      <div class="pt-upload">
-        <input type="file" id="pt-upload-input" accept="image/*" multiple />
-        <button id="pt-upload-btn" class="pt-btn pt-btn-primary">{% trans "Загрузить" %}</button>
-      </div>
-      <div id="pt-media-grid" class="pt-media-grid"></div>
+{% load static %}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Медиа библиотека</title>
+  <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
+  <style>
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:#f6f8fb;color:#111;padding:12px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+    .media-item{background:#fff;border-radius:8px;padding:8px;border:1px solid #e6eef6;cursor:pointer;text-align:center}
+    .media-item img{max-width:100%;height:120px;object-fit:cover;border-radius:6px}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h2>Медиатека</h2>
+    <div>
+      <input id="file-input" type="file" multiple accept="image/*">
+      <button id="upload-btn">Загрузить</button>
     </div>
   </div>
-</div>
-{% endblock %}
 
-{% block footer %}
-  {{ block.super }}
+  <div class="container">
+    <div id="media-grid" class="media-grid"></div>
+  </div>
+
   <script>
-    // small safety stub to avoid 'grp is not defined' errors if any old script expects it
-    if (typeof window.grp === 'undefined') {
-      window.grp = { jQuery: window.jQuery || null };
+    // Lightweight media library script - loads files via fetch to upload endpoint
+    const grid = document.getElementById('media-grid');
+    async function loadMedia(){
+      try{
+        const res = await fetch('/admin/media/list-json/');
+        const data = await res.json();
+        grid.innerHTML = '';
+        data.forEach(item=>{
+          const el = document.createElement('div');
+          el.className = 'media-item';
+          el.innerHTML = `<img src="${item.url}" alt=""><div style="font-size:12px;margin-top:6px">${item.name}</div>`;
+          el.addEventListener('click', ()=> {
+            // try to insert to opener window
+            if (window.opener && typeof window.opener.__insertMediaToEditor === 'function'){
+              window.opener.__insertMediaToEditor(item.url);
+              window.close();
+            } else {
+              navigator.clipboard.writeText(item.url);
+              alert('Ссылка скопирована в буфер');
+            }
+          });
+          grid.appendChild(el);
+        });
+      }catch(e){
+        console.warn('media load',e);
+        grid.innerHTML = '<div>Ошибка загрузки медиа</div>';
+      }
     }
+    document.getElementById('upload-btn').addEventListener('click', async ()=>{
+      const input = document.getElementById('file-input');
+      if(!input.files.length) return alert('Выберите файлы');
+      const fd = new FormData();
+      for(const f of input.files) fd.append('files', f);
+      const res = await fetch('/admin/media/upload/', { method:'POST', body: fd });
+      if(res.ok) { loadMedia(); input.value=''; }
+      else alert('Ошибка загрузки');
+    });
+
+    loadMedia();
   </script>
-  <script src="https://cdn.ckeditor.com/ckeditor5/40.2.0/classic/ckeditor.js"></script>
-  <script src="{% static 'admin/js/change-form.js' %}"></script>
-  <script>
-    window.__pt_post_preview = {% if original and original.get_absolute_url %}"{{ original.get_absolute_url|escapejs }}"{% else %}null{% endif %};
-  </script>
-{% endblock %}
+</body>
+</html>
