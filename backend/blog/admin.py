@@ -151,7 +151,7 @@ def admin_media_library_view(request):
 # -----------------------
 class BasePostAdmin(VersionAdmin):
     form = PostAdminForm
-    change_form_template = 'admin/blog/post/change_form_fixed.html'
+    change_form_template = 'admin/blog/post/change_form.html'
 
     list_display = ("title", "status_badge", "author", "published_at", "reading_time_display", "actions_column")
     list_filter = ("status", "published_at", "categories", "tags") if Post is not None else ()
@@ -184,6 +184,15 @@ class BasePostAdmin(VersionAdmin):
             'classes': ('seo-settings', 'collapse')
         }),
     )
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        extra_context.update({
+            # если у тебя реальные endpoints другие — замени эти строки на нужные URL
+            'media_upload_url': '/api/media/upload/',    # (необязательно) endpoint для прямых upload (если используешь)
+            'media_list_url': '/api/media/list/',        # (необязательно) endpoint для получения списка медиа
+        })
+        return super().changeform_view(request, object_id, form_url, extra_context=extra_context)
 
     def status_badge(self, obj):
         if not obj:

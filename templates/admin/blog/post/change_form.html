@@ -1,14 +1,14 @@
 {% extends "admin/base_site.html" %}
 {% load i18n static admin_urls %}
 
-{# Форма редактирования поста — CKEditor5 (Classic) + media-library hook #}
+{# Clean CKEditor5 integration for Post change form #}
 {% block title %}{% if is_popup %}{% trans 'Изменить элемент' %}{% else %}{% trans 'Редактировать пост' %}{% endif %}{% endblock %}
 
 {% block extrahead %}
   {{ block.super }}
-  {{ adminform.media }} {# Если какие-то виджеты добавляют свои ассеты, подключаем их #}
+  {{ adminform.media }} {# подключим media из формы, если есть #}
 
-  {# CKEditor5 Classic build (CDN). Если у тебя запрещён CDN — скажи, соберу локально. #}
+  {# CKEditor5 Classic (CDN). Если у тебя запрещён CDN, скажи — подготовлю локальную сборку. #}
   <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
 
   <style>
@@ -73,98 +73,67 @@
 {% block extra_js %}
 <script>
 (function(){
-  // Параметры: при необходимости заменяй эти URL на свои в контексте шаблона
-  const MEDIA_UPLOAD_URL = "{{ media_upload_url|default:'/api/media/upload/' }}"; // POST file -> { "url": "https://..." }
-  const MEDIA_LIST_URL   = "{{ media_list_url|default:'/api/media/list/' }}";   // GET -> [{url, thumb, name}, ...]
+  // значения можно подставить из extra_context в admin.py (мы добавили media_upload_url/media_list_url туда)
+  const MEDIA_UPLOAD_URL = "{{ media_upload_url|default:'/api/media/upload/' }}";
+  const MEDIA_LIST_URL   = "{{ media_list_url|default:'/api/media/list/' }}";
 
   function getCSRF(){
     const el = document.querySelector('input[name="csrfmiddlewaretoken"]');
     return el ? el.value : null;
   }
 
-  // глобальная карта редакторов, доступна для медиапопапа
+  // карта редакторов
   window.editorMap = window.editorMap || {};
+  let lastFocusedEditorName = null;
 
-  const CANDIDATES = ['content', 'short_description', 'body', 'description', 'summary'];
+  // имена полей, которые будем превращать в CKEditor
+  const CANDIDATES = ['content','short_description','body','description','summary'];
 
-  // UploadAdapter для CKEditor5 — отправляет файл на MEDIA_UPLOAD_URL и ждёт { url }
-  class SupabaseUploadAdapter {
-    constructor(loader){ this.loader = loader; }
-    upload(){
-      return this.loader.file.then(file => new Promise((resolve, reject) => {
-        const fd = new FormData();
-        fd.append('file', file);
-        fetch(MEDIA_UPLOAD_URL, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'X-CSRFToken': getCSRF() || '' },
-          body: fd
-        }).then(async res => {
-          if(!res.ok){
-            const t = await res.text().catch(()=>res.statusText);
-            reject(t || 'Upload failed');
-            return;
-          }
-          const json = await res.json();
-          if(json && json.url){
-            resolve({ default: json.url });
-          } else {
-            reject('Invalid upload response');
-          }
-        }).catch(err => reject(err.message || String(err)));
-      }));
-    }
-    abort(){}
-  }
-
-  function SupabaseAdapterPlugin(editor){
-    editor.plugins.get('FileRepository').createUploadAdapter = (loader) => {
-      return new SupabaseUploadAdapter(loader);
-    };
-  }
-
+  // Инициализация CKEditor для найденных textarea
   function initCKEditors(){
     CANDIDATES.forEach(name => {
       const ta = document.querySelector('textarea[name="'+name+'"]');
       if(!ta) return;
       if(window.editorMap[name]) return; // уже инициализирован
 
-      // создаём редактор
+      // Создаём редактор **без** встроенного imageUpload, чтобы не требовать upload-endpoint.
       ClassicEditor.create(ta, {
-        extraPlugins: [ SupabaseAdapterPlugin ],
         toolbar: [
           'heading','|','bold','italic','underline','strikethrough','|',
           'link','bulletedList','numberedList','blockQuote','|',
-          'insertTable','mediaEmbed','imageUpload','|','undo','redo'
+          'insertTable','mediaEmbed','|','undo','redo'
         ],
         language: 'ru'
       }).then(editor => {
         window.editorMap[name] = editor;
-        // при мосте между popup и opener — сделать глобально доступным имя инстанса
-        // (popup будет использовать window.opener.__insertMediaToEditor)
-      }).catch(err => {
-        console.error('CKEditor init error for', name, err);
-      });
+        // track focus
+        editor.model.document.on('change:data', () => {
+          // nothing — data changed
+        });
+        editor.editing.view.document.on('focus', () => { lastFocusedEditorName = name; });
+      }).catch(err => console.error('CKEditor init error for', name, err));
     });
   }
 
-  // Инициализировать когда DOM готов и через небольшую задержку (защита от асинхронности админки)
+  // init on DOM ready and shortly after (admin may render fields late)
   document.addEventListener('DOMContentLoaded', initCKEditors);
   setTimeout(initCKEditors, 600);
 
-  // Функция, которую должен вызывать popup медиатеки: window.opener.__insertMediaToEditor(url [, preferField])
+  // контракт: медиапопап вызывает эту функцию у opener'а
+  // window.opener.__insertMediaToEditor(url) — popup должен вызвать так
   window.__insertMediaToEditor = function(url, preferField){
     try {
-      preferField = preferField || 'content';
+      preferField = preferField || lastFocusedEditorName || 'content';
+      // preferred by name
       if(window.editorMap && window.editorMap[preferField]){
-        const ed = window.editorMap[preferField];
-        ed.model.change(writer => {
+        const editor = window.editorMap[preferField];
+        editor.model.change(writer => {
           const imageElement = writer.createElement('image', { src: url });
-          ed.model.insertContent(imageElement, ed.model.document.selection);
+          editor.model.insertContent(imageElement, editor.model.document.selection);
         });
         return true;
       }
-      // Иначе вставляем в первый доступный редактор
+      // fallback: any editor
       for(const k in window.editorMap){
         const ed = window.editorMap[k];
         if(ed){
@@ -175,27 +144,27 @@
           return true;
         }
       }
-      // fallback в textarea
-      const ta = document.querySelector('textarea[name="'+preferField+'"]') || document.querySelector('textarea');
+      // fallback: plain textarea
+      const ta = document.querySelector('textarea[name="'+(preferField||'content')+'"]') || document.querySelector('textarea');
       if(ta){ ta.value = (ta.value || '') + "\\n<img src='" + url + "' alt=''/>\\n"; return true; }
     } catch(e){ console.warn('insertMediaToEditor failed', e); }
     return false;
   };
 
-  // Открыть медиабиблиотеку в popup (твой маршрут admin-media-library)
+  // open media library popup
   window.openMediaLibrary = function(e){
     try {
       if(e && e.preventDefault) e.preventDefault();
       const url = "{% url 'admin-media-library' %}";
       window.open(url, "media_library", "width=1000,height=700,scrollbars=yes");
-    } catch(err){
+    } catch(err) {
       console.error('openMediaLibrary error', err);
       alert("{% trans 'Не удалось открыть медиа библиотеку' %}");
     }
     return false;
   };
 
-  // Предпросмотр: собираем данные из редакторов и показываем в новом окне
+  // preview — собираем данные и показываем
   const previewBtn = document.getElementById('preview-btn');
   if(previewBtn){
     previewBtn.addEventListener('click', function(){
@@ -211,8 +180,7 @@
 
       const w = window.open('', '_blank');
       const html = `
-        <!doctype html>
-        <html><head><meta charset="utf-8"><title>Предпросмотр — ${escapeHtml(title)}</title>
+        <!doctype html><html><head><meta charset="utf-8"><title>Предпросмотр — ${escapeHtml(title)}</title>
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
         </head><body><article class="container preview-article">
@@ -226,7 +194,7 @@
 
   function escapeHtml(s){ return (s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
 
-  // Синхронизация содержимого редакторов в textarea перед submit (чтобы Django получил актуальные html)
+  // Перед отправкой формы — синхронизируем содержимое редакторов в textarea
   document.addEventListener('submit', function(e){
     const form = e.target;
     if(!(form && form.matches && form.matches('form.nice-form'))) return;

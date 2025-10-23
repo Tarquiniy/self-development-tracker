@@ -84,8 +84,8 @@ CSRF_COOKIE_SECURE = not DEBUG
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 STATICFILES_DIRS = [
-    BASE_DIR / 'static',            
-    BASE_DIR / 'blog' / 'static',   
+    BASE_DIR / 'static',            # backend/static (новые ui assets)
+    BASE_DIR / 'blog' / 'static',   # preserve existing blog static if present
 ]
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
