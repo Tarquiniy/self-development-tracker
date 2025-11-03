@@ -1,71 +1,92 @@
 # backend/blog/storages.py
-import logging
-from typing import Optional
+import os
+import mimetypes
+import uuid
+import requests
+from django.core.files.storage import Storage
+from django.core.files.base import ContentFile
 from django.conf import settings
-from storages.backends.s3boto3 import S3Boto3Storage
 
-logger = logging.getLogger(__name__)
+# Конфиг через env
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")  # https://<project>.supabase.co
+SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")  # service_role ключ, нужен для записи
+BUCKET = os.environ.get("SUPABASE_BUCKET", "post_attachments")
 
+if not SUPABASE_URL:
+    # если не настроено, не ломаем импорт — но операции _save будут падать
+    SUPABASE_URL = None
 
-class SupabaseStorage(S3Boto3Storage):
+class SupabaseStorage(Storage):
     """
-    S3Boto3Storage wrapper tuned for Supabase storage.
-
-    - Формирует публичный URL вида:
-      https://<project>.supabase.co/storage/v1/object/public/<bucket>/<path>
-    - Аккуратно убирает дублирование "bucket/" или "post_attachments/" при построении URL.
+    Простая реализация хранения в Supabase Storage через REST API.
+    Использует PUT /storage/v1/object/{bucket}/{path} чтобы задать точный ключ.
+    Генерирует уникальный путь uploads/<uuid4><ext>.
     """
 
-    def __init__(self, *args, **kwargs):
-        # allow passing bucket_name explicitly or fallback to settings
-        self.bucket_name = kwargs.pop('bucket_name', None) or getattr(settings, 'AWS_STORAGE_BUCKET_NAME', None)
-        # ensure parent init gets the bucket_name
-        super().__init__(bucket_name=self.bucket_name, *args, **kwargs)
+    def _generate_path(self, original_name):
+        _, ext = os.path.splitext(original_name or "")
+        # оставляем только точную hex-строку + расширение
+        return f"uploads/{uuid.uuid4().hex}{ext.lower()}"
 
-    def _public_base(self) -> Optional[str]:
-        base = getattr(settings, "SUPABASE_URL", None)
-        if not base:
-            return None
-        return base.rstrip('/')
-
-    def _normalize_name(self, name: str) -> str:
-        if not name:
-            return ''
-        # remove leading slash
-        n = name.lstrip('/')
-        # If name accidentally contains bucket prefix, strip it
-        if self.bucket_name and n.startswith(self.bucket_name + '/'):
-            n = n[len(self.bucket_name) + 1:]
-        # Normalize double 'post_attachments/post_attachments' -> 'post_attachments/...'
-        n = n.replace('post_attachments/post_attachments/', 'post_attachments/')
-        return n
-
-    def url(self, name: str, expire: Optional[int] = None) -> str:
+    def _save(self, name, content):
         """
-        Return public Supabase URL for 'name' when SUPABASE_URL + bucket available.
-        Fallback to parent S3Boto3Storage.url() when not.
+        Сохраняет content в Supabase и возвращает имя/ключ (без ведущего '/').
         """
+        if not SUPABASE_URL or not SERVICE_ROLE_KEY:
+            raise RuntimeError("Supabase storage not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.")
+
+        # Попытка взять расширение из исходного имени файла, если оно есть
+        original_name = getattr(content, "name", None) or name or "file"
+        path = self._generate_path(original_name)
+
+        # Подготовим тело и mime
+        # Если content — file-like object, убедимся в начале
         try:
-            if not name:
-                return super().url(name, expire)
+            content.seek(0)
         except Exception:
-            # parent might throw if name falsy — fall through
             pass
 
-        try:
-            normalized = self._normalize_name(name)
-            public_base = self._public_base()
-            bucket = self.bucket_name or getattr(settings, 'AWS_STORAGE_BUCKET_NAME', None)
-            if public_base and bucket:
-                # Build the canonical Supabase public URL
-                return f"{public_base}/storage/v1/object/public/{bucket}/{normalized}"
-        except Exception as e:
-            logger.exception("SupabaseStorage.url build error: %s", e)
+        data = content.read() if hasattr(content, "read") else content
+        if isinstance(data, str):
+            data = data.encode("utf-8")
 
-        # fallback: try parent implementation (may produce presigned URL)
-        try:
-            return super().url(name, expire)
-        except Exception as e:
-            logger.exception("SupabaseStorage.url fallback failed for %s: %s", name, e)
-            # final fallback: return normalized path (not a URL) to avoid crash
-            return normalized
+        mimetype = mimetypes.guess_type(path)[0] or "application/octet-stream"
+
+        put_url = f"{SUPABASE_URL}/storage/v1/object/{BUCKET}/{path}"
+        headers = {
+            "Authorization": f"Bearer {SERVICE_ROLE_KEY}",
+            # Supabase рекомендует также передавать apikey, но service role в Authorization достаточно
+            "Content-Type": mimetype,
+        }
+        params = {
+            "cacheControl": "max-age=86400, public"
+        }
+
+        resp = requests.put(put_url, data=data, headers=headers, params=params, timeout=30)
+        # ожидаемые коды: 200/201/204
+        if resp.status_code not in (200, 201, 204):
+            # подробный текст для логов/диагностики
+            raise RuntimeError(f"Supabase upload failed: status={resp.status_code} body={resp.text}")
+
+        return path
+
+    def url(self, name):
+        if not SUPABASE_URL:
+            raise RuntimeError("SUPABASE_URL not configured")
+        # возвращаем публичный путь
+        return f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET}/{name}"
+
+    def exists(self, name):
+        # не проверяем существование, считаем, что имена уникальны
+        return False
+
+    def open(self, name, mode='rb'):
+        if not SUPABASE_URL:
+            raise RuntimeError("SUPABASE_URL not configured")
+        url = self.url(name)
+        r = requests.get(url, stream=True, timeout=30)
+        r.raise_for_status()
+        return ContentFile(r.content)
+
+    def get_available_name(self, name, max_length=None):
+        return name

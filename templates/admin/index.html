@@ -1,45 +1,62 @@
-{# templates/admin/index.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Admin Dashboard</title>
-  <style>
-    body{font-family:Arial,Helvetica,sans-serif;background:#f6f8fb;color:#111;margin:0;padding:20px}
-    .card{background:#fff;border-radius:8px;padding:16px;margin:12px 0;box-shadow:0 4px 12px rgba(0,0,0,0.06)}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
-    h1{margin:0 0 12px 0}
-  </style>
-</head>
-<body>
-  <h1>Админ — Дашборд</h1>
-  <div class="grid">
-    <div class="card">
-      <div>Постов</div>
-      <div style="font-size:20px;font-weight:700">{{ posts_count }}</div>
-    </div>
-    <div class="card">
-      <div>Опубликовано</div>
-      <div style="font-size:20px;font-weight:700">{{ published_count }}</div>
-    </div>
-    <div class="card">
-      <div>Черновиков</div>
-      <div style="font-size:20px;font-weight:700">{{ drafts_count }}</div>
-    </div>
-    <div class="card">
-      <div>Медиа</div>
-      <div style="font-size:20px;font-weight:700">{{ media_count }}</div>
-    </div>
-    <div class="card">
-      <div>Комментарии</div>
-      <div style="font-size:20px;font-weight:700">{{ comments_count }}</div>
-    </div>
-  </div>
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+{% block title %}Панель управления — {{ site_title|default:_('Admin') }}{% endblock %}
 
-  <div style="margin-top:16px">
-    <a href="{% url 'admin:index' %}">Вернуться в админ</a> •
-    <a href="{% url 'media-library' %}">Медиа библиотека</a>
-  </div>
-</body>
-</html>
+{% block content %}
+<div class="dashboard-grid">
+    <section class="dashboard-cards">
+        <div class="card card-stats">
+            <div class="card-body">
+                <div class="stat-title">Посты</div>
+                <div class="stat-value">{{ posts_count }}</div>
+                <div class="stat-sub">Опубликовано: {{ published_count }} · Черновиков: {{ drafts_count }}</div>
+            </div>
+        </div>
+
+        <div class="card card-stats">
+            <div class="card-body">
+                <div class="stat-title">Медиа</div>
+                <div class="stat-value">{{ media_count }}</div>
+                <div class="stat-sub">Медиабиблиотека</div>
+            </div>
+        </div>
+
+        <div class="card card-stats">
+            <div class="card-body">
+                <div class="stat-title">Комментарии</div>
+                <div class="stat-value">{{ comments_count }}</div>
+                <div class="stat-sub">Новые / Модерация</div>
+            </div>
+        </div>
+    </section>
+
+    <aside class="dashboard-side">
+        <div class="card">
+            <div class="card-header">Быстрые ссылки</div>
+            <div class="card-body">
+                <ul class="quick-links">
+                    <li><a href="{% url 'admin:blog_post_add' %}">Создать пост</a></li>
+                    <li><a href="{% url 'admin:blog_media-library' %}">Открыть медиабиблиотеку</a></li>
+                    <li><a href="{% url 'admin:blog_post_changelist' %}">Список постов</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Недавние посты</div>
+            <div class="card-body recent-list">
+                <ul>
+                    {% for app in app_list %}
+                        {% if app.name == "Blog" or app.name|lower == "blog" %}
+                            {% for m in app.models %}
+                                {% comment %} we don't have actual posts here in template context by default; admin_dashboard_view can be extended to pass recent posts if desired {% endcomment %}
+                            {% endfor %}
+                        {% endif %}
+                    {% endfor %}
+                    <li class="muted">Нет данных — расширьте admin_dashboard_view для подробного списка.</li>
+                </ul>
+            </div>
+        </div>
+    </aside>
+</div>
+{% endblock %}

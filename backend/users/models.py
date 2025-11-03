@@ -1,3 +1,4 @@
+# backend/users/models.py
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
@@ -9,16 +10,8 @@ class CustomUser(AbstractUser):
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
 
-    class Meta:
-        db_table = 'users_customuser'
-        verbose_name = 'Custom User'
-        verbose_name_plural = 'Custom Users'
-
-    def __str__(self):
-        return self.email
-
 class UserProfile(models.Model):
-    user = models.OneToOneField('CustomUser', on_delete=models.CASCADE, related_name='profile')
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='profile')
     subscription_active = models.BooleanField(default=False)
     subscription_expires = models.DateTimeField(null=True, blank=True)
     tables_limit = models.IntegerField(default=1)

@@ -1,77 +1,27 @@
-{% load static i18n %}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>{% block title %}Админка — {{ site_title|default:_('Django administration') }}{% endblock %}</title>
+{% extends "admin/base_site.html" %}
+{% load static %}
 
-  <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
-  <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
-
-  {% block extrahead %}{% endblock %}
-</head>
-<body class="admin-root">
-  <div class="admin-shell">
-    <header class="admin-header">
-      <div class="brand">
-        <button id="sidebar-toggle" aria-label="Toggle menu" class="hamburger">☰</button>
-        <a href="{% url 'admin:index' %}" class="brand-link">{{ site_header|default:_('Site administration') }}</a>
-      </div>
-      <div class="header-actions">
-        <form method="get" action="" class="search-form" role="search" onsubmit="return handleAdminSearch(event)">
-          <input name="q" placeholder="Поиск..." aria-label="Поиск" class="search-input">
-        </form>
-        <div class="user-menu">
-          <a href="{% url 'admin:logout' %}">{% trans "Выйти" %}</a>
-        </div>
-      </div>
-    </header>
-
-    <aside id="admin-sidebar" class="admin-sidebar" aria-label="Навигация администратора">
-      <nav>
-        <ul class="sidebar-list">
-          <li class="sidebar-section">Главное</li>
-          <li><a href="{% url 'admin:index' %}">Панель</a></li>
-
-          <li class="sidebar-section">Контент</li>
-          <li><a href="{% url 'admin:blog_post_changelist' %}">Посты</a></li>
-          <li><a href="{% url 'admin:blog_category_changelist' %}">Категории</a></li>
-
-          <li class="sidebar-section">Пользователи</li>
-          <li><a href="{% url 'admin:auth_user_changelist' %}">Пользователи</a></li>
-        </ul>
-      </nav>
-      <div class="sidebar-footer">
-        <small>Версия UI — 2025</small>
-      </div>
-    </aside>
-
-    <main id="admin-main" class="admin-main">
-      <div class="container">
-        {% block content %}{% endblock %}
-      </div>
-    </main>
-
-    <footer class="admin-footer">
-      <div class="container">© {{ now|date:"Y" }} — Административная панель</div>
-    </footer>
-  </div>
-
-  <script src="{% static 'admin/js/admin-fixes.js' %}"></script>
-  <script src="{% static 'admin/js/main.js' %}"></script>
-
-  <script>
-    function handleAdminSearch(e){
-      const q = (document.querySelector('.search-input') || {}).value || '';
-      if(!q) return false;
-      const target = "{% url 'admin:blog_post_changelist' %}";
-      window.location.href = target + '?q=' + encodeURIComponent(q);
-      e.preventDefault();
-      return false;
-    }
-  </script>
-
-  {% block extra_js %}{% endblock %}
-</body>
-</html>
+{# Ранний shim: если jQuery загрузился раньше, но $ отсутствует, выставим $ = jQuery.
+   Запускается до {{ block.super }} чтобы перекрыть случаи, когда админские скрипты ожидают $. #}
+{% block extrahead %}
+<script>
+(function(){
+  function ensureDollar(){
+    try {
+      if (window.jQuery) {
+        if (!window.$) window.$ = window.jQuery;
+        return true;
+      }
+    } catch(e){}
+    return false;
+  }
+  if (!ensureDollar()) {
+    var tries = 0;
+    var t = setInterval(function(){
+      if (ensureDollar() || ++tries > 200) clearInterval(t);
+    }, 25);
+  }
+})();
+</script>
+{{ block.super }}
+{% endblock %}

@@ -1,0 +1,41 @@
+{
+  "name": "ckeditor-build",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "webpack --progress --mode=production"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "css-loader": "^7.1.2",
+    "file-loader": "^6.2.0",
+    "mini-css-extract-plugin": "^2.9.4",
+    "style-loader": "^4.0.0",
+    "webpack": "^5.102.1",
+    "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "@ckeditor/ckeditor5-alignment": "^47.1.0",
+    "@ckeditor/ckeditor5-basic-styles": "^47.1.0",
+    "@ckeditor/ckeditor5-code-block": "^47.0.0",
+    "@ckeditor/ckeditor5-editor-classic": "^47.1.0",
+    "@ckeditor/ckeditor5-essentials": "^47.1.0",
+    "@ckeditor/ckeditor5-font": "^47.0.0",
+    "@ckeditor/ckeditor5-heading": "^47.1.0",
+    "@ckeditor/ckeditor5-highlight": "^47.0.0",
+    "@ckeditor/ckeditor5-html-support": "^47.1.0",
+    "@ckeditor/ckeditor5-image": "^47.1.0",
+    "@ckeditor/ckeditor5-indent": "^47.1.0",
+    "@ckeditor/ckeditor5-link": "^47.1.0",
+    "@ckeditor/ckeditor5-list": "^47.1.0",
+    "@ckeditor/ckeditor5-media-embed": "^47.1.0",
+    "@ckeditor/ckeditor5-paragraph": "^47.1.0",
+    "@ckeditor/ckeditor5-special-characters": "^47.0.0",
+    "@ckeditor/ckeditor5-table": "^47.1.0",
+    "@ckeditor/ckeditor5-upload": "^47.1.0"
+  }
+}

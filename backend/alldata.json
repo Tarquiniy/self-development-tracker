@@ -1,0 +1,329 @@
+[
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "blog",
+    "model": "postreaction"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "blog",
+    "model": "category"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "blog",
+    "model": "tag"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "blog",
+    "model": "post"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "blog",
+    "model": "comment"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "blog",
+    "model": "postattachment"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "blog",
+    "model": "postview"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "blog",
+    "model": "medialibrary"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "blog",
+    "model": "postrevision"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "auth",
+    "model": "permission"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "auth",
+    "model": "group"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "auth",
+    "model": "user"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "admin",
+    "model": "logentry"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "contenttypes",
+    "model": "contenttype"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "sessions",
+    "model": "session"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "authtoken",
+    "model": "token"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "authtoken",
+    "model": "tokenproxy"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "django_summernote",
+    "model": "attachment"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "reversion",
+    "model": "revision"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "reversion",
+    "model": "version"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "filebrowser",
+    "model": "filebrowser"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "sites",
+    "model": "site"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "users",
+    "model": "customuser"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "users",
+    "model": "userprofile"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "1bzzvg1nyabzrdfzvy0c9j70tw8y0eqj",
+  "fields": {
+    "session_data": ".eJxVjMEOwiAQRP-FsyEtu1usR-9-A1kWkKqBpLQn47_bJj1oMqd5b-atHK9LdmuLs5uCuqhenX47z_KMZQfhweVetdSyzJPXu6IP2vSthvi6Hu7fQeaWtzUiBxQryXQS6QxiTTICCYDsOAiSj9ITjIRDIhviFiHw2BFappDU5wvpcTgP:1vArkX:tIa6vY5p43csyfVkTqns5sYpIrm844LMrr6yu_eBTN0",
+    "expire_date": "2025-11-03T15:24:41.217Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "682rg6w4flv0kjayokyglcmfy8djdqet",
+  "fields": {
+    "session_data": ".eJxVjMEOwiAQRP-FsyEtu1usR-9-A1kWkKqBpLQn47_bJj1oMqd5b-atHK9LdmuLs5uCuqhenX47z_KMZQfhweVetdSyzJPXu6IP2vSthvi6Hu7fQeaWtzUiBxQryXQS6QxiTTICCYDsOAiSj9ITjIRDIhviFiHw2BFappDU5wvpcTgP:1vByRJ:JcaqG2OXZgtnwvlv0uBh07e4uwSmTI_2rzoaygTRc1U",
+    "expire_date": "2025-11-06T16:45:25.754Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "6c3bqpx4gm98lhkrutqstd4v5lk0z9i8",
+  "fields": {
+    "session_data": ".eJxVjMEOwiAQRP-FsyEtu1usR-9-A1kWkKqBpLQn47_bJj1oMqd5b-atHK9LdmuLs5uCuqhenX47z_KMZQfhweVetdSyzJPXu6IP2vSthvi6Hu7fQeaWtzUiBxQryXQS6QxiTTICCYDsOAiSj9ITjIRDIhviFiHw2BFappDU5wvpcTgP:1vByPP:9Yed8G1J7cATuFmW16NQadHFA_iQgQL_9cA9pDb5Eyw",
+    "expire_date": "2025-11-06T16:43:27.891Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "7o76n25ck1q7qz1h2sg207c65iu4yd4b",
+  "fields": {
+    "session_data": ".eJxVjMEOwiAQRP-FsyEtu1usR-9-A1kWkKqBpLQn47_bJj1oMqd5b-atHK9LdmuLs5uCuqhenX47z_KMZQfhweVetdSyzJPXu6IP2vSthvi6Hu7fQeaWtzUiBxQryXQS6QxiTTICCYDsOAiSj9ITjIRDIhviFiHw2BFappDU5wvpcTgP:1vBzIA:GW1oAAzNrIYy0RbLUyK2_73ZYObYeaCTuKGCPpNkZ6A",
+    "expire_date": "2025-11-06T17:40:02.267Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "ajupqi28xe3o58dbk5oksxrt8gyuanyt",
+  "fields": {
+    "session_data": ".eJxVjMEOwiAQRP-FsyEtu1usR-9-A1kWkKqBpLQn47_bJj1oMqd5b-atHK9LdmuLs5uCuqhenX47z_KMZQfhweVetdSyzJPXu6IP2vSthvi6Hu7fQeaWtzUiBxQryXQS6QxiTTICCYDsOAiSj9ITjIRDIhviFiHw2BFappDU5wvpcTgP:1vAneQ:5d_kRqN4ukMzITbK6ucA6Xvm8lGf4IBgKu6X4YwPL7c",
+    "expire_date": "2025-11-03T11:02:06.462Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "bssaizeku8ywufffwr9f0mubtygaabrl",
+  "fields": {
+    "session_data": ".eJxVjMEOwiAQRP-FsyEtu1usR-9-A1kWkKqBpLQn47_bJj1oMqd5b-atHK9LdmuLs5uCuqhenX47z_KMZQfhweVetdSyzJPXu6IP2vSthvi6Hu7fQeaWtzUiBxQryXQS6QxiTTICCYDsOAiSj9ITjIRDIhviFiHw2BFappDU5wvpcTgP:1vAuUV:5zHsmK-mr5Wdj5ram_27yi97ebWG6oNExXlrGA46Ujw",
+    "expire_date": "2025-11-03T18:20:19.560Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "iyxhl7wd84a24cvws325es4f8lhhryd1",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hAotgWX7nsGMjPMSNVAUtqV8e7apAvd_vfef6kI25rj1niJc1IXZdXpd0OgB5cdpDuUW9VUy7rMqHdFH7TpqSZ-Xg_37yBDy9-6Q-fZJDY2WBYnaMkxmYBCzAjncRgDsqDYAACudx66nlxCCkPwVtT7AxiPOU8:1v9SZn:ETNbdTS2mL-I6dwdt__ALni8LeU91xqs5dkALFVxy1w",
+    "expire_date": "2025-10-30T18:19:47.872Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "ntuji383o4xrj07t8yti2llyszd3wdpd",
+  "fields": {
+    "session_data": ".eJxVjMEOwiAQRP-FsyEtu1usR-9-A1kWkKqBpLQn47_bJj1oMqd5b-atHK9LdmuLs5uCuqhenX47z_KMZQfhweVetdSyzJPXu6IP2vSthvi6Hu7fQeaWtzUiBxQryXQS6QxiTTICCYDsOAiSj9ITjIRDIhviFiHw2BFappDU5wvpcTgP:1vBHAj:LRa-C4c6bvzPvW0b_etmM_0Jq8z4wb35MJGaxPpqAAE",
+    "expire_date": "2025-11-04T18:33:25.845Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "p0ecrh52tzs5eaay1la2omrexzizwsek",
+  "fields": {
+    "session_data": ".eJxVjMEOwiAQRP-FsyEtu1usR-9-A1kWkKqBpLQn47_bJj1oMqd5b-atHK9LdmuLs5uCuqhenX47z_KMZQfhweVetdSyzJPXu6IP2vSthvi6Hu7fQeaWtzUiBxQryXQS6QxiTTICCYDsOAiSj9ITjIRDIhviFiHw2BFappDU5wvpcTgP:1vBY66:3H6imbFuD8b2xz1K5EGknA62CH9Wm36OkHURn8PWZzw",
+    "expire_date": "2025-11-05T12:37:46.377Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "plps76win9splyc0eansb4d6epm5iqsf",
+  "fields": {
+    "session_data": ".eJxVjMEOwiAQRP-FsyEtu1usR-9-A1kWkKqBpLQn47_bJj1oMqd5b-atHK9LdmuLs5uCuqhenX47z_KMZQfhweVetdSyzJPXu6IP2vSthvi6Hu7fQeaWtzUiBxQryXQS6QxiTTICCYDsOAiSj9ITjIRDIhviFiHw2BFappDU5wvpcTgP:1vAnRr:uPQN6hD5bYwTzqwMydFplq2S6yOeKZUWpg-g0DBzKpY",
+    "expire_date": "2025-11-03T10:49:07.496Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "rahxd3pnsvrwxwcqymnvr2jq21b05ig8",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hAotgWX7nsGMjPMSNVAUtqV8e7apAvd_vfef6kI25rj1niJc1IXZdXpd0OgB5cdpDuUW9VUy7rMqHdFH7TpqSZ-Xg_37yBDy9-6Q-fZJDY2WBYnaMkxmYBCzAjncRgDsqDYAACudx66nlxCCkPwVtT7AxiPOU8:1v9SXz:Ke2HWVb2FgMH596Id2nknJG6SUwZWrNu9VfRc7GrubY",
+    "expire_date": "2025-10-30T18:17:55.375Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "rysno4k88o6iulto8q27l4zshis82ezp",
+  "fields": {
+    "session_data": ".eJxVjMEOwiAQRP-FsyEtu1usR-9-A1kWkKqBpLQn47_bJj1oMqd5b-atHK9LdmuLs5uCuqhenX47z_KMZQfhweVetdSyzJPXu6IP2vSthvi6Hu7fQeaWtzUiBxQryXQS6QxiTTICCYDsOAiSj9ITjIRDIhviFiHw2BFappDU5wvpcTgP:1vBytJ:87eLUXzRgBgWhuYRpbly9WojonuVpC_2GeZ64l3Ep14",
+    "expire_date": "2025-11-06T17:14:21.680Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "tf66mzi7kfowmiti54cxqndffa9lcoz9",
+  "fields": {
+    "session_data": ".eJxVjMEOwiAQRP-FsyEtu1usR-9-A1kWkKqBpLQn47_bJj1oMqd5b-atHK9LdmuLs5uCuqhenX47z_KMZQfhweVetdSyzJPXu6IP2vSthvi6Hu7fQeaWtzUiBxQryXQS6QxiTTICCYDsOAiSj9ITjIRDIhviFiHw2BFappDU5wvpcTgP:1vBcO1:riwhGc4wzNajhFRbR0eKdV-DPoM354XrApbjhUvW3rg",
+    "expire_date": "2025-11-05T17:12:33.651Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "zw2pih5y1cn7c7r5n0k5fv5ykv031yq1",
+  "fields": {
+    "session_data": ".eJxVjMEOwiAQRP-FsyEtu1usR-9-A1kWkKqBpLQn47_bJj1oMqd5b-atHK9LdmuLs5uCuqhenX47z_KMZQfhweVetdSyzJPXu6IP2vSthvi6Hu7fQeaWtzUiBxQryXQS6QxiTTICCYDsOAiSj9ITjIRDIhviFiHw2BFappDU5wvpcTgP:1vBBWO:2uy8PT0dq4lcDx2f5ZcfyUNcSvf5ucxHDs48q7ctJoc",
+    "expire_date": "2025-11-04T12:31:24.356Z"
+  }
+},
+{
+  "model": "reversion.version",
+  "pk": 1,
+  "fields": {
+    "revision": 1,
+    "object_id": "1",
+    "content_type": [
+      "blog",
+      "post"
+    ],
+    "db": "default",
+    "format": "json",
+    "serialized_data": "[{\"model\": \"blog.post\", \"pk\": 1, \"fields\": {\"author\": null, \"title\": \"тест\", \"slug\": \"\", \"excerpt\": \"тест\", \"content\": \"<p>тест</p>\", \"featured_image\": null, \"meta_title\": \"тест\", \"meta_description\": \"\", \"og_image\": \"\", \"status\": \"draft\", \"published_at\": null, \"created_at\": \"2025-10-16T19:05:48.209Z\", \"updated_at\": \"2025-10-16T19:05:48.209Z\", \"categories\": [], \"tags\": []}}]",
+    "object_repr": "тест (Черновик)"
+  }
+},
+{
+  "model": "reversion.version",
+  "pk": 2,
+  "fields": {
+    "revision": 2,
+    "object_id": "2",
+    "content_type": [
+      "blog",
+      "post"
+    ],
+    "db": "default",
+    "format": "json",
+    "serialized_data": "[{\"model\": \"blog.post\", \"pk\": 2, \"fields\": {\"author\": 1, \"title\": \"тест\", \"slug\": \"test\", \"excerpt\": \"тесттест\", \"content\": \"<h1><span class=\\\"text-huge\\\" style=\\\"font-family:'Courier New', Courier, monospace;\\\"><s><strong>тест</strong></s></span></h1>\", \"featured_image\": null, \"meta_title\": \"тест\", \"meta_description\": \"\", \"og_image\": \"\", \"status\": \"published\", \"published_at\": \"2025-10-17T16:14:27.270Z\", \"created_at\": \"2025-10-17T16:14:27.336Z\", \"updated_at\": \"2025-10-17T16:14:27.336Z\", \"categories\": [], \"tags\": []}}]",
+    "object_repr": "тест (Опубликован)"
+  }
+},
+{
+  "model": "reversion.version",
+  "pk": 3,
+  "fields": {
+    "revision": 3,
+    "object_id": "3",
+    "content_type": [
+      "blog",
+      "post"
+    ],
+    "db": "default",
+    "format": "json",
+    "serialized_data": "[{\"model\": \"blog.post\", \"pk\": 3, \"fields\": {\"author\": null, \"title\": \"testfaf\", \"slug\": \"testfaf\", \"excerpt\": \"adkfjbdsaf\", \"content\": \"fsdaflkjdaf\", \"featured_image\": null, \"meta_title\": \"testfaf\", \"meta_description\": \"\", \"og_image\": \"\", \"status\": \"published\", \"published_at\": \"2025-10-21T16:07:41.006Z\", \"created_at\": \"2025-10-21T16:07:41.075Z\", \"updated_at\": \"2025-10-21T16:07:41.075Z\", \"categories\": [], \"tags\": []}}]",
+    "object_repr": "testfaf (Опубликован)"
+  }
+}

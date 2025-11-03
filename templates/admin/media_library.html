@@ -1,80 +1,38 @@
-{# templates/admin/media_library.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Media Library</title>
-  <style>
-    body{font-family:Arial,Helvetica,sans-serif;background:#f6f8fb;color:#111;margin:0;padding:18px}
-    .card{background:#fff;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 4px 12px rgba(0,0,0,0.06)}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-    .thumb{border-radius:6px;overflow:hidden;height:120px;display:flex;align-items:center;justify-content:center;background:#fafafa}
-    .thumb img{max-width:100%;max-height:100%}
-    .meta{font-size:12px;color:#666;margin-top:6px}
-    form.inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  </style>
-</head>
-<body>
-  <h1>Медиа библиотека</h1>
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% block title %}Медиабиблиотека — {{ site_title|default:"Admin" }}{% endblock %}
 
-  <div class="card">
-    <form id="uploadForm" class="inline" enctype="multipart/form-data" method="post">
-      {% csrf_token %}
-      <input type="file" name="file" required />
-      <input type="text" name="title" placeholder="Название (необязательно)" />
-      <button type="submit">Загрузить</button>
-    </form>
-    <div id="uploadResult" style="margin-top:8px"></div>
+{% block content %}
+<div class="pt-container">
+  <h1 class="page-title">Медиабиблиотека</h1>
+
+  {% if not files %}
+    <p class="muted">Нет файлов в MEDIA_ROOT или MEDIA_ROOT не настроен. Проверьте настройки <code>MEDIA_ROOT</code> и <code>MEDIA_URL</code>.</p>
+  {% endif %}
+
+  <div class="media-grid">
+    {% for f in files %}
+      <div class="media-item" title="{{ f.relpath }}">
+        <a href="{{ f.url }}" target="_blank" rel="noopener">
+          {% if f.name|lower|endswith:".jpg" or f.name|lower|endswith:".jpeg" or f.name|lower|endswith:".png" or f.name|lower|endswith:".gif" %}
+            <img src="{{ f.url }}" alt="{{ f.name }}" />
+          {% else %}
+            <div style="height:84px;display:flex;align-items:center;justify-content:center;font-size:12px;background:#fbfbfd;border-radius:6px;border:1px solid #eee;">
+              {{ f.name|slice:":24" }}
+            </div>
+          {% endif %}
+        </a>
+        <div class="filename">{{ f.relpath }}</div>
+      </div>
+    {% endfor %}
   </div>
+</div>
 
-  <div class="card">
-    <h3>Файлы</h3>
-    <div class="grid">
-      {% for a in attachments %}
-        <div>
-          <div class="thumb">
-            {% if a.file and a.file.url %}
-              <img src="{{ a.file.url }}" alt="{{ a.title|default:'file' }}" />
-            {% else %}
-              <div>Файл</div>
-            {% endif %}
-          </div>
-          <div class="meta">{{ a.title|default:"(без названия)" }}</div>
-          <div class="meta">{{ a.uploaded_at|default:a.uploaded|default:"-" }}</div>
-          <div style="margin-top:6px">
-            <a href="{{ a.file.url }}" target="_blank">Открыть</a>
-          </div>
-        </div>
-      {% empty %}
-        <div>Нет файлов</div>
-      {% endfor %}
-    </div>
-  </div>
-
-  <p><a href="{% url 'admin:index' %}">Вернуться в админ</a></p>
-
-  <script>
-    (function(){
-      const form = document.getElementById('uploadForm');
-      const result = document.getElementById('uploadResult');
-      form.addEventListener('submit', async function(e){
-        e.preventDefault();
-        const fd = new FormData(form);
-        const resp = await fetch("", {method:"POST", body: fd, credentials: 'same-origin'});
-        try {
-          const data = await resp.json();
-          if (data.success) {
-            result.textContent = "Загрузка успешна";
-            setTimeout(()=>location.reload(), 700);
-          } else {
-            result.textContent = "Ошибка: " + (data.message || JSON.stringify(data));
-          }
-        } catch (err) {
-          result.textContent = "Ошибка ответа сервера";
-        }
-      });
-    })();
-  </script>
-</body>
-</html>
+<style>
+/* быстрые локальные стили — можно убрать, если уже есть admin-fixes.css */
+.media-grid{display:flex;flex-wrap:wrap;gap:8px}
+.media-item{width:140px;text-align:center}
+.media-item img{width:100%;height:84px;object-fit:cover;border-radius:6px;border:1px solid #eee}
+.filename{font-size:12px;color:#6b7280;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+</style>
+{% endblock %}

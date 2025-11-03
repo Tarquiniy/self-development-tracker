@@ -1,4 +1,3 @@
-# backend/blog/media_views.py
 import os
 import json
 from django.http import JsonResponse

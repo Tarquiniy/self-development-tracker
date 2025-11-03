@@ -3,176 +3,25 @@
 
 {% block extrahead %}
   {{ block.super }}
-  <!-- CKEditor bundle: убедись, что CKEDITOR_BASEPATH указывает на /static/ckeditor/ckeditor/ -->
-  <script>
-    // Подсказка: поставь CKEDITOR_BASEPATH в settings.py или включи этот путь здесь, если используешь локальную сборку:
-    window.CKEDITOR_BASEPATH = "{% static 'ckeditor/ckeditor/' %}";
-  </script>
-  <script src="{% static 'ckeditor/ckeditor/ckeditor.js' %}"></script>
-
   <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
+  {# CKEditor4 CDN (standard-all) для полного набора базовых плагинов #}
+  <script src="https://cdn.ckeditor.com/4.21.0/standard-all/ckeditor.js"></script>
+  {# Наш локальный инициализатор, который гарантирует правильную последовательность загрузки #}
+  <script src="{% static 'admin/js/ckeditor_admin_extra.js' %}"></script>
+
+  <style>
+    .ck-editor__editable_inline { min-height:260px; background:#fff; color:#0f1724; border-radius:6px; padding:12px; border:1px solid #e6eef3; }
+    .action-extra { margin-left:8px; }
+    /* Если хотите — можете переопределить кнопки панели через CSS здесь */
+  </style>
+{% endblock %}
+
+{% block submit_buttons_top %}
+  {{ block.super }}
+  <a href="{% url 'admin-media-library' %}" class="button action-extra" onclick="return openMediaLibrary(event)" title="{% trans 'Открыть медиабиблиотеку' %}">{% trans "Медиатека" %}</a>
+  <button type="button" class="button action-extra" id="preview-btn-top">{% trans "Предпросмотр" %}</button>
 {% endblock %}
 
 {% block content %}
-<form method="post" id="post_form" enctype="multipart/form-data" novalidate>
-  {% csrf_token %}
-  <div class="editor-header">
-    <div class="header-content">
-      <div class="header-title">
-        <h1>
-          {% if original %}
-            <span class="status-indicator {% if original.status == 'published' %}status-published{% else %}status-draft{% endif %}">
-              {% if original.status == 'published' %}📢{% else %}📝{% endif %}
-              {{ original.get_status_display }}
-            </span>
-            {{ original.title|default:"Без названия"|truncatechars:50 }}
-          {% else %}
-            📝 Создание нового поста
-          {% endif %}
-        </h1>
-      </div>
-      <div class="header-actions">
-        <button type="submit" name="_save" class="btn btn-primary">💾 Сохранить</button>
-        <button type="submit" name="_continue" class="btn btn-secondary">🔄 Сохранить и продолжить</button>
-        <a href="{% url 'admin:blog_post_changelist' %}" class="btn btn-outline">← Назад</a>
-      </div>
-    </div>
-  </div>
-
-  <main class="editor-main">
-    <div class="content-area">
-      <section class="editor-card">
-        <div class="card-header"><h3>📌 Основное</h3></div>
-        <div class="card-body">
-          <div class="form-group django-field">
-            <label class="form-label" for="id_title">Заголовок *</label>
-            {{ adminform.form.title }}
-            {% if adminform.form.title.help_text %}<div class="help">{{ adminform.form.title.help_text }}</div>{% endif %}
-          </div>
-
-          <div class="form-group django-field">
-            <label class="form-label" for="id_slug">Slug</label>
-            {{ adminform.form.slug }}
-            <div style="margin-top:6px">
-              <button type="button" id="generate-slug" class="btn btn-sm btn-outline">🔄 Сгенерировать из заголовка</button>
-              <span id="slug-preview" style="margin-left:12px;color:#666"></span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="editor-card">
-        <div class="card-header">
-          <h3>📝 Содержание</h3>
-          <div class="editor-toolbar" aria-hidden="true">
-            <div class="toolbar-group">
-              <button type="button" id="word-count-btn" class="btn btn-sm btn-outline">📊 Статистика</button>
-              <button type="button" id="auto-save-toggle" class="btn btn-sm btn-outline">💾 Автосохранение</button>
-            </div>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="django-field">
-            {{ adminform.form.content }}
-            {% for err in adminform.form.content.errors %}
-              <div class="errorlist">{{ err }}</div>
-            {% endfor %}
-          </div>
-        </div>
-      </section>
-
-      <section class="editor-card">
-        <div class="card-header"><h3>📋 Краткое описание</h3></div>
-        <div class="card-body">
-          {{ adminform.form.excerpt }}
-          <div class="char-counter"><span id="excerpt-counter">0</span>/320</div>
-        </div>
-      </section>
-    </div>
-
-    <aside class="sidebar-area">
-      <div class="editor-card">
-        <div class="card-header"><h3>🚀 Публикация</h3></div>
-        <div class="card-body">
-          {{ adminform.form.status }}
-          {{ adminform.form.published_at }}
-          {{ adminform.form.author }}
-        </div>
-      </div>
-
-      <div class="editor-card">
-        <div class="card-header"><h3>🏷️ Классификация</h3></div>
-        <div class="card-body">
-          {{ adminform.form.categories }}
-          {{ adminform.form.tags }}
-        </div>
-      </div>
-
-      <div class="editor-card">
-        <div class="card-header"><h3>🖼️ Изображения</h3></div>
-        <div class="card-body">
-          {{ adminform.form.featured_image }}
-          <div style="margin-top:8px">
-            <button type="button" id="open-media-lib" class="btn btn-action">🗂 Открыть медиатеку</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="editor-card">
-        <div class="card-header"><h3>🔍 SEO</h3></div>
-        <div class="card-body">
-          {{ adminform.form.meta_title }}
-          <div class="char-counter"><span id="meta-title-counter">0</span>/70</div>
-          {{ adminform.form.meta_description }}
-          <div class="char-counter"><span id="meta-desc-counter">0</span>/160</div>
-          <div style="margin-top:8px">
-            <button type="button" id="fill-meta" class="btn btn-action">📝 Заполнить SEO</button>
-            <button type="button" id="check-seo" class="btn btn-action">🔍 Проверить SEO</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="editor-card">
-        <div class="card-header"><h3>⚡ Быстрые действия</h3></div>
-        <div class="card-body">
-          <div class="quick-actions">
-            <button type="button" id="preview-btn" class="btn btn-action">👁️ Предпросмотр</button>
-            <a href="{% url 'admin-media-library' %}" class="btn btn-action" target="_blank">🗂️ Медиатека</a>
-          </div>
-        </div>
-      </div>
-    </aside>
-  </main>
-
-  {% for field in adminform.form.hidden_fields %}{{ field }}{% endfor %}
-</form>
-
-<!-- Media modal (lightweight) -->
-<div id="pt-media-modal" class="pt-modal" aria-hidden="true" style="display:none">
-  <div class="pt-modal-backdrop" data-close></div>
-  <div class="pt-modal-dialog" role="dialog" aria-modal="true">
-    <div class="pt-modal-header">
-      <h3>Медиатека</h3>
-      <button class="pt-close" data-close>✕</button>
-    </div>
-    <div class="pt-modal-body">
-      <input type="file" id="pt-upload-input" accept="image/*" multiple />
-      <button id="pt-upload-btn" class="btn btn-primary">Загрузить</button>
-      <div id="pt-media-grid" class="pt-media-grid"></div>
-    </div>
-  </div>
-</div>
-{% endblock %}
-
-{% block footer %}
   {{ block.super }}
-  <script src="{% static 'admin/js/change-form.js' %}"></script>
-  <script>
-    // expose preview URL for js
-    window.__pt_preview_url_for_id = function(id){
-      // If object has pk => open admin preview; for new objects require save
-      if (id) return '/posts/preview/' + id + '/';
-      return null;
-    };
-  </script>
 {% endblock %}

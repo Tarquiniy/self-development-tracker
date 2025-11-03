@@ -1,48 +1,26 @@
-{% extends "admin/base.html" %}
-{% load static i18n %}
-
+{% extends "admin/base_site.html" %}
+{% load static %}
 {% block extrahead %}
-  {{ block.super }}
-  <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
-  <link rel="stylesheet" href="{% static 'admin/admin-modern.css' %}">
-  <script defer src="{% static 'admin/js/custom_admin.js' %}"></script>
-  <script defer src="{% static 'admin/js/admin_dashboard.js' %}"></script>
-{% endblock %}
-
-{% block branding %}
-  <a href="{% url 'admin:index' %}" class="flex items-center gap-3">
-    <img src="{% static 'admin/img/logo.svg' %}" alt="PT" class="logo" />
-    <div>
-      <div class="text-lg font-semibold text-gray-900">Positive Theta</div>
-      <div class="text-sm text-gray-500">Content & Growth Studio</div>
-    </div>
-  </a>
-{% endblock %}
-
-{% block nav-global %}
-  {{ block.super }}
-  <div class="pt-topbar">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14">
-      <div class="flex items-center gap-3">
-        <button id="pt-toggle-sidebar" class="p-2 rounded-md hover:bg-gray-100 md:hidden">☰</button>
-        <form action="{% url 'search' %}" method="get" class="hidden md:flex">
-          <input name="q" class="border rounded-md px-3 py-1 text-sm" placeholder="Поиск..." />
-        </form>
-      </div>
-      <div class="flex items-center gap-2">
-        <a href="{% url 'admin:index' %}" class="pt-btn">Dashboard</a>
-        <a href="{% url 'admin:app_list' 'blog' %}" class="pt-btn-primary">Blog</a>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    // Минимальная логика управления сайдбаром и быстрой навигации
-    document.addEventListener('DOMContentLoaded', function () {
-      try {
-        var toggle = document.getElementById('pt-toggle-sidebar');
-        if (toggle) toggle.addEventListener('click', function () { document.body.classList.toggle('pt-sidebar-collapsed'); });
-      } catch (e) { if (window.console) console.error('[pt-topbar] init error', e); }
+<!-- GRP SHIM INJECTED -->
+<script>
+(function(){
+  if (typeof window === "undefined") return;
+  try {
+    Object.defineProperty(window, "$", {
+      configurable: true,
+      enumerable: true,
+      get: function(){ return window.jQuery; },
+      set: function(v){ window.jQuery = v; return v; }
     });
-  </script>
+  } catch(e){
+    var t = setInterval(function(){
+      if (typeof window.jQuery === "function") { window.$ = window.jQuery; clearInterval(t); }
+    }, 30);
+  }
+  window.grp = window.grp || {};
+  window.grp.showRelatedObjectLookupPopup = window.grp.showRelatedObjectLookupPopup || function(){ return false; };
+  window.grp.dismissRelatedLookupPopup = window.grp.dismissRelatedLookupPopup || function(){ return false; };
+})();
+</script>
+{{ block.super }}
 {% endblock %}

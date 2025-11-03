@@ -1,0 +1,105 @@
+{% load static i18n admin_urls %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{% block title %}{{ site_title|default:_('Django admin') }}{% endblock %}</title>
+
+    {# Подключаем стандартные admin-css, затем наши правки #}
+    <link rel="stylesheet" href="{% static 'admin/css/base.css' %}" />
+    <link rel="stylesheet" href="{% static 'admin/css/dashboard.css' %}" />
+    <link rel="stylesheet" href="{% static 'admin/css/admin-fixes.css' %}" />
+    <script defer src="{% static 'admin/js/grappelli-custom.js' %}"></script>
+    <script defer src="{% static 'admin/js/simple_admin_editor.js' %}"></script>
+
+    {% block extrahead %}{% endblock %}
+    <style>
+      /* minimal inline fallback for older admin pages (won't override admin-fixes) */
+      html,body{height:100%}
+    </style>
+</head>
+<body class="pt-admin-body">
+    <header class="pt-admin-topbar">
+        <div class="pt-container">
+            <div class="brand">
+                <a href="{% url 'admin:index' %}" class="brand-link">
+                    <img src="{% static 'admin/img/logo.png' %}" alt="logo" class="brand-logo" onerror="this.style.display='none'"/>
+                    <span class="brand-title">{{ site_header|default:_('Site administration') }}</span>
+                </a>
+            </div>
+
+            <nav class="top-actions">
+                <a href="{% url 'admin:app_list' 'blog' %}" class="top-action">Блог</a>
+                <a href="{% url 'admin:auth_user_changelist' %}" class="top-action">Пользователи</a>
+                <a href="{% url 'admin:logout' %}" class="top-action">Выйти</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="pt-admin-shell">
+        <aside class="pt-admin-sidebar">
+            <div class="pt-container">
+                <div class="sidebar-section">
+                    <h4 class="sidebar-title">Быстрые действия</h4>
+                    <ul class="sidebar-list">
+                        <li><a href="{% url 'admin:blog_post_add' %}">Добавить пост</a></li>
+                        <li><a href="{% url 'admin:blog_category_changelist' %}">Категории</a></li>
+                        <li><a href="{% url 'admin:blog_tag_changelist' %}">Теги</a></li>
+                        <li><a href="{% url 'admin:blog_medialibrary_changelist' %}">Медиабиблиотека</a></li>
+                    </ul>
+                </div>
+
+                <div class="sidebar-section">
+                    <h4 class="sidebar-title">Приложения</h4>
+                    <ul class="sidebar-list small">
+                        {% for app in app_list %}
+                        <li class="app-item">
+                          <strong>{{ app.name }}</strong>
+                          <ul class="model-list">
+                            {% for model in app.models %}
+                              <li><a href="{{ model.admin_url }}">{{ model.name }}</a></li>
+                            {% endfor %}
+                          </ul>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
+        <main class="pt-admin-main">
+            <div class="pt-container content-area">
+                {% block content_title %}
+                    {% if title %}
+                        <h1 class="page-title">{{ title }}</h1>
+                    {% endif %}
+                {% endblock %}
+
+                {% block messages %}
+                  {% if messages %}
+                    <div class="pt-messages">
+                      {% for m in messages %}
+                        <div class="msg {{ m.tags }}">{{ m }}</div>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                {% endblock %}
+
+                {% block content %}
+                {# Стандартный контент админа будет здесь #}
+                {% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <footer class="pt-admin-footer">
+        <div class="pt-container">
+            <div>© {{ now|date:"Y" }} {{ site_title|default:"Admin" }}</div>
+            <div class="footer-right">Backend · Django · 2025</div>
+        </div>
+    </footer>
+
+    {% block extrabody %}{% endblock %}
+</body>
+</html>

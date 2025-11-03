@@ -1,71 +1,69 @@
-{% load static %}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Медиа библиотека</title>
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block content %}
+  <h1>Медиа библиотека</h1>
 
-  <style>
-    :root{ --accent:#0b5fff; --muted:#6b7280; --bg:#f6f8fb; --card:#fff; --border:#e6eef6; --radius:10px; --shadow:0 8px 20px rgba(2,6,23,0.06) }
-    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:#111}
-    .topbar{background:linear-gradient(90deg,#061226,#082033);color:#fff;padding:12px}
-    .topbar-inner{max-width:1100px;margin:0 auto;padding:0 16px;display:flex;justify-content:space-between;align-items:center}
-    .container{max-width:1100px;margin:18px auto;padding:0 16px}
-    .card{background:var(--card);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);border:1px solid var(--border)}
-    .btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;border:1px solid transparent;cursor:pointer;background:#fff}
-    .btn-primary{background:var(--accent);color:#fff}
-    .media-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:12px}
-    .media-item{padding:10px;border-radius:8px;background:#fff;border:1px solid var(--border)}
-    .media-thumb{height:120px;display:flex;align-items:center;justify-content:center;background:#fafafa;border-radius:6px;overflow:hidden}
-    .media-thumb img{max-width:100%;height:100%;object-fit:cover}
-    .muted{color:var(--muted)}
-    @media (max-width:700px){ .topbar-inner{flex-direction:column;align-items:flex-start} }
-  </style>
+  <form id="uploadForm" enctype="multipart/form-data" method="post">
+    {% csrf_token %}
+    <input type="file" name="file" id="fileInput" />
+    <input type="text" name="title" placeholder="Название (опционально)" />
+    <button type="submit">Загрузить</button>
+  </form>
 
-</head>
-<body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div style="font-weight:700">Медиа библиотека</div>
-      <div>
-        <a class="btn" href="{% url 'admin:index' %}">Админка</a>
-        <a class="btn btn-primary" href="{% url 'admin:blog_post_add' %}">Создать пост</a>
+  <hr/>
+  <div id="attachments">
+    {% for a in attachments %}
+      <div class="attachment" data-url="{{ a.file.url }}">
+        <img src="{{ a.file.url }}" style="max-width:200px;max-height:120px" alt="{{ a.title }}" />
+        <div>{{ a.title }}</div>
+        <button onclick="insertToEditor('{{ a.file.url }}')">Вставить в редактор</button>
       </div>
-    </div>
-  </header>
+    {% empty %}
+      <div>Нет файлов</div>
+    {% endfor %}
+  </div>
 
-  <main class="container">
-    <section class="card">
-      <form id="mediaUploadForm" enctype="multipart/form-data" method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        {% csrf_token %}
-        <input type="file" name="file" required />
-        <input type="text" name="title" placeholder="Название (необязательно)" />
-        <button class="btn btn-primary" type="submit">Загрузить</button>
-      </form>
-    </section>
+  <script>
+    const uploadForm = document.getElementById('uploadForm');
+    uploadForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = document.getElementById('fileInput').files[0];
+      if (!f) return alert('Выберите файл');
+      const fd = new FormData(uploadForm);
+      const resp = await fetch("", { method: "POST", body: fd, headers: {'X-Requested-With': 'XMLHttpRequest'}});
+      const data = await resp.json();
+      if (data.success) {
+        alert('Загружено');
+        location.reload();
+      } else {
+        alert('Ошибка: ' + (data.error || 'unknown'));
+      }
+    });
 
-    <section class="card">
-      <div class="media-grid">
-        {% for a in attachments %}
-          <div class="media-item">
-            <div class="media-thumb">
-              {% if a.file and a.file.url %}
-                <img src="{{ a.file.url }}" alt="{{ a.title|default:'file' }}" loading="lazy"/>
-              {% else %}
-                <div class="muted">Нет превью</div>
-              {% endif %}
-            </div>
-            <div style="margin-top:8px">
-              <div style="font-weight:700">{{ a.title|default:"(без названия)" }}</div>
-              <div class="muted">{{ a.uploaded_at|default:a.uploaded|default:"-" }}</div>
-            </div>
-          </div>
-        {% empty %}
-          <div>Файлов нет</div>
-        {% endfor %}
-      </div>
-    </section>
-  </main>
-</body>
-</html>
+    function insertToEditor(url) {
+      // Try to find common fields to insert (featured_image input or content textarea)
+      // This function expects you to have opened media library in a popup from post change form.
+      if (window.opener) {
+        try {
+          // вставить в поле featured_image, если есть
+          const fg = window.opener.document.querySelector('input[name="featured_image"]');
+          if (fg) {
+            fg.value = url;
+            window.close();
+            return;
+          }
+          // вставить в поле content (textarea) — добавляем простой <img>
+          const cnt = window.opener.document.querySelector('textarea[name="content"]');
+          if (cnt) {
+            cnt.value = (cnt.value || '') + "\\n<img src='" + url + "' />\\n";
+            window.close();
+            return;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      alert('Нельзя вставить: откройте медиа-библиотеку из формы поста');
+    }
+  </script>
+{% endblock %}

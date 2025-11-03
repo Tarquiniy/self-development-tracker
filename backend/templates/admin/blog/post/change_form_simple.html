@@ -1,0 +1,12 @@
+{# templates/admin/blog/post/change_form_simple.html #}
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{# Override extrahead to prevent other templates from injecting TipTap/CDN assets.
+   We include only the standard media and our simple editor assets. #}
+{% block extrahead %}
+  {{ block.super }}
+  {# Ensure our simple editor's CSS/JS are present in case media() didn't include them #}
+  <link rel="stylesheet" href="{% static 'admin/css/simple_admin_editor.css' %}">
+  <script src="{% static 'admin/js/simple_admin_editor.js' %}"></script>
+{% endblock %}

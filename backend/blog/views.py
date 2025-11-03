@@ -1,8 +1,11 @@
+# backend/blog/views.py
 import os
 import json
 import logging
 import mimetypes
 import traceback
+import uuid
+import requests
 
 from django.conf import settings
 from django.core import signing
@@ -17,7 +20,6 @@ from django.middleware.csrf import get_token
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db import transaction
 from django.urls import reverse
-from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes, parser_classes
@@ -27,6 +29,12 @@ from rest_framework.parsers import MultiPartParser, FormParser
 
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import models as dj_models
+
+from django.views.decorators.csrf import csrf_exempt
+from django.http import HttpResponse, HttpResponseBadRequest
+from django.utils.html import escape
+from django.contrib.admin.views.decorators import staff_member_required
+
 
 from .models import Post, Category, PostView, Tag, Comment, PostReaction, PostAttachment, PostRevision
 from .serializers import (
@@ -66,7 +74,7 @@ def preview_by_token(request, token):
 # ---------------------------
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'categories__slug', 'tags__slug']
     search_fields = ['title', 'excerpt', 'content', 'meta_description']
@@ -401,24 +409,13 @@ def media_upload(request):
         for f in files:
             att = PostAttachment()
             try:
-                # Используем save с правильными параметрами
-                att.file.save(f.name, ContentFile(f.read()), save=False)
+                att.file.save(f.name, f, save=False)
             except Exception as e:
                 logger.exception("media_upload: file.save failed for %s: %s", f.name, e)
-                return Response({'success': False, 'message': f'file.save failed: {str(e)}'}, status=500)
+                return Response({'success': False, 'message': 'file.save failed'}, status=500)
 
             att.title = request.data.get('title') or f.name
             att.uploaded_by = request.user if request.user.is_authenticated else None
-
-            # Обрабатываем post_id если он передан
-            post_id = request.data.get('post_id')
-            if post_id:
-                try:
-                    post = Post.objects.get(pk=int(post_id))
-                    att.post = post
-                except (Post.DoesNotExist, ValueError):
-                    pass  # Оставляем post как None если не найден
-
             try:
                 att.save()
             except Exception as e:
@@ -428,26 +425,35 @@ def media_upload(request):
                 except Exception:
                     logger.exception("media_upload: cleanup failed for %s", f.name)
                 logger.exception("media_upload: saving PostAttachment failed: %s", e)
-                return Response({'success': False, 'message': f'attachment save failed: {str(e)}'}, status=500)
+                return Response({'success': False, 'message': 'attachment save failed'}, status=500)
 
             try:
-                file_url = att.file.url
-            except Exception as e:
-                file_url = ''
-                logger.warning("Could not get file URL for attachment %s: %s", att.id, e)
+                name = getattr(att.file, 'name', '') or ''
+                normalized = name.replace('post_attachments/post_attachments/', 'post_attachments/')
+                if normalized != name:
+                    try:
+                        if att.file.storage.exists(normalized):
+                            att.file.name = normalized
+                            att.save(update_fields=['file'])
+                            logger.debug("Normalized attachment name from %s -> %s", name, normalized)
+                    except Exception:
+                        logger.debug("Could not check storage.exists for normalized path %s", normalized)
+            except Exception:
+                logger.exception("media_upload: normalization check failed")
 
             uploaded.append({
                 'id': att.id,
-                'url': file_url,
+                'url': getattr(att.file, 'url', ''),
                 'filename': getattr(att.file, 'name', f.name),
                 'title': att.title,
             })
 
         return Response({'success': True, 'uploaded': uploaded})
-    except Exception as e:
+    except Exception:
         tb = traceback.format_exc()
         logger.exception("media_upload error: %s", tb)
-        return Response({'success': False, 'message': f'Internal server error: {str(e)}'}, status=500)
+        return Response({'success': False, 'message': 'Internal server error'}, status=500)
+
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
@@ -645,17 +651,42 @@ def revisions_delete(request):
     except Exception:
         logger.exception("revisions_delete error")
         return Response({'success': False, 'message': 'internal'}, status=500)
-
+    
 @csrf_exempt
-def cors_test(request):
-    """Endpoint для тестирования CORS"""
-    return JsonResponse({
-        "status": "CORS test successful",
-        "message": "CORS headers are working correctly",
-        "origin": request.META.get('HTTP_ORIGIN', 'Not provided')
-    })
+@staff_member_required
+def ckeditor_upload(request):
+    """
+    Endpoint для CKEditor4 upload. Ожидает POST с полем 'upload' (CKEditor4).
+    Загружает файл в SUPABASE bucket через Supabase REST API используя SERVICE ROLE KEY.
+    Возвращает JSON: { uploaded: 1, fileName: "...", url: "..." } - формат, который понимает CKEditor4.
+    """
+    if request.method != 'POST':
+        return HttpResponseBadRequest('Only POST allowed')
+    upload = request.FILES.get('upload') or request.FILES.get('file')
+    if not upload:
+        return HttpResponseBadRequest('No file uploaded')
 
-def search_view(request):
-    q = request.GET.get('q','').strip()
-    results = Post.objects.filter(title__icontains=q) if q else Post.objects.none()
-    return render(request, 'search/results.html', {'query': q, 'results': results})
+    SUPABASE_URL = os.getenv('SUPABASE_URL')
+    SERVICE_ROLE = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    BUCKET = os.getenv('SUPABASE_BUCKET', 'post_attachments')
+
+    if not SUPABASE_URL or not SERVICE_ROLE:
+        return HttpResponse('Supabase not configured on server', status=500)
+
+    # формируем имя файла в бакете
+    filename = f"uploads/{uuid.uuid4().hex}_{upload.name}"
+
+    upload_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/{BUCKET}"
+    headers = {
+        "Authorization": f"Bearer {SERVICE_ROLE}",
+        # "apikey": SERVICE_ROLE  # не нужно, Authorization хватает
+    }
+    files = {
+        'file': (filename, upload.read(), upload.content_type)
+    }
+    resp = requests.post(upload_url, headers=headers, files=files, timeout=30)
+    if resp.status_code not in (200, 201, 204):
+        return HttpResponse(f"Upload failed: {resp.status_code} {resp.text}", status=500)
+
+    public_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/{BUCKET}/{filename}"
+    return JsonResponse({'uploaded': 1, 'fileName': upload.name, 'url': public_url})

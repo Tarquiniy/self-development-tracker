@@ -1,10 +1,12 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
 
+{# admin/dashboard.html — современный и безопасный дашборд #}
+
 {% block title %}Админ — Панель управления{% endblock %}
 
 {% block extrahead %}
-<link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
+<link rel="stylesheet" href="{% static 'admin/css/dashboard.css' %}">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
 <script src="{% static 'admin/js/dashboard.js' %}" defer></script>
 {% endblock %}
@@ -72,6 +74,9 @@
   </section>
 </div>
 
+{# Передаём данные в JS безопасно #}
 {{ labels|default:"[]"|json_script:"pt-dashboard-labels" }}
 {{ posts|default:"[]"|json_script:"pt-dashboard-posts" }}
+{{ comments|default:"[]"|json_script:"pt-dashboard-comments" }}
+{{ views|default:"[]"|json_script:"pt-dashboard-views" }}
 {% endblock %}

@@ -1,0 +1,17 @@
+{% load static %}
+{# Минимальный шаблон виджета: textarea + контейнер для CKEditor. Скрипты подключаем через ModelAdmin.Media. #}
+
+<textarea name="{{ widget.name }}"
+          id="{{ widget.attrs.id|default:'id_'|add:widget.name }}"
+          {% for k,v in widget.attrs.items %}
+            {% if k != 'id' %} {{ k }}="{{ v|escape }}" {% endif %}
+          {% endfor %}>{{ widget.value|default_if_none:''|escape }}</textarea>
+
+<div class="admin-ckeditor-widget"
+     data-upload-url="{{ widget.attrs.data-upload-url|default:"/api/blog/media/upload/" }}"
+     aria-hidden="false">
+  <div class="ckeditor-toolbar" aria-hidden="true"></div>
+  <div class="ckeditor-editor" contenteditable="true"></div>
+</div>
+
+<link rel="stylesheet" href="{% static 'admin/css/ckeditor_admin.css' %}">

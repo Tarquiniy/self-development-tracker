@@ -4,7 +4,7 @@
 {% block extrahead %}
   {{ block.super }}
   {{ adminform.media }}
-  <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
+  <script src="https://cdn.ckeditor.com/ckeditor5@latest/classic/ckeditor.js"></script>
   <link rel="stylesheet" href="{% static 'admin/css/main.css' %}">
   <style>
     /* локальные правки — оставляем вашу стилистику */
@@ -218,4 +218,86 @@ document.addEventListener('DOMContentLoaded', function(){
   if(nativeForm) nativeForm.addEventListener('submit', function(){ syncEditorsToTextarea(); }, true);
 });
 </script>
+{% endblock %}
+{% extends "admin/change_form.html" %}
+{% load i18n static admin_urls %}
+{% block extrahead %}
+    {{ block.super }}
+    <meta name="robots" content="noindex">
+{% endblock %}
+
+{% block content %}
+<div class="post-edit-shell">
+    <div class="post-edit-grid">
+        <section class="left-col">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Содержание</h2>
+                    <small class="muted">Редактор сохраняет HTML, редактор оставлен ваш (CKEditor/TipTap).</small>
+                </div>
+                <div class="card-body">
+                    {# Django admin form will render here: #}
+                    {% for fieldset in adminform %}
+                        {% for line in fieldset %}
+                            {{ line }}
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Резервные сохранения / Ревизии</h3>
+                </div>
+                <div class="card-body">
+                    {% if original and original.revisions.exists %}
+                        <ul class="muted">
+                        {% for rev in original.revisions.all|slice:":6" %}
+                            <li>{{ rev.created_at }} — {{ rev.author }} — {{ rev.title|default:"(без заголовка)" }}</li>
+                        {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="muted">Нет ревизий</div>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+
+        <aside class="right-col">
+            <div class="card sticky-panel">
+                <div class="card-header">
+                    <h3>Публикация</h3>
+                </div>
+                <div class="card-body">
+                    {% if adminform.form.author %}<div class="meta-row">{{ adminform.form.author }}</div>{% endif %}
+                    <div class="meta-row">{{ adminform.form.status }}</div>
+                    <div class="meta-row">{{ adminform.form.published_at }}</div>
+
+                    <div class="actions-row">
+                        <button type="submit" class="primary-button" name="_save">Сохранить</button>
+                        <button type="submit" class="secondary-button" name="_continue">Сохранить и продолжить</button>
+                        <a class="ghost-button" href="{% url 'admin:blog_post_changelist' %}">Отмена</a>
+                    </div>
+
+                    <hr/>
+
+                    <div class="card-subtle">
+                        <strong>SEO:</strong>
+                        <div class="meta-row">{{ adminform.form.meta_title }}</div>
+                        <div class="meta-row">{{ adminform.form.meta_description }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Изображения</div>
+                <div class="card-body">
+                    <div class="meta-row">{{ adminform.form.featured_image }}</div>
+                    <div class="meta-row">{{ adminform.form.og_image }}</div>
+                    <a href="{% url 'admin:blog_media-library' %}" class="link-button">Открыть медиабиблиотеку</a>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
 {% endblock %}

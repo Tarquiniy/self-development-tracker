@@ -1,4 +1,3 @@
-# backend/blog/revalidation.py
 import requests
 import os
 from django.conf import settings
@@ -9,19 +8,19 @@ def send_revalidation_request(post_slug=None):
     """
     frontend_url = os.environ.get('FRONTEND_URL', 'https://positive-theta.vercel.app')
     secret_key = os.environ.get('REVALIDATION_SECRET')
-    
+
     if not secret_key:
         print("REVALIDATION_SECRET not set")
         return False
-    
+
     paths = ['/blog']
     tags = ['posts']
-    
+
     # Если передан slug поста, добавляем его страницу для ревалидации
     if post_slug:
         paths.append(f'/blog/{post_slug}')
         tags.append(f'post-{post_slug}')
-    
+
     try:
         response = requests.post(
             f'{frontend_url}/api/revalidate',
@@ -35,14 +34,14 @@ def send_revalidation_request(post_slug=None):
             },
             timeout=10
         )
-        
+
         if response.status_code == 200:
             print(f"Revalidation successful: {response.json()}")
             return True
         else:
             print(f"Revalidation failed: {response.status_code} - {response.text}")
             return False
-            
+
     except requests.exceptions.RequestException as e:
         print(f"Revalidation request error: {e}")
         return False

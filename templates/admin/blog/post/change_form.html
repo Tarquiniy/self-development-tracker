@@ -1,22 +1,21 @@
 {% extends "admin/change_form.html" %}
-{% load i18n static admin_urls %}
-
-{# Стандартная форма admin + CKEditor5 + кнопка Медиатеки и Preview #}
+{% load static i18n %}
 
 {% block extrahead %}
   {{ block.super }}
-  {{ adminform.media }}
-
-  {# CKEditor 5 Classic (CDN) - можно заменить на локальный файл при необходимости #}
-  <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
+  <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
+  {# CKEditor4 CDN (standard-all) для полного набора базовых плагинов #}
+  <script src="https://cdn.ckeditor.com/4.21.0/standard-all/ckeditor.js"></script>
+  {# Наш локальный инициализатор, который гарантирует правильную последовательность загрузки #}
+  <script src="{% static 'admin/js/ckeditor_admin_extra.js' %}"></script>
 
   <style>
     .ck-editor__editable_inline { min-height:260px; background:#fff; color:#0f1724; border-radius:6px; padding:12px; border:1px solid #e6eef3; }
     .action-extra { margin-left:8px; }
+    /* Если хотите — можете переопределить кнопки панели через CSS здесь */
   </style>
 {% endblock %}
 
-{# Добавим кнопку "Медиатека" и "Предпросмотр" рядом с submit-кнопками #}
 {% block submit_buttons_top %}
   {{ block.super }}
   <a href="{% url 'admin-media-library' %}" class="button action-extra" onclick="return openMediaLibrary(event)" title="{% trans 'Открыть медиабиблиотеку' %}">{% trans "Медиатека" %}</a>
@@ -24,141 +23,5 @@
 {% endblock %}
 
 {% block content %}
-  {# Рендерим стандартную форму админки (гарантирует корректный вывод полей) #}
   {{ block.super }}
-{% endblock %}
-
-{% block extra_js %}
-  {{ block.super }}
-
-<script>
-(function(){
-  const MEDIA_UPLOAD_URL = "{{ media_upload_url|default:'' }}";
-  const CANDIDATES = ['content','short_description','excerpt','body','description','summary'];
-  function getCSRF(){ const el = document.querySelector('input[name="csrfmiddlewaretoken"]'); return el ? el.value : null; }
-  window.editorMap = window.editorMap || {};
-
-  class SimpleUploadAdapter {
-    constructor(loader){ this.loader = loader; }
-    upload(){
-      if(!MEDIA_UPLOAD_URL) return Promise.reject('No upload URL configured');
-      return this.loader.file.then(file => new Promise((resolve, reject) => {
-        const fd = new FormData();
-        fd.append('file', file);
-        fetch(MEDIA_UPLOAD_URL, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'X-CSRFToken': getCSRF() || '' },
-          body: fd
-        }).then(async res => {
-          if(!res.ok){ const t = await res.text().catch(()=>res.statusText); reject(t || 'Upload failed'); return; }
-          const json = await res.json().catch(()=>null);
-          if(json && json.url) { resolve({ default: json.url }); }
-          else reject('Invalid upload response');
-        }).catch(err => reject(err.message || String(err)));
-      }));
-    }
-    abort(){}
-  }
-  function AdapterPlugin(editor){ editor.plugins.get('FileRepository').createUploadAdapter = (loader) => new SimpleUploadAdapter(loader); }
-
-  function initEditors(){
-    CANDIDATES.forEach(name=>{
-      const ta = document.querySelector('textarea[name="'+name+'"]');
-      if(!ta) return;
-      if(window.editorMap[name]) return;
-      const config = { language: 'ru',
-        toolbar: ['heading','|','bold','italic','underline','strikethrough','|','link','bulletedList','numberedList','blockQuote','|','insertTable','mediaEmbed','imageUpload','|','undo','redo'] };
-      if(MEDIA_UPLOAD_URL) config.extraPlugins = [ AdapterPlugin ];
-      ClassicEditor.create(ta, config)
-        .then(editor=>{
-          window.editorMap[name] = editor;
-          editor.editing.view.document.on('focus', () => { window._last_focused_editor = name; });
-        })
-        .catch(err => console.error('CKEditor init failed for', name, err));
-    });
-  }
-
-  document.addEventListener('DOMContentLoaded', initEditors);
-  setTimeout(initEditors, 500);
-  setTimeout(initEditors, 1200);
-
-  window.__insertMediaToEditor = function(url, preferField){
-    try {
-      preferField = preferField || window._last_focused_editor || 'content';
-      if(window.editorMap && window.editorMap[preferField]){
-        const ed = window.editorMap[preferField];
-        ed.model.change(writer=>{
-          const img = writer.createElement('image', { src: url });
-          ed.model.insertContent(img, ed.model.document.selection);
-        });
-        return true;
-      }
-      for(const k in window.editorMap){
-        const ed = window.editorMap[k];
-        if(ed){
-          ed.model.change(writer=>{
-            const img = writer.createElement('image', { src: url });
-            ed.model.insertContent(img, ed.model.document.selection);
-          });
-          return true;
-        }
-      }
-      const ta = document.querySelector('textarea[name="'+preferField+'"]') || document.querySelector('textarea');
-      if(ta){ ta.value = (ta.value || '') + "\\n<img src='" + url + "' alt='' />\\n"; return true; }
-    } catch(e){ console.warn('insertMediaToEditor failed', e); }
-    return false;
-  };
-
-  window.openMediaLibrary = function(e){
-    try {
-      if(e && e.preventDefault) e.preventDefault();
-      window.open("{% url 'admin-media-library' %}", "media_library", "width=1000,height=700,scrollbars=yes");
-    } catch(err){
-      console.error('openMediaLibrary error', err);
-      alert("{% trans 'Не удалось открыть медиа библиотеку' %}");
-    }
-    return false;
-  };
-
-  document.addEventListener('click', function(e){
-    const btn = e.target.closest('#preview-btn-top');
-    if(!btn) return;
-    e.preventDefault();
-    const form = document.querySelector('form');
-    if(!form) { alert("{% trans 'Форма не найдена' %}"); return; }
-    try {
-      for(const name of CANDIDATES){
-        if(window.editorMap[name]){
-          const ta = form.querySelector('textarea[name="'+name+'"]');
-          if(ta) ta.value = window.editorMap[name].getData();
-        }
-      }
-    } catch(e){ console.warn(e); }
-    const title = (form.querySelector('[name=title]') || {}).value || '';
-    const content = (form.querySelector('textarea[name="content"]') || {}).value || '';
-    const short = (form.querySelector('textarea[name="short_description"]') || form.querySelector('textarea[name="excerpt"]') || {}).value || '';
-    const w = window.open('', '_blank');
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Предпросмотр — ${escapeHtml(title)}</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="{% static 'admin/css/main.css' %}"></head><body><article class="container preview-article"><h1>${escapeHtml(title)}</h1><section class="preview-short">${short}</section><section class="preview-content">${content}</section></article></body></html>`;
-    w.document.open(); w.document.write(html); w.document.close();
-  });
-
-  function escapeHtml(s){ return (s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
-
-  document.addEventListener('submit', function(e){
-    const form = e.target;
-    if(!(form && form.matches && form.matches('form'))) return;
-    try {
-      for(const name of CANDIDATES){
-        if(window.editorMap[name]){
-          const ta = form.querySelector('textarea[name="'+name+'"]');
-          if(ta){ ta.value = window.editorMap[name].getData(); }
-        }
-      }
-    } catch(err){ console.warn('sync editors before submit failed', err); }
-  }, true);
-
-})();
-</script>
-
 {% endblock %}
