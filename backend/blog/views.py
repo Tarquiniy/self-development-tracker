@@ -20,6 +20,7 @@ from django.middleware.csrf import get_token
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db import transaction
 from django.urls import reverse
+from rest_framework import permissions, viewsets
 
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes, parser_classes
@@ -127,13 +128,14 @@ class TagViewSet(viewsets.ModelViewSet):
 
 
 class CommentViewSet(viewsets.ModelViewSet):
-    queryset = Comment.objects.filter(is_public=True)
+    queryset = Comment.objects.all()
     serializer_class = CommentSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
 
-    def perform_create(self, serializer):
-        user = self.request.user if self.request.user.is_authenticated else None
-        serializer.save(user=user)
+    def get_permissions(self):
+        # чтение — всем, создание — всем, изменение/удаление — только владельцу
+        if self.action in ['create', 'list', 'retrieve']:
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
 
 
 # ---------------------------

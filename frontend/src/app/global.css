@@ -31,14 +31,14 @@
   --foreground: 222 47% 11%;        /* почти чёрный текст */
   --card: 0 0% 100%;
   --card-foreground: 222 47% 11%;
-  --primary: 340 80% 72%;           /* мягкий розовый (#f48fb1 примерно) */
+  --primary: 203 100% 56%;           
   --primary-foreground: 0 0% 100%;  /* белый текст (Positive Theta) */
   --muted: 210 40% 96%;
   --muted-foreground: 215 16% 47%;
   --border: 214 32% 91%;
 
   /* градиент тоже розовый */
-  --gradient-start: 340 80% 72%;
+  --gradient-start: 203 100% 56%;
   --gradient-end: 345 85% 60%;
 
   --radius-lg: 1rem;
