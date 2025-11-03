@@ -1,4 +1,3 @@
-# backend/blog/views.py
 import os
 import json
 import logging
@@ -11,7 +10,7 @@ from django.conf import settings
 from django.core import signing
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.http import JsonResponse, FileResponse, Http404
+from django.http import JsonResponse, FileResponse, Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, render, redirect
 from django.utils import timezone
 from django.views.generic import TemplateView
@@ -20,9 +19,7 @@ from django.middleware.csrf import get_token
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db import transaction
 from django.urls import reverse
-from rest_framework import permissions, viewsets
-
-from rest_framework import viewsets, status, filters
+from rest_framework import permissions, viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny, IsAdminUser
 from rest_framework.response import Response
@@ -31,11 +28,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import models as dj_models
 
-from django.views.decorators.csrf import csrf_exempt
-from django.http import HttpResponse, HttpResponseBadRequest
-from django.utils.html import escape
-from django.contrib.admin.views.decorators import staff_member_required
-
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
+from django.utils.decorators import method_decorator
 
 from .models import Post, Category, PostView, Tag, Comment, PostReaction, PostAttachment, PostRevision
 from .serializers import (
@@ -45,9 +39,9 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-# Preview token settings
 PREVIEW_SALT = getattr(settings, "PREVIEW_SALT", "post-preview-salt")
-PREVIEW_MAX_AGE = getattr(settings, "PREVIEW_MAX_AGE", 60 * 60)  # seconds
+PREVIEW_MAX_AGE = getattr(settings, "PREVIEW_MAX_AGE", 60 * 60)
+
 
 
 # ---------------------------
@@ -95,7 +89,7 @@ class PostViewSet(viewsets.ModelViewSet):
         user = getattr(self.request, 'user', None)
         if not (user and getattr(user, 'is_staff', False)):
             qs = qs.filter(dj_models.Q(status='published', published_at__lte=timezone.now()))
-        return qs
+        return qs   
 
     def perform_create(self, serializer):
         user = self.request.user if self.request.user.is_authenticated else None
@@ -103,6 +97,10 @@ class PostViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def add_comment(self, request, slug=None):
+        """
+        POST /api/blog/posts/<slug>/add_comment/
+        (this action exists and accepts post data)
+        """
         post = self.get_object()
         data = request.data.copy()
         data['post'] = post.pk
@@ -111,6 +109,7 @@ class PostViewSet(viewsets.ModelViewSet):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -128,14 +127,29 @@ class TagViewSet(viewsets.ModelViewSet):
 
 
 class CommentViewSet(viewsets.ModelViewSet):
+    """
+    CommentViewSet:
+      - list/create/retrieve -> AllowAny
+      - update/delete -> authenticated
+    Note: create is csrf_exempt to allow anonymous POSTs from cross-origin frontends
+    (you may remove csrf_exempt and rely on CSRF cookie + X-CSRFToken from frontend).
+    """
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
 
     def get_permissions(self):
-        # чтение — всем, создание — всем, изменение/удаление — только владельцу
         if self.action in ['create', 'list', 'retrieve']:
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
+    
+    @method_decorator(csrf_exempt)
+    def create(self, request, *args, **kwargs):
+        """
+        Allow creation without CSRF when called from external frontend (fallback).
+        If you prefer CSRF protection, remove the decorator and ensure frontend
+        fetches /api/blog/csrf/ before POST and sends X-CSRFToken header.
+        """
+        return super().create(request, *args, **kwargs)
 
 
 # ---------------------------
@@ -231,14 +245,7 @@ def dashboard_stats(request):
 # Media Library UI (admin) and helpers
 # ---------------------------
 class MediaLibraryView(TemplateView):
-    """
-    Admin-facing media library page. Template locations:
-      - blog/templates/admin/media_library.html
-      OR
-      - templates/admin/media_library.html
-    """
     template_name = 'admin/media_library.html'
-
     def dispatch(self, request, *args, **kwargs):
         try:
             return super().dispatch(request, *args, **kwargs)
@@ -250,8 +257,8 @@ class MediaLibraryView(TemplateView):
         ctx = super().get_context_data(**kwargs)
         attachments = []
         try:
-            qs = PostAttachment.objects.all().order_by('-uploaded_at')[:1000]
-            for a in qs:
+            qs = PostAttachment.objects.all().order_by('-uploaded_at')
+            for a in qs[:1000]:
                 file_field = getattr(a, 'file', None)
                 url = ''
                 filename = ''
@@ -291,6 +298,14 @@ def admin_preview_token_view(request):
     token = get_token(request)
     return JsonResponse({"csrf": token})
 
+@ensure_csrf_cookie
+@require_GET
+def get_csrf_token(request):
+    """
+    GET /api/blog/csrf/ -> returns JSON { csrf: "<token>" } and sets csrftoken cookie.
+    Frontend should call this with credentials included to obtain CSRF cookie before POST.
+    """
+    return JsonResponse({"csrf": get_token(request)})
 
 @require_GET
 @staff_member_required(login_url='/admin/login/')
