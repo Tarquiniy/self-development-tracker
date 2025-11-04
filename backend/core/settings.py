@@ -18,7 +18,7 @@ SUPABASE_USE_PROXY = True
 SUPABASE_URL = env("SUPABASE_URL", "").strip() or None
 SUPABASE_KEY = env("SUPABASE_KEY", "").strip() or None
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "post_attachments")
-SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", "").strip() or None
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 AWS_ACCESS_KEY_ID = env("SUPABASE_S3_KEY", "").strip() or None
 AWS_SECRET_ACCESS_KEY = env("SUPABASE_S3_SECRET", "").strip() or None
@@ -279,9 +279,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ========== REST FRAMEWORK ==========
 REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.TokenAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "backend.core.authentication.SupabaseBearerAuthentication",
+        "rest_framework.authentication.SessionAuthentication",  # оставляем сессию для форм/админки
+        "rest_framework_simplejwt.authentication.JWTAuthentication",  # если используете simplejwt
     ],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',

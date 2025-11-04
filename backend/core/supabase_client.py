@@ -1,22 +1,29 @@
+# backend/core/supabase_client.py
 import os
-from supabase import create_client, Client
+from typing import Optional
+import requests
 
-class SupabaseClient:
-    _instance = None
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # опционально, НЕ хранить в клиенте
 
-    @classmethod
-    def get_client(cls) -> Client:
-        if cls._instance is None:
-            supabase_url = os.getenv('SUPABASE_URL')
-            supabase_key = os.getenv('SUPABASE_KEY')
+if not SUPABASE_URL:
+    # не падаем при импортe, но будем предъявлять явную ошибку при использовании
+    SUPABASE_URL = None
 
-            if not supabase_url or not supabase_key:
-                raise ValueError("Supabase URL and Key must be set in environment variables")
-
-            cls._instance = create_client(supabase_url, supabase_key)
-
-        return cls._instance
-
-# Утилита для работы с Supabase
-def get_supabase():
-    return SupabaseClient.get_client()
+def supabase_user_info(access_token: str, timeout: float = 5.0) -> Optional[dict]:
+    """
+    Запрашивает /auth/v1/user у Supabase, возвращает JSON user info или None.
+    Требует, чтобы переменная SUPABASE_URL была задана в окружении.
+    """
+    if not SUPABASE_URL or not access_token:
+        return None
+    url = SUPABASE_URL.rstrip('/') + '/auth/v1/user'
+    headers = {"Authorization": f"Bearer {access_token}", "apikey": os.getenv("SUPABASE_ANON_KEY","")}
+    try:
+        r = requests.get(url, headers=headers, timeout=timeout)
+        if r.status_code == 200:
+            return r.json()
+        # 401/403/other -> None
+    except requests.RequestException:
+        pass
+    return None

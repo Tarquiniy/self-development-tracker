@@ -1,72 +1,51 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+'use client';
+import React, { useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [msg, setMsg] = useState<string | null>(null);
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  
 
-  async function handleLogin(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
+    setMsg(null);
 
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login/`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include", // важно для сессии
-          body: JSON.stringify({ email, password }),
-        }
-      );
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setMsg(error.message);
+      return;
+    }
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || "Ошибка входа");
-      }
+    const accessToken = data?.session?.access_token;
+    if (!accessToken) {
+      setMsg('Не удалось получить access_token');
+      return;
+    }
 
-      router.push("/"); // после логина на главную
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    // Сохраните токен на клиенте (например, в memory или localStorage)
+    localStorage.setItem('sb_access_token', accessToken);
+
+    // Пример запроса к защищённому Django endpoint:
+    const res = await fetch('/api/protected-test', {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    if (res.ok) {
+      router.push('/dashboard');
+    } else {
+      setMsg('Вход успешен, но проверка на бекенде вернула ошибку');
     }
   }
 
   return (
-    <main className="container py-16">
-      <div className="max-w-md mx-auto bg-card shadow-lg rounded-xl p-8">
-        <h1 className="text-3xl font-bold mb-6 text-center">Вход</h1>
-        <form onSubmit={handleLogin} className="flex flex-col gap-4">
-          <input
-            type="email"
-            placeholder="Email"
-            className="border rounded-lg px-4 py-2"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <input
-            type="password"
-            placeholder="Пароль"
-            className="border rounded-lg px-4 py-2"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-          <Button type="submit" className="btn-primary w-full" disabled={loading}>
-            {loading ? "Входим..." : "Войти"}
-          </Button>
-        </form>
-      </div>
-    </main>
+    <form onSubmit={onSubmit}>
+      <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" />
+      <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Пароль" />
+      <button type="submit">Войти</button>
+      {msg && <div>{msg}</div>}
+    </form>
   );
 }
