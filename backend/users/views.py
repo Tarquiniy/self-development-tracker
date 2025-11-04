@@ -8,38 +8,38 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.core.mail import send_mail
 from django.conf import settings
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from django.middleware.csrf import get_token
+
 
 from .serializers import UserRegistrationSerializer, UserLoginSerializer, UserSerializer, UserProfileSerializer
 from .models import UserProfile
 
 User = get_user_model()
 
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        # Ваш существующий код регистрации
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
             
-            # Отправка email для верификации (в реальном приложении)
-            try:
-                self.send_verification_email(user)
-            except Exception as e:
-                # Логируем ошибку, но не прерываем регистрацию
-                print(f"Failed to send verification email: {e}")
-            
             # Создаем профиль пользователя
             UserProfile.objects.get_or_create(user=user)
-            
-            # Логиним пользователя
-            login(request._request, user)
             
             # JWT токены
             refresh = RefreshToken.for_user(user)
             
             return Response({
-                'user': UserSerializer(user).data,
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'username': user.username
+                },
                 'tokens': {
                     'refresh': str(refresh),
                     'access': str(refresh.access_token),
@@ -47,6 +47,7 @@ class RegisterView(APIView):
             }, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
     def send_verification_email(self, user):
         # В реальном приложении реализовать отправку email
@@ -61,6 +62,7 @@ class RegisterView(APIView):
             fail_silently=False,
         )
 
+@method_decorator(csrf_exempt, name='dispatch')
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -186,3 +188,11 @@ class PasswordResetConfirmView(APIView):
         
         except User.DoesNotExist:
             return Response({'detail': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
+        
+@method_decorator(csrf_exempt, name='dispatch')
+class CSRFTokenView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        token = get_token(request)
+        return Response({'csrfToken': token})

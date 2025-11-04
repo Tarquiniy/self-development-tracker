@@ -9,4 +9,5 @@ urlpatterns = [
     path("verify-email/", views.VerifyEmailView.as_view(), name="verify-email"),
     path("password-reset/", views.PasswordResetView.as_view(), name="password-reset"),
     path("password-reset-confirm/", views.PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
+    path("csrf/", views.CSRFTokenView.as_view(), name="csrf-token"),
 ]
