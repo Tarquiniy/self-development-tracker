@@ -8,7 +8,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const router = useRouter();
-  
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
