@@ -1,18 +1,11 @@
+// frontend/src/app/blog/[slug]/page.tsx
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import CommentsSection from "./CommentsSection";
+import { Card } from "@/components/ui/card";
 import type { Metadata } from "next";
-import "./page.css"; // ✅ подключаем CSS вместо styled-jsx
-
-type Comment = {
-  id: number;
-  name: string;
-  content: string;
-  created_at: string;
-  replies?: Comment[];
-};
+import "./page.css";
 
 type Post = {
   id: number;
@@ -26,7 +19,7 @@ type Post = {
   meta_title?: string | null;
   meta_description?: string | null;
   og_image?: string | null;
-  comments: Comment[];
+  comments?: any[]; // kept for compatibility but not used
 };
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
@@ -130,18 +123,13 @@ export default async function BlogPostPage({ params }: any) {
         />
 
         <div className="post-buttons">
-          <Link href="/blog" className="btn btn-secondary">
+          <Link href="/blog" prefetch={false} className="btn btn-secondary">
             ← Вернуться в блог
           </Link>
-          <Link href="/tracker" className="btn btn-primary">
+          <Link href="/tracker" prefetch={false} className="btn btn-primary">
             Открыть трекер
           </Link>
         </div>
-
-        <section className="post-comments">
-          <h2>Комментарии</h2>
-          <CommentsSection postId={post.id} initialComments={post.comments} />
-        </section>
       </div>
     </main>
   );
