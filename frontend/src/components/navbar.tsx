@@ -3,20 +3,129 @@
 
 import React, { JSX, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
 /**
- * Navbar — самодостаточный, без Tailwind.
- * - Фиксированная высота хедера
- * - Центрированный гамбургер
- * - Мобильное меню выпадает под шапкой (не ломает высоту)
- * - Поиск, "Главная", "Блог" — явно белые
+ * Navbar с динамической темой и твёрдым непрозрачным фоном.
  */
 
 export default function Navbar(): JSX.Element {
   const [open, setOpen] = useState(false);
+  const [user, setUser] = useState<any | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const headerRef = useRef<HTMLElement | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const router = useRouter();
+
+  const LUMINANCE_THRESHOLD = 0.6;
 
   useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (!mounted) return;
+        setUser(data?.user ?? null);
+      } catch (e) {}
+    })();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setUser(session?.user ?? null);
+    });
+
+    function parseRgbString(s: string | null) {
+      if (!s) return null;
+      s = s.trim();
+      const rgbMatch = s.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([0-9.]+))?\)/i);
+      if (rgbMatch) {
+        return {
+          r: Number(rgbMatch[1]),
+          g: Number(rgbMatch[2]),
+          b: Number(rgbMatch[3]),
+          a: rgbMatch[4] !== undefined ? Number(rgbMatch[4]) : 1,
+        };
+      }
+      const hexMatch = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+      if (hexMatch) {
+        let hex = hexMatch[1];
+        if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+        const int = parseInt(hex, 16);
+        return {
+          r: (int >> 16) & 255,
+          g: (int >> 8) & 255,
+          b: int & 255,
+          a: 1,
+        };
+      }
+      return null;
+    }
+
+    function getEffectiveBackgroundColor(el: Element | null) {
+      let cur: Element | null = el;
+      const doc = document;
+      while (cur && cur !== doc.documentElement) {
+        try {
+          const style = getComputedStyle(cur);
+          const bg = style.backgroundColor || style.background || null;
+          const parsed = parseRgbString(bg);
+          if (parsed && parsed.a > 0) return parsed;
+        } catch (e) {}
+        cur = cur.parentElement;
+      }
+      try {
+        const bodyStyle = getComputedStyle(document.body);
+        const parsedBody = parseRgbString(bodyStyle.backgroundColor || bodyStyle.background || null);
+        if (parsedBody) return parsedBody;
+      } catch (e) {}
+      return { r: 255, g: 255, b: 255, a: 1 };
+    }
+
+    function luminanceFromRgb({ r, g, b }: { r: number; g: number; b: number }) {
+      const srgb = [r, g, b].map((v) => v / 255).map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+      return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+    }
+
+    function sampleUnderHeaderAndSetTheme() {
+      const headerEl = headerRef.current;
+      const headerHeight = headerEl ? headerEl.getBoundingClientRect().height : 64;
+      const y = Math.min(headerHeight + 8, window.innerHeight - 4);
+      const xs = [window.innerWidth * 0.1, window.innerWidth * 0.5, window.innerWidth * 0.9];
+      const lumVals: number[] = [];
+
+      for (const x of xs) {
+        const el = document.elementFromPoint(Math.round(x), Math.round(y)) as Element | null;
+        const bg = getEffectiveBackgroundColor(el);
+        if (bg) {
+          const lum = luminanceFromRgb(bg);
+          lumVals.push(lum);
+        }
+      }
+
+      if (lumVals.length === 0) {
+        setTheme("light");
+        return;
+      }
+      const avg = lumVals.reduce((a, b) => a + b, 0) / lumVals.length;
+      const chosen = avg > LUMINANCE_THRESHOLD ? "dark" : "light";
+      setTheme(chosen);
+    }
+
+    function scheduleSample() {
+      if (rafRef.current) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        sampleUnderHeaderAndSetTheme();
+      });
+    }
+
+    scheduleSample();
+    window.addEventListener("scroll", scheduleSample, { passive: true });
+    window.addEventListener("resize", scheduleSample);
+
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
@@ -25,23 +134,47 @@ export default function Navbar(): JSX.Element {
       const target = e.target as Node;
       if (open && !menuRef.current.contains(target)) setOpen(false);
     }
-    function onResize() {
-      if (window.innerWidth >= 960) setOpen(false);
-    }
 
     document.addEventListener("keydown", onKey);
     document.addEventListener("click", onDocClick);
-    window.addEventListener("resize", onResize);
+
     return () => {
+      mounted = false;
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("click", onDocClick);
-      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", scheduleSample);
+      window.removeEventListener("resize", scheduleSample);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      try {
+        listener?.subscription?.unsubscribe?.();
+      } catch (e) {}
     };
   }, [open]);
 
+  useEffect(() => {
+    // debug: покажет в консоли какую тему выбрал компонент
+    // убери в production если нужно
+    console.log("Navbar theme:", theme);
+  }, [theme]);
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e: any) {
+      // Supabase иногда возвращает 403 при logout если сессии нет.
+      console.warn('signOut warning:', e?.message ?? e);
+    } finally {
+      try { localStorage.removeItem("sb_access_token"); } catch {}
+      setUser(null);
+      router.push("/");
+    }
+  };
+
+  const isLight = theme === "light";
+
   return (
     <>
-      <header className="pt-header" role="banner">
+      <header ref={headerRef} className={`pt-header ${isLight ? "theme-light" : "theme-dark"}`} role="banner">
         <div className="bar">
           <div className="left">
             <Link href="/" className="logoLink" aria-label="Home">
@@ -80,7 +213,6 @@ export default function Navbar(): JSX.Element {
           </div>
 
           <div className="right">
-            {/* search icon link: stroke uses currentColor so color applies */}
             <Link href="/search" prefetch={false} className="searchBtn" aria-label="Search">
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
                 <circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" strokeWidth="2" />
@@ -88,14 +220,25 @@ export default function Navbar(): JSX.Element {
               </svg>
             </Link>
 
-            <nav className="desktopNav" aria-hidden>
+            <nav className="desktopNav" aria-hidden={false}>
               <Link href="/" className="navItem">Главная</Link>
               <Link href="/blog" className="navItem">Блог</Link>
+
+              {user ? (
+                <>
+                  <Link href="/profile" className="navItem profileBtn">Профиль</Link>
+                  <button onClick={handleSignOut} className="navItem signoutBtn">Выйти</button>
+                </>
+              ) : (
+                <>
+                  <Link href="/login" className="navItem loginBtn">Войти</Link>
+                  <Link href="/register" className="navItem registerBtn">Регистрация</Link>
+                </>
+              )}
             </nav>
           </div>
         </div>
 
-        {/* Mobile menu — absolutely positioned below header */}
         <div
           ref={menuRef}
           className={`mobileMenu ${open ? "show" : ""}`}
@@ -108,8 +251,17 @@ export default function Navbar(): JSX.Element {
             <a href="/about" onClick={() => setOpen(false)} role="menuitem">О проекте</a>
 
             <div className="mobileActions">
-              <a href="/login" className="actionBtn" onClick={() => setOpen(false)}>Войти</a>
-              <a href="/register" className="actionPrimary" onClick={() => setOpen(false)}>Регистрация</a>
+              {user ? (
+                <>
+                  <a href="/profile" className="actionBtn" onClick={() => setOpen(false)}>Профиль</a>
+                  <button className="actionBtn" onClick={() => { setOpen(false); handleSignOut(); }}>Выйти</button>
+                </>
+              ) : (
+                <>
+                  <a href="/login" className="actionBtn" onClick={() => setOpen(false)}>Войти</a>
+                  <a href="/register" className="actionPrimary" onClick={() => setOpen(false)}>Регистрация</a>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -125,15 +277,61 @@ export default function Navbar(): JSX.Element {
           --shadow: 0 6px 18px rgba(20, 40, 60, 0.12);
         }
 
-        /* Fixed header */
         .pt-header {
           position: fixed;
           top: 0;
           left: 0;
           right: 0;
-          z-index: 60;
+          z-index: 9999; /* поднял выше всего */
           height: var(--header-height);
           pointer-events: auto;
+          transition: background 260ms ease, color 160ms ease, box-shadow 260ms ease;
+        }
+
+        /* LIGHT THEME: solid white background, opaque */
+        .pt-header.theme-light .bar {
+          background: #ffffff !important;
+          color: #0f1724 !important;
+          border-bottom: 1px solid rgba(15,23,36,0.06) !important;
+          box-shadow: 0 6px 20px rgba(12,20,30,0.08) !important;
+        }
+        .pt-header.theme-light .logoChar,
+        .pt-header.theme-light .brand,
+        .pt-header.theme-light .navItem,
+        .pt-header.theme-light .burger {
+          color: #0f1724 !important;
+        }
+        .pt-header.theme-light .searchBtn {
+          color: #0f1724 !important;
+          background: rgba(15,23,36,0.04) !important;
+          border:1px solid rgba(15,23,36,0.06) !important;
+        }
+        .pt-header.theme-light .logoCircle {
+          background: #f7f8fa !important;
+          border: 1px solid rgba(15,23,36,0.06) !important;
+        }
+
+        /* DARK THEME: solid colored gradient, opaque */
+        .pt-header.theme-dark .bar {
+          background: linear-gradient(90deg, var(--blue-1) 0%, var(--blue-2) 50%, var(--blue-3) 100%) !important;
+          color: #ffffff !important;
+          border-bottom: 1px solid rgba(0,0,0,0.06) !important;
+          box-shadow: 0 6px 20px rgba(2,6,23,0.18) !important;
+        }
+        .pt-header.theme-dark .logoChar,
+        .pt-header.theme-dark .brand,
+        .pt-header.theme-dark .navItem,
+        .pt-header.theme-dark .burger {
+          color: #fff !important;
+        }
+        .pt-header.theme-dark .searchBtn {
+          color: #fff !important;
+          background: rgba(255,255,255,0.03) !important;
+          border:1px solid rgba(255,255,255,0.12) !important;
+        }
+        .pt-header.theme-dark .logoCircle {
+          background: rgba(255,255,255,0.06) !important;
+          border: 1px solid rgba(255,255,255,0.12) !important;
         }
 
         .bar {
@@ -143,21 +341,15 @@ export default function Navbar(): JSX.Element {
           justify-content: space-between;
           padding: 0 16px;
           box-sizing: border-box;
-          background: linear-gradient(90deg, var(--blue-1) 0%, var(--blue-2) 50%, var(--blue-3) 100%);
-          border-bottom: 1px solid rgba(0,0,0,0.06);
-          backdrop-filter: saturate(120%) blur(6px);
         }
 
         .left, .center, .right { display:flex; align-items:center; }
 
-        /* Logo */
-        .logoLink { display:flex; gap:10px; align-items:center; color:#ffffff; text-decoration:none; }
-        .logoCircle { width:40px; height:40px; border-radius:999px; border:1px solid rgba(255,255,255,0.25); display:flex; align-items:center; justify-content:center; background: rgba(255,255,255,0.06); }
-        .logoChar { color:#fff; font-weight:700; font-size:18px; }
-        .brand { color:#fff; font-weight:700; font-size:14px; display:none; }
+        .logoLink { display:flex; gap:10px; align-items:center; text-decoration:none; }
+        .logoChar { color:inherit; font-weight:700; font-size:18px; }
+        .brand { color:inherit; font-weight:700; font-size:14px; display:none; }
         @media (min-width:600px) { .brand { display:inline-block; } }
 
-        /* Centered burger */
         .center {
           position: absolute;
           left: 50%;
@@ -175,26 +367,21 @@ export default function Navbar(): JSX.Element {
           justify-content:center;
           border: 1px solid rgba(255,255,255,0.18);
           background: transparent;
-          color: white; /* default icon color */
+          color: inherit;
           cursor: pointer;
           transition: all 160ms ease;
           box-shadow: none;
         }
         .burger.open {
-          background: #ffffff;
-          color: #0f1724;
           border-color: rgba(0,0,0,0.12);
-          box-shadow: var(--shadow);
         }
         .burger.closed:hover {
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
 
-        /* Right side: search + desktop nav */
         .right { gap: 12px; }
 
-        /* Search button: force white */
         .searchBtn {
           width:36px;
           height:36px;
@@ -202,22 +389,22 @@ export default function Navbar(): JSX.Element {
           align-items:center;
           justify-content:center;
           border-radius:999px;
-          color:#fff !important; /* ensure white */
+          color:inherit !important;
           text-decoration:none;
           border:1px solid rgba(255,255,255,0.12);
-          background: rgba(255,255,255,0.03);
+          background: transparent;
         }
         .searchBtn svg { display:block; color: inherit; stroke: currentColor; }
-        .searchBtn:hover { background: rgba(255,255,255,0.06); }
+        .searchBtn:hover { opacity: 0.94; }
 
-        /* Desktop nav: explicitly white */
         .desktopNav {
           display: none;
           gap: 18px;
           margin-left: 6px;
+          align-items:center;
         }
         .desktopNav .navItem {
-          color: #ffffff !important; /* force white */
+          color: inherit !important;
           text-decoration: none;
           font-weight: 600;
           padding: 4px 6px;
@@ -226,10 +413,9 @@ export default function Navbar(): JSX.Element {
 
         @media (min-width: 960px) {
           .desktopNav { display:flex; }
-          .center { display: none; } /* hide centered burger on desktop */
+          .center { display: none; }
         }
 
-        /* Mobile menu: absolute below header so it doesn't increase header height */
         .mobileMenu {
           position: absolute;
           left: 0;
@@ -255,7 +441,7 @@ export default function Navbar(): JSX.Element {
           background: #fff;
           border-bottom-left-radius: 12px;
           border-bottom-right-radius: 12px;
-          box-shadow: var(--shadow);
+          box-shadow: 0 6px 18px rgba(20,40,60,0.08);
           padding: 14px 16px;
           display:flex;
           flex-direction: column;
@@ -297,7 +483,6 @@ export default function Navbar(): JSX.Element {
           border: none;
         }
 
-        /* Ensure page content is pushed down so header doesn't overlap it */
         :global(body) {
           padding-top: var(--header-height) !important;
         }
