@@ -93,3 +93,16 @@ class ProgressTableSerializer(serializers.ModelSerializer):
         instance.default_view = validated_data.get('default_view', instance.default_view)
         instance.save()
         return instance
+class DailyProgressSerializer(serializers.ModelSerializer):
+    id = serializers.ReadOnlyField()
+    # Добавьте это поле для удобного доступа к данным
+    display_data = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DailyProgress
+        fields = ['id', 'table', 'date', 'data', 'display_data', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_display_data(self, obj):
+        """Форматирует данные для отображения в календаре"""
+        return obj.data

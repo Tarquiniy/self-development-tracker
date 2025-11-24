@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import CategoriesManager from "./CategoriesManager";
 import PetalChart from "./PetalChart";
+import ProgressCalendar from "./ProgressCalendar";
 
 type Cat = {
   id: string;
@@ -50,6 +51,7 @@ export default function TableEditorClient({ tableId, serverData }: Props) {
   const [entries, setEntries] = useState<any[]>([]);
   const [categories, setCategories] = useState<Cat[]>([]);
   const [addingMap, setAddingMap] = useState<Record<string, boolean>>({});
+  const [calendarData, setCalendarData] = useState<{ [key: string]: any }>({});
 
   const prevValueRef = useRef<Record<string, number>>({});
   const unlockTimeoutsRef = useRef<Record<string, number | null>>({});
@@ -75,6 +77,7 @@ export default function TableEditorClient({ tableId, serverData }: Props) {
       }));
       setCategories(normalized);
       fetchEntries();
+      fetchCalendarData();
     } else {
       fetchServer();
     }
@@ -115,6 +118,7 @@ export default function TableEditorClient({ tableId, serverData }: Props) {
       if (normalized.length) setCategories(normalized);
 
       await fetchEntries();
+      await fetchCalendarData();
     } catch (e: any) {
       const msg = e && typeof e === "object" ? e.message ?? JSON.stringify(e) : String(e ?? "Ошибка загрузки");
       setError(msg);
@@ -136,6 +140,20 @@ export default function TableEditorClient({ tableId, serverData }: Props) {
       setEntries(Array.isArray(json?.data) ? json.data : toArray(json).filter(Boolean));
     } catch (e) {
       console.warn("fetchEntries exception", e);
+    }
+  }
+
+  async function fetchCalendarData() {
+    try {
+      const res = await fetch(`/api/tables/progress/calendar_data/?table=${tableId}`);
+      if (!res.ok) {
+        console.warn("fetchCalendarData failed:", res.status);
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      setCalendarData(data);
+    } catch (e) {
+      console.warn("fetchCalendarData exception", e);
     }
   }
 
@@ -171,6 +189,7 @@ export default function TableEditorClient({ tableId, serverData }: Props) {
   async function refreshAll() {
     await fetchServer();
     await fetchEntries();
+    await fetchCalendarData();
   }
 
   const radarCats = useMemo(() => {
@@ -301,6 +320,9 @@ export default function TableEditorClient({ tableId, serverData }: Props) {
       } else {
         await fetchCategoryFromServer(categoryId);
       }
+
+      // Обновляем данные календаря после успешного добавления
+      await fetchCalendarData();
     } catch (e: any) {
       setEntries((prev) => prev.filter((it) => it.id !== tmpId));
       setCategories((prev) =>
@@ -349,16 +371,30 @@ export default function TableEditorClient({ tableId, serverData }: Props) {
           <div style={{ fontSize: 12, color: "#556" }}>{loading ? "Загрузка…" : `Категорий: ${categories.length}`}</div>
         </div>
 
+        {/* Календарь прогресса */}
+        <div className="calendar-section">
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, width: "100%" }}>
+            <h3 style={{ margin: 0, fontSize: 16 }}>История прогресса</h3>
+            <button
+              onClick={() => refreshAll()}
+              style={{ marginLeft: "auto", padding: "6px 10px", borderRadius: 8, border: "1px solid #e6eef9", background: "#fff", color: "#0b2336" }}
+            >
+              Обновить
+            </button>
+          </div>
+          
+          <ProgressCalendar
+            tableId={tableId}
+            categories={categories}
+            calendarData={calendarData}
+            onDataUpdate={fetchCalendarData}
+          />
+        </div>
+
         <div className="editor-grid">
           <div className="radar-area">
             <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, width: "100%" }}>
               <h3 style={{ margin: 0, fontSize: 16 }}>Прогресс</h3>
-              <button
-                onClick={() => refreshAll()}
-                style={{ marginLeft: "auto", padding: "6px 10px", borderRadius: 8, border: "1px solid #e6eef9", background: "#fff", color: "#0b2336" }}
-              >
-                Обновить
-              </button>
             </div>
 
             <div className="petal-wrapper" style={{ width: "100%", display: "flex", justifyContent: "center", alignItems: "center", overflow: "visible", minHeight: 440 }}>
@@ -398,6 +434,13 @@ export default function TableEditorClient({ tableId, serverData }: Props) {
         .table-editor-root {
           max-width: 1100px;
           margin: 0 auto;
+        }
+        .calendar-section {
+          background: white;
+          border-radius: 12px;
+          padding: 20px;
+          margin-bottom: 20px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
         .editor-grid {
           display: grid;

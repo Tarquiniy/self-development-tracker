@@ -81,4 +81,3 @@ filebrowser==1.2.0
 bleach==6.2.0
 django-extensions==4.1
 django-ckeditor-5==0.2.18
-fullcalendar==6.1.19

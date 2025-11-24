@@ -97,42 +97,81 @@ class DailyProgressViewSet(viewsets.ModelViewSet):
     serializer_class = DailyProgressSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
 
+    @action(detail=False, methods=['get'])
+    def calendar_data(self, request):
+        """Получить данные для календаря"""
+        table_id = request.query_params.get('table')
+        year = request.query_params.get('year')
+        month = request.query_params.get('month')
+        
+        if not table_id:
+            return Response({'error': 'table parameter is required'}, status=400)
+            
+        # Фильтрация по таблице
+        queryset = self.get_queryset().filter(table_id=table_id)
+        
+        # Фильтрация по году и месяцу если указаны
+        if year and month:
+            import datetime
+            from django.db.models import Q
+            start_date = datetime.date(int(year), int(month), 1)
+            if int(month) == 12:
+                end_date = datetime.date(int(year) + 1, 1, 1)
+            else:
+                end_date = datetime.date(int(year), int(month) + 1, 1)
+            queryset = queryset.filter(date__gte=start_date, date__lt=end_date)
+        
+        # Форматируем данные для календаря
+        calendar_data = {}
+        for progress in queryset:
+            date_str = progress.date.isoformat()
+            calendar_data[date_str] = {
+                'id': progress.id,
+                'date': date_str,
+                'data': progress.data,
+                'notes': progress.notes,
+                'mood': progress.mood,
+                'total_progress': self.calculate_total_progress(progress.data)
+            }
+        
+        return Response(calendar_data)
+    
+    def calculate_total_progress(self, data):
+        """Вычисляет общий прогресс по всем категориям"""
+        if not data:
+            return 0
+        values = [int(v) for v in data.values()]
+        return sum(values) / len(values)
+
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
         table_id = self.request.query_params.get('table')
-        date = self.request.query_params.get('date')
         
-        if user.is_authenticated and user.is_staff:
-            if table_id:
-                qs = qs.filter(table__id=table_id)
-            if date:
-                qs = qs.filter(date=date)
-            return qs
+        # Фильтрация по таблице
+        if table_id:
+            qs = qs.filter(table__id=table_id)
             
+        if user.is_authenticated and user.is_staff:
+            return qs
         if not user.is_authenticated:
             return qs.none()
             
-        # Обычный пользователь — только свои таблицы
-        qs = qs.filter(table__user=user)
-        if table_id:
-            qs = qs.filter(table__id=table_id)
-        if date:
-            qs = qs.filter(date=date)
-            
-        return qs
+        # Обычный пользователь - только свои таблицы
+        return qs.filter(table__user=user)
 
-    def perform_create(self, serializer):
-        table = serializer.validated_data.get('table')
-        user = self.request.user
-        if table.user != user and not user.is_staff:
-            raise permissions.PermissionDenied("You don't own that table")
-        try:
-            with transaction.atomic():
-                serializer.save()
-        except IntegrityError as e:
-            from . import serializers as ser
-            raise ser.ValidationError({"detail": str(e)})
+    def list(self, request, *args, **kwargs):
+        """Переопределяем для поддержки фильтрации по таблице"""
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # Добавляем пагинацию если нужно
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+            
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
 class CalendarView(APIView):
     permission_classes = [IsAuthenticated]
