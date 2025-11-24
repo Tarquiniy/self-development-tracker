@@ -23,6 +23,9 @@
   --radius-lg: 1rem;
   --shadow-sm: 0 6px 18px rgba(2,6,23,0.06);
   --shadow-lg: 0 20px 50px rgba(2,6,23,0.12);
+
+  /* header height for layout-safe spacing */
+  --header-height: 64px;
 }
 
 /* dark theme values (apply by adding .dark on <html> or <body>) */

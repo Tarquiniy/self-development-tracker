@@ -3,9 +3,9 @@
 const fetch = require('node-fetch'); // npm i node-fetch@2
 const crypto = require('crypto');
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8003162562:AAH2Dt4ASv44kZYzCH6wHvvDWAeSRW2tqg8';
-const SITE_ORIGIN = process.env.SITE_ORIGIN || 'https://positive-theta.vercel.app';
-const ENDPOINT = (process.env.ENDPOINT || `https://positive-theta.vercel.app/api/auth/telegram`);
+const TELEGRAM_BOT_TOKEN = '8003162562:AAH2Dt4ASv44kZYzCH6wHvvDWAeSRW2tqg8';
+const SITE_ORIGIN = 'https://positive-theta.vercel.app';
+const ENDPOINT="https://positive-theta.vercel.app/api/auth/telegram";
 
 // Поддельные поля как их отдаёт виджет
 const payload = {

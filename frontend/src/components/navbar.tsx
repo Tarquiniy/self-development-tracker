@@ -1,130 +1,48 @@
-// frontend/src/components/navbar.tsx
 "use client";
 
 import React, { JSX, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 /**
- * Navbar с динамической темой и твёрдым непрозрачным фоном.
+ * Navbar with dynamic contrast:
+ * - Samples DOM just under the header to compute the effective background luminance.
+ * - Switches the navbar between "light" (light background / dark text)
+ *   and "dark" (dark background / light text) variants so the navbar always
+ *   contrasts with the content beneath.
+ *
+ * Notes:
+ * - Sampling uses document.elementFromPoint and climbs parents to find a non-transparent
+ *   background. If background is semi-transparent it is alpha-composited over white.
+ * - Sampling is throttled with rAF for scroll/resize events.
+ * - Reactivity triggered on mount, scroll, resize and when mobile menu toggles.
  */
 
 export default function Navbar(): JSX.Element {
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState<any | null>(null);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [preferDarkNav, setPreferDarkNav] = useState<boolean | null>(null); // null = not yet measured
   const menuRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLElement | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const router = useRouter();
-
-  const LUMINANCE_THRESHOLD = 0.6;
+  const ticking = useRef(false);
 
   useEffect(() => {
+    // initial session fetch
     let mounted = true;
-
     (async () => {
       try {
-        const { data } = await supabase.auth.getUser();
+        const { data } = await supabaseBrowser.auth.getSession();
         if (!mounted) return;
-        setUser(data?.user ?? null);
-      } catch (e) {}
+        setUser(data?.session?.user ?? null);
+      } catch (e) {
+        // ignore
+      }
     })();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) return;
+    // listen to auth changes
+    const { data: sub } = supabaseBrowser.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
     });
-
-    function parseRgbString(s: string | null) {
-      if (!s) return null;
-      s = s.trim();
-      const rgbMatch = s.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([0-9.]+))?\)/i);
-      if (rgbMatch) {
-        return {
-          r: Number(rgbMatch[1]),
-          g: Number(rgbMatch[2]),
-          b: Number(rgbMatch[3]),
-          a: rgbMatch[4] !== undefined ? Number(rgbMatch[4]) : 1,
-        };
-      }
-      const hexMatch = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-      if (hexMatch) {
-        let hex = hexMatch[1];
-        if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
-        const int = parseInt(hex, 16);
-        return {
-          r: (int >> 16) & 255,
-          g: (int >> 8) & 255,
-          b: int & 255,
-          a: 1,
-        };
-      }
-      return null;
-    }
-
-    function getEffectiveBackgroundColor(el: Element | null) {
-      let cur: Element | null = el;
-      const doc = document;
-      while (cur && cur !== doc.documentElement) {
-        try {
-          const style = getComputedStyle(cur);
-          const bg = style.backgroundColor || style.background || null;
-          const parsed = parseRgbString(bg);
-          if (parsed && parsed.a > 0) return parsed;
-        } catch (e) {}
-        cur = cur.parentElement;
-      }
-      try {
-        const bodyStyle = getComputedStyle(document.body);
-        const parsedBody = parseRgbString(bodyStyle.backgroundColor || bodyStyle.background || null);
-        if (parsedBody) return parsedBody;
-      } catch (e) {}
-      return { r: 255, g: 255, b: 255, a: 1 };
-    }
-
-    function luminanceFromRgb({ r, g, b }: { r: number; g: number; b: number }) {
-      const srgb = [r, g, b].map((v) => v / 255).map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
-      return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
-    }
-
-    function sampleUnderHeaderAndSetTheme() {
-      const headerEl = headerRef.current;
-      const headerHeight = headerEl ? headerEl.getBoundingClientRect().height : 64;
-      const y = Math.min(headerHeight + 8, window.innerHeight - 4);
-      const xs = [window.innerWidth * 0.1, window.innerWidth * 0.5, window.innerWidth * 0.9];
-      const lumVals: number[] = [];
-
-      for (const x of xs) {
-        const el = document.elementFromPoint(Math.round(x), Math.round(y)) as Element | null;
-        const bg = getEffectiveBackgroundColor(el);
-        if (bg) {
-          const lum = luminanceFromRgb(bg);
-          lumVals.push(lum);
-        }
-      }
-
-      if (lumVals.length === 0) {
-        setTheme("light");
-        return;
-      }
-      const avg = lumVals.reduce((a, b) => a + b, 0) / lumVals.length;
-      const chosen = avg > LUMINANCE_THRESHOLD ? "dark" : "light";
-      setTheme(chosen);
-    }
-
-    function scheduleSample() {
-      if (rafRef.current) return;
-      rafRef.current = requestAnimationFrame(() => {
-        rafRef.current = null;
-        sampleUnderHeaderAndSetTheme();
-      });
-    }
-
-    scheduleSample();
-    window.addEventListener("scroll", scheduleSample, { passive: true });
-    window.addEventListener("resize", scheduleSample);
 
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -134,47 +52,156 @@ export default function Navbar(): JSX.Element {
       const target = e.target as Node;
       if (open && !menuRef.current.contains(target)) setOpen(false);
     }
+    function onResize() {
+      if (window.innerWidth >= 960) setOpen(false);
+      requestMeasure();
+    }
 
     document.addEventListener("keydown", onKey);
     document.addEventListener("click", onDocClick);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", requestMeasure, { passive: true });
+
+    // Mutation observer to catch DOM changes that may change background under header
+    const mo = new MutationObserver(() => requestMeasure());
+    mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
+
+    // initial measure after mount
+    requestMeasure();
 
     return () => {
       mounted = false;
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("click", onDocClick);
-      window.removeEventListener("scroll", scheduleSample);
-      window.removeEventListener("resize", scheduleSample);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      try {
-        listener?.subscription?.unsubscribe?.();
-      } catch (e) {}
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", requestMeasure as any);
+      mo.disconnect();
+      sub?.subscription?.unsubscribe?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  useEffect(() => {
-    // debug: покажет в консоли какую тему выбрал компонент
-    // убери в production если нужно
-    console.log("Navbar theme:", theme);
-  }, [theme]);
+  // requestMeasure throttled by rAF
+  function requestMeasure() {
+    if (ticking.current) return;
+    ticking.current = true;
+    window.requestAnimationFrame(() => {
+      try {
+        measureAndSet();
+      } finally {
+        ticking.current = false;
+      }
+    });
+  }
 
-  const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (e: any) {
-      // Supabase иногда возвращает 403 при logout если сессии нет.
-      console.warn('signOut warning:', e?.message ?? e);
-    } finally {
-      try { localStorage.removeItem("sb_access_token"); } catch {}
-      setUser(null);
-      router.push("/");
+  function measureAndSet() {
+    const headerEl = headerRef.current ?? document.querySelector("header.pt-header");
+    if (!headerEl) return;
+
+    const rect = headerEl.getBoundingClientRect();
+    // sample just below header to capture content background (y = header bottom + 4px)
+    const sampleY = Math.min(window.innerHeight - 1, Math.max(1, Math.round(rect.bottom + 4)));
+    const sampleXs = [window.innerWidth * 0.25, window.innerWidth * 0.5, window.innerWidth * 0.75];
+
+    const luminances = sampleXs.map((x) => {
+      const col = getEffectiveBackgroundColorAtPoint(Math.round(x), Math.round(sampleY));
+      return colorToLuminance(col);
+    }).filter((v) => typeof v === "number") as number[];
+
+    if (!luminances.length) return;
+
+    const avg = luminances.reduce((a, b) => a + b, 0) / luminances.length;
+    // avg in 0..1. Heuristic:
+    // if average luminance is high (light content) => use dark navbar (text dark? actually dark navbar = dark bg with light text)
+    // we want dark navbar if background is light to contrast (so preferDarkNav = true when avg > threshold)
+    const threshold = 0.6;
+    const wantDarkNav = avg > threshold;
+    setPreferDarkNav(wantDarkNav);
+  }
+
+  // returns CSS rgb(a) string or null
+  function getEffectiveBackgroundColorAtPoint(x: number, y: number): string | null {
+    // clamp points inside viewport
+    if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) return null;
+    let el: Element | null = document.elementFromPoint(x, y);
+    // If the point is inside the navbar itself, move slightly further down
+    const headerEl = headerRef.current ?? document.querySelector("header.pt-header");
+    if (el && headerEl && headerEl.contains(el)) {
+      el = document.elementFromPoint(x, Math.min(window.innerHeight - 1, y + headerEl.getBoundingClientRect().height + 6));
     }
-  };
+    while (el && el !== document.documentElement) {
+      const style = window.getComputedStyle(el as Element);
+      const bg = style.backgroundColor;
+      if (bg && bg !== "transparent" && bg !== "rgba(0, 0, 0, 0)" && bg !== "initial") {
+        // return the first non-transparent background
+        return bg;
+      }
+      el = el.parentElement;
+    }
+    // fallback to body background
+    const bodyBg = window.getComputedStyle(document.body).backgroundColor;
+    return bodyBg && bodyBg !== "transparent" ? bodyBg : null;
+  }
 
-  const isLight = theme === "light";
+  // parse color like "rgb(r,g,b)" or "rgba(r,g,b,a)" or hex #rrggbb
+  function parseColor(str: string | null): { r: number; g: number; b: number; a: number } | null {
+    if (!str) return null;
+    str = str.trim();
+    // rgb/rgba
+    const rgbMatch = str.match(/rgba?\(([^)]+)\)/i);
+    if (rgbMatch) {
+      const parts = rgbMatch[1].split(",").map((s) => s.trim());
+      const r = Number(parts[0]) || 0;
+      const g = Number(parts[1]) || 0;
+      const b = Number(parts[2]) || 0;
+      const a = parts[3] !== undefined ? Number(parts[3]) : 1;
+      return { r, g, b, a };
+    }
+    // hex #rrggbb or #rgb
+    const hexMatch = str.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hexMatch) {
+      const hex = hexMatch[1];
+      if (hex.length === 3) {
+        const r = parseInt(hex[0] + hex[0], 16);
+        const g = parseInt(hex[1] + hex[1], 16);
+        const b = parseInt(hex[2] + hex[2], 16);
+        return { r, g, b, a: 1 };
+      } else {
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        return { r, g, b, a: 1 };
+      }
+    }
+    return null;
+  }
+
+  // composite semi-transparent color over white (simple) and compute relative luminance
+  function colorToLuminance(cssColor: string | null): number {
+    const parsed = parseColor(cssColor);
+    if (!parsed) return 1; // default to light if unknown
+    // composite over white if alpha < 1
+    const a = typeof parsed.a === "number" ? parsed.a : 1;
+    const r = Math.round(parsed.r * a + 255 * (1 - a));
+    const g = Math.round(parsed.g * a + 255 * (1 - a));
+    const b = Math.round(parsed.b * a + 255 * (1 - a));
+
+    // convert sRGB to linear
+    const srgb = [r, g, b].map((v) => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    // relative luminance
+    const L = 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+    return L; // 0..1
+  }
+
+  // compute class name for header: preferDarkNav === true -> dark bg (dark overlay) else light bg
+  const contrastClass = preferDarkNav === null ? "nav-contrast-auto" : preferDarkNav ? "nav-contrast-dark" : "nav-contrast-light";
 
   return (
     <>
-      <header ref={headerRef} className={`pt-header ${isLight ? "theme-light" : "theme-dark"}`} role="banner">
+      <header ref={headerRef} className={`pt-header ${contrastClass}`} role="banner" aria-hidden={false}>
         <div className="bar">
           <div className="left">
             <Link href="/" className="logoLink" aria-label="Home">
@@ -193,6 +220,8 @@ export default function Navbar(): JSX.Element {
               onClick={(e) => {
                 e.stopPropagation();
                 setOpen((s) => !s);
+                // re-measure after opening mobile menu (since it changes layout)
+                setTimeout(() => requestMeasure(), 120);
               }}
             >
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
@@ -220,19 +249,19 @@ export default function Navbar(): JSX.Element {
               </svg>
             </Link>
 
-            <nav className="desktopNav" aria-hidden={false}>
+            <nav className="desktopNav" aria-hidden>
               <Link href="/" className="navItem">Главная</Link>
               <Link href="/blog" className="navItem">Блог</Link>
 
               {user ? (
                 <>
-                  <Link href="/profile" className="navItem profileBtn">Профиль</Link>
-                  <button onClick={handleSignOut} className="navItem signoutBtn">Выйти</button>
+                  <Link href="/dashboard" className="navItem">Dashboard</Link>
+                  <Link href="/profile" className="navItem">Профиль</Link>
                 </>
               ) : (
                 <>
-                  <Link href="/login" className="navItem loginBtn">Войти</Link>
-                  <Link href="/register" className="navItem registerBtn">Регистрация</Link>
+                  <Link href="/login" className="navItem">Войти</Link>
+                  <Link href="/register" className="navItem">Регистрация</Link>
                 </>
               )}
             </nav>
@@ -253,8 +282,8 @@ export default function Navbar(): JSX.Element {
             <div className="mobileActions">
               {user ? (
                 <>
-                  <a href="/profile" className="actionBtn" onClick={() => setOpen(false)}>Профиль</a>
-                  <button className="actionBtn" onClick={() => { setOpen(false); handleSignOut(); }}>Выйти</button>
+                  <a href="/dashboard" className="actionBtn" onClick={() => setOpen(false)}>Dashboard</a>
+                  <a href="/profile" className="actionPrimary" onClick={() => setOpen(false)}>Профиль</a>
                 </>
               ) : (
                 <>
@@ -277,63 +306,19 @@ export default function Navbar(): JSX.Element {
           --shadow: 0 6px 18px rgba(20, 40, 60, 0.12);
         }
 
+        /* base header layout (keeps height and positioning) */
         .pt-header {
           position: fixed;
           top: 0;
           left: 0;
           right: 0;
-          z-index: 9999; /* поднял выше всего */
+          z-index: 60;
           height: var(--header-height);
           pointer-events: auto;
-          transition: background 260ms ease, color 160ms ease, box-shadow 260ms ease;
+          transition: background-color 220ms ease, color 220ms ease, box-shadow 220ms ease;
         }
 
-        /* LIGHT THEME: solid white background, opaque */
-        .pt-header.theme-light .bar {
-          background: #ffffff !important;
-          color: #0f1724 !important;
-          border-bottom: 1px solid rgba(15,23,36,0.06) !important;
-          box-shadow: 0 6px 20px rgba(12,20,30,0.08) !important;
-        }
-        .pt-header.theme-light .logoChar,
-        .pt-header.theme-light .brand,
-        .pt-header.theme-light .navItem,
-        .pt-header.theme-light .burger {
-          color: #0f1724 !important;
-        }
-        .pt-header.theme-light .searchBtn {
-          color: #0f1724 !important;
-          background: rgba(15,23,36,0.04) !important;
-          border:1px solid rgba(15,23,36,0.06) !important;
-        }
-        .pt-header.theme-light .logoCircle {
-          background: #f7f8fa !important;
-          border: 1px solid rgba(15,23,36,0.06) !important;
-        }
-
-        /* DARK THEME: solid colored gradient, opaque */
-        .pt-header.theme-dark .bar {
-          background: linear-gradient(90deg, var(--blue-1) 0%, var(--blue-2) 50%, var(--blue-3) 100%) !important;
-          color: #ffffff !important;
-          border-bottom: 1px solid rgba(0,0,0,0.06) !important;
-          box-shadow: 0 6px 20px rgba(2,6,23,0.18) !important;
-        }
-        .pt-header.theme-dark .logoChar,
-        .pt-header.theme-dark .brand,
-        .pt-header.theme-dark .navItem,
-        .pt-header.theme-dark .burger {
-          color: #fff !important;
-        }
-        .pt-header.theme-dark .searchBtn {
-          color: #fff !important;
-          background: rgba(255,255,255,0.03) !important;
-          border:1px solid rgba(255,255,255,0.12) !important;
-        }
-        .pt-header.theme-dark .logoCircle {
-          background: rgba(255,255,255,0.06) !important;
-          border: 1px solid rgba(255,255,255,0.12) !important;
-        }
-
+        /* default bar uses CSS variables for bg/text so variants can override them */
         .bar {
           height: 100%;
           display: flex;
@@ -341,13 +326,41 @@ export default function Navbar(): JSX.Element {
           justify-content: space-between;
           padding: 0 16px;
           box-sizing: border-box;
+          background: var(--nav-bg, linear-gradient(90deg, var(--blue-1) 0%, var(--blue-2) 50%, var(--blue-3) 100%));
+          color: var(--nav-foreground, white);
+          border-bottom: 1px solid rgba(0,0,0,0.06);
+          backdrop-filter: saturate(120%) blur(6px);
+        }
+
+        /* NAVBAR VARIANTS:
+           - .nav-contrast-dark  -> darker overlay (for light content beneath) with light text
+           - .nav-contrast-light -> light overlay (for dark content beneath) with dark text
+           - .nav-contrast-auto  -> initial state: semi-transparent neutral
+        */
+        .nav-contrast-auto .bar {
+          --nav-bg: linear-gradient(90deg, var(--blue-1) 0%, var(--blue-2) 50%, var(--blue-3) 100%);
+          --nav-foreground: white;
+        }
+        .nav-contrast-dark .bar {
+          --nav-bg: rgba(6, 12, 20, 0.86); /* dark translucent background */
+          --nav-foreground: #fff;
+          box-shadow: 0 6px 18px rgba(2,6,23,0.28);
+        }
+        .nav-contrast-light .bar {
+          --nav-bg: rgba(255,255,255,0.92); /* light translucent background */
+          --nav-foreground: #0f1724;
+          box-shadow: 0 6px 18px rgba(2,6,23,0.06);
+          border-bottom: 1px solid rgba(15,23,36,0.06);
         }
 
         .left, .center, .right { display:flex; align-items:center; }
 
-        .logoLink { display:flex; gap:10px; align-items:center; text-decoration:none; }
-        .logoChar { color:inherit; font-weight:700; font-size:18px; }
-        .brand { color:inherit; font-weight:700; font-size:14px; display:none; }
+        .logoLink { display:flex; gap:10px; align-items:center; color:inherit; text-decoration:none; }
+        .logoCircle { width:40px; height:40px; border-radius:999px; border:1px solid rgba(255,255,255,0.12); display:flex; align-items:center; justify-content:center; background: rgba(255,255,255,0.06); }
+        /* ensure logo colors adapt to nav foreground */
+        .nav-contrast-light .logoCircle { background: rgba(15,23,36,0.04); border-color: rgba(15,23,36,0.06); }
+        .logoChar { color: var(--nav-foreground); font-weight:700; font-size:18px; }
+        .brand { color: var(--nav-foreground); font-weight:700; font-size:14px; display:none; }
         @media (min-width:600px) { .brand { display:inline-block; } }
 
         .center {
@@ -373,7 +386,10 @@ export default function Navbar(): JSX.Element {
           box-shadow: none;
         }
         .burger.open {
-          border-color: rgba(0,0,0,0.12);
+          background: rgba(0,0,0,0.08);
+          color: inherit;
+          border-color: rgba(0,0,0,0.08);
+          box-shadow: var(--shadow);
         }
         .burger.closed:hover {
           transform: translateY(-1px);
@@ -389,19 +405,18 @@ export default function Navbar(): JSX.Element {
           align-items:center;
           justify-content:center;
           border-radius:999px;
-          color:inherit !important;
+          color: inherit !important;
           text-decoration:none;
-          border:1px solid rgba(255,255,255,0.12);
+          border:1px solid rgba(255,255,255,0.08);
           background: transparent;
         }
         .searchBtn svg { display:block; color: inherit; stroke: currentColor; }
-        .searchBtn:hover { opacity: 0.94; }
+        .searchBtn:hover { background: rgba(255,255,255,0.04); }
 
         .desktopNav {
           display: none;
           gap: 18px;
           margin-left: 6px;
-          align-items:center;
         }
         .desktopNav .navItem {
           color: inherit !important;
@@ -438,17 +453,21 @@ export default function Navbar(): JSX.Element {
         }
 
         .mobileInner {
-          background: #fff;
+          background: var(--mobile-bg, #fff);
           border-bottom-left-radius: 12px;
           border-bottom-right-radius: 12px;
-          box-shadow: 0 6px 18px rgba(20,40,60,0.08);
+          box-shadow: var(--shadow);
           padding: 14px 16px;
           display:flex;
           flex-direction: column;
           gap: 8px;
         }
+        /* ensure mobile menu colors follow variant */
+        .nav-contrast-dark .mobileInner { --mobile-bg: rgba(15,20,25,0.98); color: #fff; }
+        .nav-contrast-light .mobileInner { --mobile-bg: #fff; color: #0f1724; }
+
         .mobileInner a {
-          color: #0f1724;
+          color: inherit;
           text-decoration: none;
           padding: 10px 6px;
           border-radius: 8px;
@@ -467,24 +486,20 @@ export default function Navbar(): JSX.Element {
           padding: 10px;
           border-radius: 8px;
           border: 1px solid rgba(15,23,36,0.06);
-          color: #0f1724;
+          color: inherit;
           text-decoration:none;
           font-weight:700;
-          background: #ffffff;
+          background: transparent;
         }
         .actionPrimary {
           text-align:center;
           padding: 10px;
           border-radius: 8px;
-          color: #ffffff;
+          color: var(--nav-foreground);
           text-decoration:none;
           font-weight:700;
           background: linear-gradient(90deg,#0073e6,#1fa6ff);
           border: none;
-        }
-
-        :global(body) {
-          padding-top: var(--header-height) !important;
         }
 
         @media (min-width: 960px) {

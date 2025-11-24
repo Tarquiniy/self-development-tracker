@@ -1,91 +1,127 @@
-'use client';
-import React, { JSX, useState } from 'react';
-import Navbar from '@/components/navbar';
-import TelegramLoginButton from '@/components/TelegramLoginButton';
-import { supabase } from '@/lib/supabaseClient';
-import { useRouter } from 'next/navigation';
+"use client";
 
-export default function LoginPage(): JSX.Element {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+import React, { useState } from "react";
+import Link from "next/link";
+import { createClient } from "@supabase/supabase-js";
+import { useRouter } from "next/navigation";
+import TelegramLoginButton from "@/components/TelegramLoginButton";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+export default function LoginPage(): React.ReactElement {
   const router = useRouter();
 
-  const canSubmit = email.length > 0 && password.length > 0 && !loading;
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const onSubmit = async (e: React.FormEvent) => {
+  async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
-    setMsg(null);
-    if (!canSubmit) {
-      setMsg('Введите email и пароль.');
-      return;
-    }
+    setError(null);
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        setMsg('Ошибка входа: ' + error.message);
+      const { data, error: signErr } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      } as any);
+
+      if (signErr) {
+        setError(signErr.message || "Ошибка входа");
         setLoading(false);
         return;
       }
-      try { localStorage.setItem('sb_access_token', (data?.session?.access_token) ?? ''); } catch {}
-      setMsg('Вход выполнен. Перенаправляем...');
-      setTimeout(() => router.push('/'), 400);
+
+      // successful sign in - redirect to homepage
+      router.push("/");
     } catch (err: any) {
-      setMsg(err?.message ?? String(err));
+      console.error("signin error", err);
+      setError(String(err?.message ?? err));
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  async function handleMagicLink(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const { data, error: err } = await supabase.auth.signInWithOtp({ email } as any);
+      if (err) {
+        setError(err.message || "Не удалось отправить magic-link");
+      } else {
+        setError(null);
+        alert("Magic-link отправлен на почту. Проверьте вашу почту.");
+      }
+    } catch (e) {
+      setError("Ошибка запроса");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <>
-      <Navbar />
       <main className="page">
-        <section className="card" aria-labelledby="login-title">
-          <h1 id="login-title">Войти</h1>
-          <p className="lead">Войдите через Telegram или используйте email и пароль.</p>
+        <div className="card">
+          <h1>Войти</h1>
 
-          <div className="socialArea">
-            <div className="tgWidgetWrap">
-              <TelegramLoginButton />
+          <form onSubmit={handleSignIn} className="form">
+            <label className="field">
+              <span className="label">Email</span>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
+            </label>
+
+            <label className="field">
+              <span className="label">Пароль</span>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
+            </label>
+
+            {error && <div className="error">{error}</div>}
+
+            <div className="actions">
+              <button type="submit" className="primary" disabled={loading}>
+                {loading ? "Вход…" : "Войти"}
+              </button>
+
+              <button type="button" className="ghost" onClick={handleMagicLink} disabled={loading || !email}>
+                Отправить magic-link
+              </button>
             </div>
-          </div>
 
-          <div className="divider"><span>или</span></div>
-
-          <form onSubmit={onSubmit} className="form" noValidate>
-            <label className="label">
-              <span>Email</span>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
-            </label>
-
-            <label className="label">
-              <span>Пароль</span>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Ваш пароль" required />
-            </label>
-
-            <button type="submit" className="submit" disabled={!canSubmit}>
-              {loading ? 'Вхожу...' : 'Войти'}
-            </button>
-
-            {msg && <div role="status" className="serverMsg">{msg}</div>}
-
-            <div className="aux">
-              <a href="/register">Нет аккаунта? Зарегистрироваться</a>
+            <div className="foot">
+              <Link href="/register">Нет аккаунта? Зарегистрироваться</Link>
             </div>
           </form>
-        </section>
+
+          <div className="mt-6">
+        <p className="text-center text-sm text-gray-600 mb-2">Или войдите через Telegram:</p>
+        <TelegramLoginButton />
+      </div>
+        </div>
       </main>
 
       <style jsx>{`
-        /* стили из твоего UI, не менял визуал — оставлены для краткости */
-        .page { padding-top: calc(64px + 24px); display:flex; justify-content:center; align-items:flex-start; min-height:calc(100vh - 64px); background: linear-gradient(180deg,#ffffff 0%, #f7fbff 100%); }
-        .card { width:100%; max-width:520px; margin:32px; background: #fff; border-radius:12px; padding:28px; box-shadow: 0 10px 30px rgba(2,6,23,0.06); }
-        .socialArea { display:flex; flex-direction:column; gap:10px; align-items:center; margin-bottom:10px; }
-        .divider { display:flex; align-items:center; justify-content:center; margin:14px 0; }
-        .divider span { background:#fff; padding:0 12px; color:#64748b; }
+        .page { min-height: calc(100vh - 64px); display:flex; align-items:center; justify-content:center; padding:32px; }
+        .card { width:100%; max-width:520px; background: linear-gradient(180deg,#ffffff,#f8fbff); border-radius:12px; padding:24px; box-shadow: 0 10px 30px rgba(10,20,40,0.06); }
+        h1 { margin:0 0 12px 0; font-size:20px; color:#0f1724; }
+        .form { display:flex; flex-direction:column; gap:12px; }
+        .field { display:flex; flex-direction:column; }
+        .label { font-size:13px; color:#475569; margin-bottom:6px; }
+        input { padding:10px 12px; border-radius:10px; border:1px solid rgba(15,23,36,0.06); font-size:14px; outline:none; background:#fff; }
+        .actions { display:flex; gap:12px; align-items:center; margin-top:6px; }
+        .primary { background:linear-gradient(90deg,#0073e6,#1fa6ff); color:#fff; padding:10px 14px; border-radius:10px; border:none; font-weight:700; cursor:pointer; }
+        .primary:disabled { opacity:0.6; cursor:default; }
+        .ghost { background:#fff; border:1px solid rgba(15,23,36,0.06); padding:10px 12px; border-radius:10px; cursor:pointer; }
+        .foot { margin-top:8px; }
+        .divider { text-align:center; margin:16px 0; color:#94a3b8; }
+        .socialRow { display:flex; gap:12px; justify-content:center; }
+        .error { color:#b91c1c; background: rgba(185,28,28,0.06); padding:8px; border-radius:8px; }
+        @media (max-width:520px) { .card { padding:18px; } }
       `}</style>
     </>
   );

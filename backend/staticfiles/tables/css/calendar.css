@@ -1,0 +1,178 @@
+/* Стили для календаря */
+.calendar-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    margin-bottom: 24px;
+    overflow: hidden;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.calendar-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.calendar-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.calendar-view-buttons {
+    display: flex;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 4px;
+}
+
+.calendar-view-btn {
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.calendar-view-btn.active {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.calendar-nav-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.calendar-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.calendar-content {
+    padding: 20px;
+}
+
+/* FullCalendar customization */
+.fc {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.fc-header-toolbar {
+    margin-bottom: 1.5em !important;
+}
+
+.fc-toolbar-title {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    color: #374151 !important;
+}
+
+.fc-button {
+    background: #3B82F6 !important;
+    border: 1px solid #3B82F6 !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    text-transform: capitalize !important;
+}
+
+.fc-button:hover {
+    background: #2563EB !important;
+    border-color: #2563EB !important;
+}
+
+.fc-button-active {
+    background: #1D4ED8 !important;
+    border-color: #1D4ED8 !important;
+}
+
+.fc-day-today {
+    background: #EFF6FF !important;
+}
+
+.fc-event {
+    border: none !important;
+    border-radius: 6px !important;
+    padding: 4px 8px !important;
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+}
+
+.fc-event-title {
+    font-weight: 600 !important;
+}
+
+/* Progress indicators in calendar */
+.progress-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+}
+
+.progress-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+}
+
+/* Calendar stats */
+.calendar-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background: white;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1F2937;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: #6B7280;
+    margin-top: 4px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .calendar-header {
+        flex-direction: column;
+        gap: 16px;
+        align-items: stretch;
+    }
+    
+    .calendar-controls {
+        justify-content: space-between;
+    }
+    
+    .calendar-stats {
+        grid-template-columns: 1fr;
+    }
+}

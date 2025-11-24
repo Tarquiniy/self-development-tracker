@@ -1,0 +1,107 @@
+/* frontend/src/styles/petal-mobile.css
+   Мобильные стили и градиентный фон для области с лепестковой диаграммой.
+   Подбирать можно дальше по вкусу; текущие значения ориентированы на мобильный макет.
+*/
+
+.petal-viewport {
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 20px 16px;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #f3f8ff 0%, #fdf5fb 40%, #fff 100%);
+  border-radius: 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* мягкое свечение позади лепестков */
+.petal-viewport::before {
+  content: "";
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  left: 50%;
+  top: 10%;
+  transform: translateX(-50%);
+  background: radial-gradient(circle at 50% 50%, rgba(90,156,255,0.14), rgba(255,200,200,0.02) 40%, transparent 60%);
+  filter: blur(28px);
+  z-index: 0;
+}
+
+/* контейнер для svg: располагать над свечением */
+.petal-viewport .petal-chart-wrap {
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+/* адаптивные размеры для мобильных */
+@media (max-width: 380px) {
+  .petal-viewport {
+    padding: 16px 12px;
+    min-height: 360px;
+  }
+  .petal-chart-wrap svg {
+    width: 260px !important;
+    height: 260px !important;
+  }
+}
+
+@media (min-width: 381px) and (max-width: 480px) {
+  .petal-chart-wrap svg {
+    width: 300px !important;
+    height: 300px !important;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+  .petal-chart-wrap svg {
+    width: 340px !important;
+    height: 340px !important;
+  }
+}
+
+/* desktop: чуть другой фон, центрирование */
+@media (min-width: 980px) {
+  .petal-viewport {
+    padding: 28px;
+    min-height: 460px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #ffffff 0%, #f7fbff 40%);
+  }
+  .petal-chart-wrap svg {
+    width: 380px !important;
+    height: 380px !important;
+  }
+}
+
+/* хедер внутри viewport (дата, стрелки и т.п.) */
+.petal-viewport .petal-header {
+  z-index: 3;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.petal-viewport .date-row {
+  font-size: 13px;
+  color: #334;
+  opacity: 0.88;
+}
+
+/* дополнительно: плавные переходы для svg */
+.petal-chart-wrap svg {
+  display: block;
+  transition: transform 0.22s ease;
+  will-change: transform;
+}
