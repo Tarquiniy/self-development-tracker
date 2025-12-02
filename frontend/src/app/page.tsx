@@ -51,7 +51,7 @@ export default function HomePage() {
             <Link href="/blog" className="btn btn-primary" style={{ textDecoration: "none" }}>
               Читай статьи
             </Link>
-            <Link href="/tracker" className="btn btn-secondary" style={{ textDecoration: "none" }}>
+            <Link href="/tables" className="btn btn-secondary" style={{ textDecoration: "none" }}>
               Попробовать трекер
             </Link>
           </div>
@@ -94,7 +94,7 @@ export default function HomePage() {
           </ul>
 
           <p style={{ maxWidth: "72ch", margin: "1.25rem auto 0 auto", fontSize: "1.02rem" }}>
-            Хотите попробовать? <Link href="/tracker" style={{ color: "hsl(203 100% 56%)", textDecoration: "underline" }}>Запустите PWA-трекер</Link> и начните фиксировать первые шаги уже сегодня.
+            Хотите попробовать? <Link href="/tables" style={{ color: "hsl(203 100% 56%)", textDecoration: "underline" }}>Запустите PWA-трекер</Link> и начните фиксировать первые шаги уже сегодня.
           </p>
         </div>
       </section>

@@ -11,15 +11,6 @@ class ProgressTable(models.Model):
     categories = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
-    # Новые поля для календаря
-    calendar_enabled = models.BooleanField(default=True, verbose_name="Включить календарь")
-    default_view = models.CharField(
-        max_length=20,
-        choices=[('month', 'Месяц'), ('week', 'Неделя'), ('day', 'День')],
-        default='month',
-        verbose_name="Вид по умолчанию"
-    )
 
     class Meta:
         ordering = ['-created_at']
@@ -32,7 +23,7 @@ class ProgressTable(models.Model):
             raise ValidationError("Минимум 3 категории")
         if len(self.categories) > 12:
             raise ValidationError("Максимум 12 категорий")
-
+        
         category_ids = [cat['id'] for cat in self.categories]
         if len(category_ids) != len(set(category_ids)):
             raise ValidationError("ID категорий должны быть уникальными")
@@ -48,14 +39,6 @@ class DailyProgress(models.Model):
     data = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
-    # Новые поля для расширенного отслеживания
-    notes = models.TextField(blank=True, verbose_name="Заметки")
-    mood = models.IntegerField(
-        choices=[(1, '😢'), (2, '😞'), (3, '😐'), (4, '😊'), (5, '😁')],
-        null=True, blank=True,
-        verbose_name="Настроение"
-    )
 
     class Meta:
         unique_together = ['table', 'date']
@@ -69,7 +52,7 @@ class DailyProgress(models.Model):
             for category_id, value in self.data.items():
                 if not any(cat['id'] == category_id for cat in self.table.categories):
                     raise ValidationError(f"Категория {category_id} не найдена в таблице")
-
+                
                 if not (0 <= int(value) <= 99):
                     raise ValidationError("Значение прогресса должно быть между 0 и 99")
 

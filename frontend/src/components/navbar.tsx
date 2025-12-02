@@ -255,7 +255,7 @@ export default function Navbar(): JSX.Element {
 
               {user ? (
                 <>
-                  <Link href="/dashboard" className="navItem">Dashboard</Link>
+                  <Link href="/tables" className="navItem">Dashboard</Link>
                   <Link href="/profile" className="navItem">Профиль</Link>
                 </>
               ) : (

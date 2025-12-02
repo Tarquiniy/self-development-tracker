@@ -126,7 +126,7 @@ export default async function BlogPostPage({ params }: any) {
           <Link href="/blog" prefetch={false} className="btn btn-secondary">
             ← Вернуться в блог
           </Link>
-          <Link href="/tracker" prefetch={false} className="btn btn-primary">
+          <Link href="/tables" prefetch={false} className="btn btn-primary">
             Открыть трекер
           </Link>
         </div>

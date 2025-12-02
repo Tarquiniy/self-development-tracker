@@ -1,56 +1,82 @@
-// frontend/src/app/api/tables/[id]/progress/route.ts
+// frontend/src/app/api/tables/[id]/route.ts
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const SUPABASE_URL = process.env.SUPABASE_URL ?? "";
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
-
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 /**
- * GET /api/tables/[id]/progress
- * Возвращаем агрегированный прогресс по таблице:
- * для каждой категории — текущее суммарное значение / максимум
+ * DELETE /api/tables/:id
+ * - Требует Authorization: Bearer <token>
+ * - Удаляет связанные записи (entries, categories) и саму таблицу,
+ *   только если текущий пользователь является owner.
  */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const tableId = params?.id ?? "";
-  if (!tableId) return NextResponse.json({ error: "missing_table_id" }, { status: 400 });
-
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   try {
-    // Берём все категории таблицы
-    const catRes = await supabaseAdmin
-      .from("tables_categories")
-      .select("id,name,max")
-      .eq("table_id", tableId);
+    const id = params?.id;
+    if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
 
-    if (catRes.error) return NextResponse.json({ error: catRes.error.message }, { status: 500 });
+    const authHeader = req.headers.get("authorization") || "";
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    const token = match ? match[1] : null;
+    if (!token) {
+      return NextResponse.json({ error: "missing_token" }, { status: 401 });
+    }
 
-    const cats = catRes.data ?? [];
+    const userRes = await supabaseAdmin.auth.getUser(token);
+    if (userRes.error || !userRes.data?.user) {
+      return NextResponse.json({ error: "invalid_token", detail: userRes.error?.message ?? null }, { status: 401 });
+    }
+    const user = userRes.data.user;
 
-    // Для каждой категории считаем сумму значений в entries (можно оптимизировать SQL-агрегацией)
-    const catIds = cats.map((c: any) => c.id);
-    const entriesRes = await supabaseAdmin
-      .from("table_entries")
-      .select("category_id,value")
-      .in("category_id", catIds)
-      .order("created_at", { ascending: false })
-      .limit(10000); // разумный cap
+    // проверяем, что таблица принадлежит пользователю
+    const tableRes = await supabaseAdmin
+      .from("user_tables")
+      .select("id, owner")
+      .eq("id", id)
+      .limit(1)
+      .maybeSingle();
 
-    if (entriesRes.error) return NextResponse.json({ error: entriesRes.error.message }, { status: 500 });
+    if (tableRes.error) {
+      return NextResponse.json({ error: "db_error", detail: tableRes.error.message }, { status: 500 });
+    }
 
-    const entries = entriesRes.data ?? [];
+    const table = tableRes.data;
+    if (!table) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
 
-    const progress = cats.map((c: any) => {
-      const sum = entries
-        .filter((e: any) => e.category_id === c.id)
-        .reduce((acc: number, cur: any) => acc + (typeof cur.value === "number" ? cur.value : 0), 0);
-      return { id: c.id, name: c.name, max: c.max, sum };
-    });
+    if (String(table.owner) !== String(user.id)) {
+      return NextResponse.json({ error: "forbidden", detail: "not table owner" }, { status: 403 });
+    }
 
-    return NextResponse.json({ data: progress });
+    // best-effort: удалить связанные записи (entries, categories), если такие таблицы есть
+    try {
+      // entries
+      await supabaseAdmin.from("entries").delete().eq("table_id", id);
+    } catch (e) {
+      // игнорируем ошибку — возможно таблицы нет
+      console.warn("Failed deleting entries for table", id, e);
+    }
+    try {
+      await supabaseAdmin.from("tables_categories").delete().eq("table_id", id);
+    } catch (e) {
+      console.warn("Failed deleting categories for table", id, e);
+    }
+
+    // удалить саму таблицу
+    const delRes = await supabaseAdmin.from("user_tables").delete().eq("id", id);
+    if (delRes.error) {
+      return NextResponse.json({ error: "delete_failed", detail: delRes.error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data: { deleted: id } }, { status: 200 });
   } catch (e: any) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: "internal", detail: String(e?.message ?? e) }, { status: 500 });
   }
 }
+
+/**
+ * (Опционально) GET /api/tables/:id — возвращает таблицу по id для текущего пользователя
+ * Если нужен — можно раскомментировать и вернуть.
+ */
+// export async function GET(req: Request, { params }: { params: { id: string } }) {
+//   // аналогично: проверка токена -> select * where id = params.id and owner = user.id
+// }

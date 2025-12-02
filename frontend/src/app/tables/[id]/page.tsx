@@ -1,12 +1,6 @@
 // frontend/src/app/tables/[id]/page.tsx
 import React from "react";
-import dynamic from "next/dynamic";
 import TableEditorClient from "@/components/TableEditorClient";
-
-// Делаем динамический импорт, иначе react-day-picker ломает SSR
-const RadarOverview = dynamic(() => import("@/components/RadarOverview"), {
-  ssr: false,
-});
 
 type Props = { params: { id: string } };
 
@@ -19,21 +13,11 @@ export default function TablePage({ params }: Props) {
         {id ? (
           <>
             <header style={{ marginBottom: 18 }}>
-              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>
-                Таблица
-              </h1>
-              <p style={{ margin: "6px 0 0", color: "#475569" }}>
-                Работа с целями и категориями
-              </p>
+              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Таблица</h1>
+              <p style={{ margin: "6px 0 0", color: "#475569" }}>Работа с целями и категориями</p>
             </header>
 
-            {/* --- ВСТАВЛЯЕМ РАДАР С КАЛЕНДАРЁМ ПРЯМО СЮДА --- */}
-            <div style={{ marginBottom: 30 }}>
-              <RadarOverview tableId={id} />
-            </div>
-            {/* ---------------------------------------------- */}
-
-            {/* Основной редактор таблицы */}
+            {/* TableEditorClient — client component. It expects a tableId string prop. */}
             <TableEditorClient tableId={id} />
           </>
         ) : (
@@ -47,8 +31,7 @@ export default function TablePage({ params }: Props) {
           >
             <h2 style={{ marginTop: 0 }}>Таблица не найдена</h2>
             <p style={{ margin: 0, color: "#64748b" }}>
-              Не передан идентификатор таблицы в URL. Проверьте ссылку или
-              вернитесь на страницу «Мои таблицы».
+              Не передан идентификатор таблицы в URL. Проверьте ссылку или вернитесь на страницу «Мои таблицы».
             </p>
           </div>
         )}

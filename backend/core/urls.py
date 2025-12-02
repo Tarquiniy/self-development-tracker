@@ -52,8 +52,6 @@ urlpatterns = [
     path('summernote/', include('django_summernote.urls')),
     path('api/auth/profile/', ProfileView.as_view(), name='profile'),
     path('preview/<str:token>/', blog_views.preview_by_token, name='post-preview'),
-    path('tables/calendar/', TemplateView.as_view(template_name='tables/table_calendar.html'), name='table-calendar'),
-    path('tables/<uuid:table_id>/calendar/', TemplateView.as_view(template_name='tables/table_calendar.html'), name='table-calendar-detail'),
 ]
 
 # Регистрируем /admin/media-library/ ДО admin.urls, чтобы не перехватывался

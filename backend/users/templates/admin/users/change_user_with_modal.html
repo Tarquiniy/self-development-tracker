@@ -1,0 +1,15 @@
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block submit_buttons_top %}
+{{ block.super }}
+
+<a
+  href="{% url 'admin:set_tables_limit' original.id %}"
+  class="button"
+  style="margin-left: 10px; background: #2563eb; color: #fff;"
+>
+  Изменить лимит таблиц
+</a>
+
+{% endblock %}

@@ -2,316 +2,205 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer } from "recharts";
-import { DayPicker } from "react-day-picker";
-import "react-day-picker/dist/style.css";
+import {
+  RadarChart as RechartsRadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  ResponsiveContainer,
+} from "recharts";
 
-/**
- * RadarOverview
- *
- * - Показывает Lepestkovuyu (radar) диаграмму (Recharts)
- * - Над диаграммой — календарь react-day-picker в режиме range
- * - Есть быстрые пресеты (7, 14, 30 дней)
- * - Работает в режиме "try option 1": мы получаем все записи с /api/tables/{tableId}
- *   и фильтруем их на клиенте по выбранному диапазону.
- *
- * Требования API (ожидаемый формат ответа от /api/tables/:id):
- * {
- *   categories: [{ id, name || title, max? }],
- *   progress: [{ category_id, value, date }] // date в формате YYYY-MM-DD
- * }
- *
- * Если у тебя API возвращает другой формат — сообщи, и я адаптирую.
- */
+type Category = { id: string; name?: string; [k: string]: any };
 
-type Category = {
-  id: string | number;
-  name?: string;
-  title?: string;
-  max?: number | null;
-};
+function isoDate(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
 
-type ProgressRow = {
-  category_id: string | number;
-  value?: number | null;
-  date: string; // "YYYY-MM-DD"
-};
+function datesBetween(startIso: string, endIso: string) {
+  const arr: string[] = [];
+  const s = new Date(startIso + "T00:00:00");
+  const e = new Date(endIso + "T00:00:00");
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return arr;
+  for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+    arr.push(isoDate(new Date(d)));
+  }
+  return arr;
+}
 
 export default function RadarOverview({ tableId }: { tableId: string }) {
+  const [dataRaw, setDataRaw] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [progressRows, setProgressRows] = useState<ProgressRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [rangeDays, setRangeDays] = useState<number>(14);
 
-  // range state (DayPicker range object: { from, to } or undefined)
-  const [range, setRange] = useState<{ from?: Date | undefined; to?: Date | undefined } | undefined>(undefined);
+  // date range (ISO yyyy-mm-dd)
+  const [endDate, setEndDate] = useState<string>(() => isoDate(new Date()));
+  const [startDate, setStartDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - (14 - 1));
+    return isoDate(d);
+  });
 
-  // preset selected days (when user clicks preset)
-  const [presetDays, setPresetDays] = useState<number>(14);
-
-  // initialize default range = last `presetDays` up to today
-  useEffect(() => {
-    const to = new Date();
-    const from = new Date();
-    from.setDate(to.getDate() - (presetDays - 1));
-    setRange({ from, to });
-  }, [presetDays]);
-
-  // Load data from API (attempts to get full dataset — option 1)
+  // Load table data (categories + progress rows)
   useEffect(() => {
     let mounted = true;
     async function load() {
-      setLoading(true);
-      setError(null);
       try {
-        const resp = await fetch(`/api/tables/${tableId}`);
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => "");
-          throw new Error(`API error ${resp.status} ${text}`);
+        const res = await fetch(`/api/tables/${tableId}`);
+        if (!res.ok) {
+          const txt = await res.text();
+          console.warn("RadarOverview: failed to load table", res.status, txt);
+          return;
         }
-        const j = await resp.json();
-        // try to extract categories & progress
-        const cats = j.categories ?? j.data?.categories ?? j.categories ?? [];
-        const progress = j.progress ?? j.data?.progress ?? j.progress ?? [];
-        if (mounted) {
-          setCategories(Array.isArray(cats) ? cats : []);
-          setProgressRows(Array.isArray(progress) ? progress : []);
-        }
-      } catch (e: any) {
-        console.error("RadarOverview load error", e);
-        if (mounted) setError(String(e?.message ?? e));
-      } finally {
-        if (mounted) setLoading(false);
+        const j = await res.json();
+        if (!mounted) return;
+        setCategories(j.categories ?? []);
+        setDataRaw(j.progress ?? []);
+      } catch (err) {
+        console.error("RadarOverview load error", err);
       }
     }
     load();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [tableId]);
 
-  // helper: format date to YYYY-MM-DD
-  const toYMD = (d: Date) => {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
+  // When user chooses preset rangeDays, update start/end
+  useEffect(() => {
+    const e = new Date();
+    const s = new Date();
+    s.setDate(e.getDate() - (rangeDays - 1));
+    setEndDate(isoDate(e));
+    setStartDate(isoDate(s));
+  }, [rangeDays]);
+
+  // Derived array of date strings between startDate and endDate (inclusive)
+  const dates = useMemo(() => {
+    if (!startDate || !endDate) return [];
+    // if start > end, swap
+    if (startDate > endDate) {
+      return datesBetween(endDate, startDate);
+    }
+    return datesBetween(startDate, endDate);
+  }, [startDate, endDate]);
+
+  // Aggregation: for each category compute sum over selected dates
+  const aggregated = useMemo(() => {
+    // build a quick lookup: for each (category_id, date) sum values
+    // dataRaw expected shape: [{category_id, date, value, ...}, ...]
+    if (!Array.isArray(categories)) return [];
+    return categories.map((cat: any) => {
+      let sum = 0;
+      for (const row of dataRaw) {
+        // row.date expected to be 'YYYY-MM-DD' (as in your backend)
+        if (String(row?.category_id) === String(cat.id) && dates.includes(String(row?.date ?? ""))) {
+          sum += Number(row?.value ?? 0);
+        }
+      }
+      // clamp to 0..100 for radar domain (original code used Math.min(99, sum))
+      const A = Math.min(100, Math.round(sum));
+      const subject = String(cat.name ?? cat.title ?? cat.title ?? cat.id);
+      return { subject, A };
+    });
+  }, [categories, dataRaw, dates]);
+
+  // helper: quick presets
+  const applyPreset = (days: number) => {
+    setRangeDays(days);
   };
 
-  // derived array of strings for selected date range inclusive
-  const selectedDates = useMemo(() => {
-    if (!range || !range.from || !range.to) return [];
-    const arr: string[] = [];
-    const cur = new Date(range.from);
-    const end = new Date(range.to);
-    // normalize times
-    cur.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-    while (cur <= end) {
-      arr.push(toYMD(cur));
-      cur.setDate(cur.getDate() + 1);
-    }
-    return arr;
-  }, [range]);
-
-  // aggregated data for radar chart
-  const aggregated = useMemo(() => {
-    // categories may have name/title variations
-    const cats = categories.map((c) => ({
-      id: String(c.id),
-      title: (c as any).title ?? (c as any).name ?? `cat-${c.id}`,
-      max: typeof c.max === "number" && c.max > 0 ? c.max : null,
-    }));
-
-    // sum values for each category within selectedDates
-    const sums = cats.map((cat) => {
-      const sum = progressRows
-        .filter((r) => String(r.category_id) === String(cat.id))
-        .filter((r) => {
-          if (!selectedDates.length) return true; // if no selection, include all
-          return selectedDates.includes(String(r.date));
-        })
-        .reduce((acc, cur) => acc + (typeof cur.value === "number" ? cur.value : Number(cur.value ?? 0)), 0);
-      return { id: cat.id, title: cat.title, sum, max: cat.max };
-    });
-
-    // normalize to percentage 0..100
-    // if category has its own max -> percent = sum / max * 100
-    // otherwise compute globalMax as max(sum) or 1 to avoid divide by 0
-    const globalMaxCandidate = Math.max(...sums.map((s) => (s.max && s.max > 0 ? s.max : s.sum)), 1);
-    return sums.map((s) => {
-      const denom = s.max && s.max > 0 ? s.max : globalMaxCandidate;
-      const pct = denom > 0 ? Math.round((s.sum / denom) * 100) : 0;
-      return { subject: s.title, A: Math.max(0, Math.min(100, pct)), rawSum: s.sum, rawMax: denom };
-    });
-  }, [categories, progressRows, selectedDates]);
-
-  // fast preset handler to set date range
-  function setPreset(nDays: number) {
-    setPresetDays(nDays);
-    const to = new Date();
-    const from = new Date();
-    from.setDate(to.getDate() - (nDays - 1));
-    setRange({ from, to });
-  }
-
-  // UI: display selected range nicely
-  const rangeLabel = useMemo(() => {
-    if (!range || !range.from || !range.to) return "За всё время";
-    return `${range.from.toLocaleDateString()} — ${range.to.toLocaleDateString()}`;
-  }, [range]);
-
   return (
-    <div style={{
-      border: "1px solid #eef2ff",
-      padding: 12,
-      borderRadius: 10,
-      background: "#fff",
-      boxShadow: "0 6px 18px rgba(16,24,40,0.04)"
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+    <div style={{ height: 420, border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div style={{ fontWeight: 700 }}>Лепестковая диаграмма</div>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ fontSize: 13, color: "#475569" }}>{loading ? "Загрузка…" : rangeLabel}</div>
-          <div style={{ borderLeft: "1px solid #eef2ff", height: 28, marginLeft: 8 }} />
+        {/* Controls: presets + manual calendar inputs */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <label style={{ fontSize: 13 }}>Период:</label>
             <button
-              onClick={() => setPreset(7)}
-              style={{
-                padding: "6px 8px",
-                borderRadius: 8,
-                border: presetDays === 7 ? "2px solid #0b84ff" : "1px solid rgba(11,35,54,0.06)",
-                background: presetDays === 7 ? "#eaf4ff" : "#fff",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-              title="Последние 7 дней"
+              onClick={() => applyPreset(7)}
+              type="button"
+              style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid #e6eef9", background: rangeDays === 7 ? "#eef6ff" : "#fff" }}
             >
               7
             </button>
             <button
-              onClick={() => setPreset(14)}
-              style={{
-                padding: "6px 8px",
-                borderRadius: 8,
-                border: presetDays === 14 ? "2px solid #0b84ff" : "1px solid rgba(11,35,54,0.06)",
-                background: presetDays === 14 ? "#eaf4ff" : "#fff",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-              title="Последние 14 дней"
+              onClick={() => applyPreset(14)}
+              type="button"
+              style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid #e6eef9", background: rangeDays === 14 ? "#eef6ff" : "#fff" }}
             >
               14
             </button>
             <button
-              onClick={() => setPreset(30)}
-              style={{
-                padding: "6px 8px",
-                borderRadius: 8,
-                border: presetDays === 30 ? "2px solid #0b84ff" : "1px solid rgba(11,35,54,0.06)",
-                background: presetDays === 30 ? "#eaf4ff" : "#fff",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-              title="Последние 30 дней"
+              onClick={() => applyPreset(30)}
+              type="button"
+              style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid #e6eef9", background: rangeDays === 30 ? "#eef6ff" : "#fff" }}
             >
               30
             </button>
           </div>
-        </div>
-      </div>
 
-      <div style={{
-        display: "flex",
-        gap: 12,
-        marginTop: 12,
-        flexDirection: "column",
-      }}>
-        {/* Calendar + apply/clear controls */}
-        <div style={{
-          display: "flex",
-          gap: 12,
-          alignItems: "flex-start",
-          flexWrap: "wrap"
-        }}>
-          <div style={{
-            border: "1px solid #eef6ff",
-            padding: 8,
-            borderRadius: 8,
-            background: "#fbfdff"
-          }}>
-            <DayPicker
-              mode="range"
-              selected={range as any}
-              onSelect={(r) => {
-                // r may be undefined or { from, to }
-                setRange(r as any);
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <label style={{ fontSize: 13 }}>C</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                // adjust rangeDays to match manual selection length
+                try {
+                  const d1 = new Date(e.target.value + "T00:00:00");
+                  const d2 = new Date(endDate + "T00:00:00");
+                  const diffDays = Math.round((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24)) + 1;
+                  if (diffDays > 0) setRangeDays(diffDays);
+                } catch {}
               }}
+              style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid #e6eef9" }}
+            />
+            <label style={{ fontSize: 13 }}>По</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                try {
+                  const d1 = new Date(startDate + "T00:00:00");
+                  const d2 = new Date(e.target.value + "T00:00:00");
+                  const diffDays = Math.round((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24)) + 1;
+                  if (diffDays > 0) setRangeDays(diffDays);
+                } catch {}
+              }}
+              style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid #e6eef9" }}
             />
           </div>
 
-          <div style={{ minWidth: 240, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={() => {
-                  if (range && range.from && range.to) {
-                    // no-op - already selected
-                    return;
-                  }
-                  // fallback: set to preset days if none
-                  setPreset(presetDays || 14);
-                }}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(11,35,54,0.06)",
-                  background: "#fff",
-                  cursor: "pointer",
-                }}
-              >
-                Применить
-              </button>
-
-              <button
-                onClick={() => {
-                  setRange(undefined);
-                }}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(11,35,54,0.06)",
-                  background: "#fff",
-                  cursor: "pointer",
-                }}
-              >
-                Очистить
-              </button>
-            </div>
-
-            <div style={{ color: "#6b7280", fontSize: 13 }}>
-              Подсказка: выбери диапазон на календаре (клик на начало → клик на конец). Пресеты слева — быстрый выбор.
-            </div>
-
-            {error && <div style={{ color: "crimson", padding: 8, borderRadius: 8, background: "#fff4f4" }}>{error}</div>}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <label style={{ fontSize: 13 }}>Дней:</label>
+            <select
+              value={rangeDays}
+              onChange={(e) => setRangeDays(Number(e.target.value))}
+              style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid #e6eef9" }}
+            >
+              <option value={7}>7</option>
+              <option value={14}>14</option>
+              <option value={30}>30</option>
+            </select>
           </div>
         </div>
+      </div>
 
-        {/* Radar chart */}
-        <div style={{ width: "100%", height: 320 }}>
-          {aggregated.length === 0 ? (
-            <div style={{ padding: 18, color: "#64748b" }}>
-              Нет категорий или данных для выбранного диапазона.
-            </div>
-          ) : (
-            <ResponsiveContainer>
-              <RadarChart cx="50%" cy="50%" outerRadius="80%" data={aggregated}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="subject" />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} />
-                <Radar name="Прогресс" dataKey="A" stroke="#0b84ff" fill="#0b84ff" fillOpacity={0.24} />
-              </RadarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+      {/* Radar */}
+      <div style={{ width: "100%", height: 340, marginTop: 12 }}>
+        <ResponsiveContainer>
+          <RechartsRadarChart cx="50%" cy="50%" outerRadius="80%" data={aggregated}>
+            <PolarGrid />
+            <PolarAngleAxis dataKey="subject" />
+            <PolarRadiusAxis angle={30} domain={[0, 100]} />
+            <Radar name="Прогресс" dataKey="A" stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
+          </RechartsRadarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );

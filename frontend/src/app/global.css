@@ -6,7 +6,7 @@
    Theme: CSS variables (HSL triples)
    =========================== */
 :root {
-  /* light theme values (hue saturation% lightness%) */
+  /* light theme values */
   --background: 0 0% 100%;
   --foreground: 222 47% 11%;
   --card: 0 0% 100%;
@@ -19,28 +19,24 @@
   --gradient-start: 239 84% 67%;
   --gradient-end: 221 83% 53%;
 
-  /* radius & shadows */
   --radius-lg: 1rem;
   --shadow-sm: 0 6px 18px rgba(2,6,23,0.06);
   --shadow-lg: 0 20px 50px rgba(2,6,23,0.12);
 
-  /* header height for layout-safe spacing */
   --header-height: 64px;
 }
 
-/* dark theme values (apply by adding .dark on <html> or <body>) */
 .dark {
-  --background: 0 0% 100%;          /* белый фон */
-  --foreground: 222 47% 11%;        /* почти чёрный текст */
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
   --card: 0 0% 100%;
   --card-foreground: 222 47% 11%;
-  --primary: 203 100% 56%;           
-  --primary-foreground: 0 0% 100%;  /* белый текст (Positive Theta) */
+  --primary: 203 100% 56%;
+  --primary-foreground: 0 0% 100%;
   --muted: 210 40% 96%;
   --muted-foreground: 215 16% 47%;
   --border: 214 32% 91%;
 
-  /* градиент тоже розовый */
   --gradient-start: 203 100% 56%;
   --gradient-end: 345 85% 60%;
 
@@ -66,24 +62,44 @@ body {
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.6;
   word-wrap: break-word;
-  -webkit-font-feature-settings: "liga" 1, "kern" 1;
 }
 
 /* ===========================
-   Container (explicit values to avoid tailwind @apply issues)
+   FIX: Inputs — always light background
+   =========================== */
+input,
+textarea,
+select {
+  background: #ffffff !important; /* FIX */
+  color: hsl(var(--foreground)) !important; /* FIX */
+  border: 1px solid hsl(var(--border)) !important; /* FIX */
+  border-radius: 8px !important; /* FIX */
+  padding: 10px !important; /* FIX */
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none !important;
+  border-color: hsl(var(--primary)) !important;
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.25);
+}
+
+/* ===========================
+   Container
    =========================== */
 .container {
   width: 100%;
   box-sizing: border-box;
-  max-width: 80rem; /* 1280px */
+  max-width: 80rem;
   margin-left: auto;
   margin-right: auto;
-  padding-left: 1.5rem; /* px-6 */
+  padding-left: 1.5rem;
   padding-right: 1.5rem;
 }
 
 /* ===========================
-   Links / accents
+   Links
    =========================== */
 a {
   color: hsl(var(--primary));
@@ -97,7 +113,7 @@ a:hover {
 }
 
 /* ===========================
-   Buttons (explicit CSS)
+   Buttons
    =========================== */
 .btn {
   display: inline-flex;
@@ -108,24 +124,19 @@ a:hover {
   font-weight: 600;
   border-radius: 9999px;
   transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
-  text-decoration: none;
   white-space: nowrap;
-  line-height: 1;
-  user-select: none;
   padding: 0.5rem 1rem;
 }
 
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  transform: none;
 }
 
-/* Primary (gradient) */
+/* Primary gradient */
 .btn-primary {
   color: hsl(var(--primary-foreground));
   background-image: linear-gradient(135deg, hsl(var(--gradient-start)), hsl(var(--gradient-end)));
-  padding: 0.6rem 1.25rem;
   box-shadow: var(--shadow-sm);
 }
 .btn-primary:hover {
@@ -134,18 +145,34 @@ a:hover {
   box-shadow: var(--shadow-lg);
 }
 
-/* Secondary (muted) */
 .btn-secondary {
   background-color: hsl(var(--muted));
   color: hsl(var(--foreground));
-  padding: 0.5rem 1rem;
 }
 .btn-secondary:hover {
   background-color: color-mix(in srgb, hsl(var(--muted)) 85%, black 10%);
 }
 
 /* ===========================
-   Typography (headings, paragraphs)
+   FIX: Category buttons always visible
+   =========================== */
+button,
+button * {
+  color: #0b2336 !important; /* FIX: dark text */
+}
+
+button {
+  background: #ffffff !important; /* FIX: always white */
+  border: 1px solid hsl(var(--border)) !important; /* FIX */
+  border-radius: 10px !important;
+}
+
+button:hover:not(:disabled) {
+  background: hsl(var(--muted)) !important; /* FIX */
+}
+
+/* ===========================
+   Typography
    =========================== */
 h1, h2, h3, h4, h5, h6 {
   margin: 0 0 0.6rem 0;
@@ -159,36 +186,31 @@ h3 { font-size: clamp(1.25rem, 1.6vw, 1.75rem); font-weight: 700; }
 p {
   margin: 0 0 1rem 0;
   color: hsl(var(--muted-foreground));
-  font-size: 1rem;
 }
 
-/* small helpers */
+/* Helpers */
 .lead {
   font-size: 1.125rem;
   color: hsl(var(--foreground));
 }
 
 /* ===========================
-   Prose (typography plugin friendly)
+   Prose
    =========================== */
 .prose {
   max-width: none;
   color: hsl(var(--muted-foreground));
 }
 .prose p { margin-bottom: 1rem; }
-.prose h1, .prose h2, .prose h3 { color: hsl(var(--foreground)); margin-top: 1.5rem; margin-bottom: 0.6rem; }
-.prose a { color: hsl(var(--primary)); text-decoration: underline; }
-.prose ul, .prose ol { margin-left: 1.25rem; }
-.prose blockquote {
-  border-left: 4px solid hsl(var(--primary));
-  padding-left: 1rem;
-  font-style: italic;
-  color: hsl(var(--muted-foreground));
-  margin: 1rem 0;
+.prose h1, .prose h2, .prose h3 {
+  color: hsl(var(--foreground));
+  margin-top: 1.5rem;
+  margin-bottom: 0.6rem;
 }
+.prose a { color: hsl(var(--primary)); }
 
 /* ===========================
-   Card components (robust, independent of Tailwind utls)
+   Cards
    =========================== */
 .card {
   background-color: hsl(var(--card));
@@ -207,7 +229,7 @@ p {
   box-shadow: var(--shadow-lg);
 }
 
-/* media (image) */
+/* media */
 .card-media {
   width: 100%;
   height: 13rem;
@@ -215,14 +237,12 @@ p {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: hsl(var(--muted-foreground));
   overflow: hidden;
 }
 .card-media img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
   transition: transform 420ms cubic-bezier(.2,.9,.25,1);
 }
 .card:hover .card-media img {
@@ -235,23 +255,19 @@ p {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  flex: 1 1 auto;
 }
 .card-title {
   font-weight: 700;
   font-size: 1.0625rem;
-  color: hsl(var(--foreground));
   margin: 0;
 }
 .card-excerpt {
   color: hsl(var(--muted-foreground));
   font-size: 0.95rem;
-  margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* footer */
@@ -260,8 +276,6 @@ p {
   border-top: 1px solid hsl(var(--border));
   display: flex;
   gap: 0.75rem;
-  justify-content: flex-start;
-  background-color: transparent;
 }
 
 /* ===========================
@@ -293,96 +307,37 @@ p {
   border-top: 1px solid hsl(var(--border));
   padding: 2rem 0;
   text-align: center;
-  color: hsl(var(--muted-foreground));
 }
 
 /* ===========================
-   Posts grid / post-card / pagination (explicit, reliable)
+   Posts grid / etc.
    =========================== */
 .posts-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1.5rem; /* distance between cards */
-  align-items: stretch;
+  gap: 1.5rem;
 }
 
-/* specific post-card wrapper to ensure spacing and look */
 .post-card {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
   background-color: hsl(var(--card));
-  color: hsl(var(--card-foreground));
-  box-shadow: var(--shadow-sm);
   border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   transition: transform 200ms ease, box-shadow 200ms ease;
 }
-
-/* hover for post card */
 .post-card:hover {
   transform: translateY(-6px);
   box-shadow: var(--shadow-lg);
 }
 
-/* card media */
-.post-card .card-media {
-  width: 100%;
-  height: 14rem;
-  background-color: hsl(var(--muted));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: hsl(var(--muted-foreground));
-  overflow: hidden;
-}
-.post-card .card-media img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 420ms cubic-bezier(.2,.9,.25,1);
-}
-.post-card:hover .card-media img {
-  transform: scale(1.04);
-}
-
-/* header / title / content padding */
-.post-card .card-header {
-  padding: 1rem;
-  padding-bottom: 0.25rem;
-}
-.post-card .card-title {
-  margin: 0;
-  font-weight: 700;
-  color: hsl(var(--foreground));
-  font-size: 1.05rem;
-}
-.post-card .card-content {
-  padding: 0.75rem 1rem 0 1rem;
-  color: hsl(var(--muted-foreground));
-}
-
-/* footer (button) */
-.post-card .card-footer {
-  padding: 1rem;
-  border-top: 1px solid hsl(var(--border));
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-start;
-  background: transparent;
-}
-
-/* pagination block — ensure margin so it never sticks to cards */
 .posts-pagination {
   display: flex;
   gap: 0.75rem;
   justify-content: center;
-  align-items: center;
   margin-top: 3.5rem;
 }
 
-/* responsive grid: 2 columns on tablet, 3 on desktop */
+/* responsive */
 @media (min-width: 768px) {
   .posts-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -396,13 +351,12 @@ p {
   }
 }
 
-/* safeguard: ensure direct children do not collapse margins */
 .posts-grid > * {
   margin: 0;
   min-height: 100%;
 }
 
-/* small helpers for spacing in components using inline styles */
+/* small helpers */
 .u-mt-8 { margin-top: 2rem; }
 .u-mt-12 { margin-top: 3rem; }
 .u-mb-6 { margin-bottom: 1.5rem; }
