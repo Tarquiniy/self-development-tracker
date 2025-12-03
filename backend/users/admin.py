@@ -10,10 +10,9 @@ from .models import CustomUser, UserProfile
 User = get_user_model()
 
 
-# -----------------------------
-#  INLINE ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ
-# -----------------------------
-
+# --------------------------------------------------
+#          Форма профиля (валидатор max_tables)
+# --------------------------------------------------
 class UserProfileForm(forms.ModelForm):
     class Meta:
         model = UserProfile
@@ -22,6 +21,7 @@ class UserProfileForm(forms.ModelForm):
     def clean_max_tables(self):
         value = self.cleaned_data.get("max_tables")
 
+        # Если пусто → выставляем минимум
         if value is None:
             return 1
 
@@ -34,6 +34,9 @@ class UserProfileForm(forms.ModelForm):
         return value
 
 
+# --------------------------------------------------
+#         Inline „Профиль пользователя”
+# --------------------------------------------------
 class UserProfileInline(admin.StackedInline):
     model = UserProfile
     form = UserProfileForm
@@ -42,26 +45,26 @@ class UserProfileInline(admin.StackedInline):
 
     fieldsets = (
         ("Ограничения", {
+            # ТОЛЬКО max_tables — основной параметр
             "fields": ("max_tables", "subscription_active", "subscription_expires"),
         }),
-        ("Дополнительно", {
-            "fields": ("tables_limit", "phone", "website", "location"),
+        ("Контакты и дополнительные данные", {
+            # tables_limit удалён → он больше не нужен в админке
+            "fields": ("phone", "website", "location"),
         }),
-        ("Настройки", {
+        ("Настройки пользователя", {
             "fields": ("email_notifications", "language"),
-        })
+        }),
     )
 
 
-# -----------------------------
-#     АДМИНКА CUSTOM USER
-# -----------------------------
-
+# --------------------------------------------------
+#                Админка CustomUser
+# --------------------------------------------------
 @admin.register(CustomUser)
 class CustomUserAdmin(DjangoUserAdmin):
     model = CustomUser
 
-    # что видим в списке
     list_display = (
         "email",
         "username",
@@ -73,7 +76,6 @@ class CustomUserAdmin(DjangoUserAdmin):
 
     list_filter = ("is_staff", "is_superuser", "is_active", "email_verified")
     search_fields = ("email", "username")
-
     ordering = ("-date_joined",)
 
     readonly_fields = (
@@ -85,27 +87,13 @@ class CustomUserAdmin(DjangoUserAdmin):
     )
 
     fieldsets = (
-        ("Основная информация", {
-            "fields": ("email", "username", "password"),
-        }),
-        ("Статусы", {
-            "fields": ("is_active", "is_staff", "is_superuser"),
-        }),
-        ("Верификация", {
-            "fields": ("email_verified", "verification_token", "verification_sent_at"),
-        }),
-        ("Сброс пароля", {
-            "fields": ("reset_token", "reset_sent_at"),
-        }),
-        ("Supabase", {
-            "fields": ("supabase_uid", "registration_method"),
-        }),
-        ("Дополнительно", {
-            "fields": ("avatar_url", "bio"),
-        }),
-        ("Системное", {
-            "fields": ("last_login", "date_joined"),
-        }),
+        ("Основная информация", {"fields": ("email", "username", "password")}),
+        ("Статусы", {"fields": ("is_active", "is_staff", "is_superuser")}),
+        ("Верификация", {"fields": ("email_verified", "verification_token", "verification_sent_at")}),
+        ("Сброс пароля", {"fields": ("reset_token", "reset_sent_at")}),
+        ("Supabase", {"fields": ("supabase_uid", "registration_method")}),
+        ("Профиль (основные поля)", {"fields": ("avatar_url", "bio")}),
+        ("Системные поля", {"fields": ("last_login", "date_joined")}),
     )
 
     add_fieldsets = (
@@ -115,5 +103,5 @@ class CustomUserAdmin(DjangoUserAdmin):
         }),
     )
 
-    # Самое важное → Профиль рядом как inline
+    # ⬇ ВАЖНО: профиль теперь отображается прямо в админке пользователя
     inlines = [UserProfileInline]
