@@ -46,10 +46,14 @@ export default function TablesDashboardClient(): React.ReactElement {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
+  // профиль с лимитом
+  const [profile, setProfile] = useState<{ max_tables?: number; tables_limit?: number } | null>(null);
+
   useEffect(() => {
     (async () => {
-      // получаем токен и сразу используем его для fetchTables — избегаем race condition
+      // получаем токен и профиль, затем таблицы — избегаем race condition
       const { token } = await getOwnerAndToken();
+      await fetchUserProfile(token);
       await fetchTables(token);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,6 +91,60 @@ export default function TablesDashboardClient(): React.ReactElement {
       setCurrentUserId(null);
       setAccessToken(null);
       return { userId: null, token: null };
+    }
+  }
+
+  // -------- получить профиль пользователя (max_tables/tables_limit) --------
+  async function fetchUserProfile(tokenParam?: string | null) {
+    try {
+      const token = tokenParam ?? accessToken;
+      // Если нет токена — попробуем загрузить профиль через сессию Supabase (клиент-side)
+      if (!token) {
+        // Попытка — получить профиль из таблицы profiles через supabase client (anon key)
+        try {
+          const { data: userData } = await supabase.auth.getUser();
+          const user = (userData as any)?.user ?? null;
+          if (user) {
+            const { data: prof, error } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+            if (!error && prof) {
+              setProfile({
+                max_tables: Number(prof.max_tables ?? prof.tables_limit ?? 1),
+                tables_limit: Number(prof.tables_limit ?? prof.max_tables ?? 1),
+              });
+            }
+            return;
+          }
+        } catch (e) {
+          // ignore
+        }
+        return;
+      }
+
+      // Если есть серверный endpoint, используем его (в проекте он доступен по /api/auth/profile/)
+      try {
+        const res = await fetch("/api/auth/profile/", {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!res.ok) {
+          // не фатально, попытаемся клиентским способом
+          return;
+        }
+        const j = await res.json().catch(() => null);
+        const prof = j?.profile ?? j?.data ?? j;
+        if (prof) {
+          setProfile({
+            max_tables: prof.max_tables ? Number(prof.max_tables) : undefined,
+            tables_limit: prof.tables_limit ? Number(prof.tables_limit) : undefined,
+          });
+        }
+      } catch (e) {
+        console.warn("fetchUserProfile server fail:", e);
+      }
+    } catch (e) {
+      console.warn("fetchUserProfile failed:", e);
     }
   }
 
@@ -212,30 +270,40 @@ export default function TablesDashboardClient(): React.ReactElement {
         token = got.token;
       }
 
+      // вычисляем предел, который мы будем использовать:
+      const maxAllowed = profile?.max_tables ?? profile?.tables_limit ?? 1;
+
+      if (tables.length >= Number(maxAllowed)) {
+        setError(`Вы можете создать максимум ${maxAllowed} таблиц. Попросите администратора увеличить лимит.`);
+        setCreating(false);
+        return;
+      }
+
       if (!token) {
         throw new Error("missing_token: пользователь не аутентифицирован");
       }
 
       const payload = { title: newTitle.trim() };
 
-      const res = await fetch("/api/tables", {
+      const res = await fetch("/api/tables/tables/", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
 
+      // если backend возвращает 409 + { error: "user_has_table", existing: {...} } — обрабатываем
+      if (res.status === 409) {
+        const j409 = await res.json().catch(() => ({}));
+        if (j409?.error === "user_has_table") {
+          setExistingTable(j409.existing ?? null);
+          setModalVisible(true);
+          setCreating(false);
+          return;
+        }
+        throw new Error(JSON.stringify(j409));
+      }
+
       const j = await res.json().catch(() => ({}));
-
-      if (res.status === 401) {
-        throw new Error(JSON.stringify(j));
-      }
-
-      if (res.status === 409 && j?.error === "user_has_table") {
-        setExistingTable(j.existing ?? null);
-        setModalVisible(true);
-        setCreating(false);
-        return;
-      }
 
       if (!res.ok) {
         throw new Error(j?.detail ?? j?.error ?? "Ошибка создания таблицы");
@@ -244,6 +312,9 @@ export default function TablesDashboardClient(): React.ReactElement {
       const created = j?.data?.table ?? j?.data ?? j;
 
       await fetchTables(token);
+      // refresh profile as admin might have changed limit
+      await fetchUserProfile(token);
+
       setNewTitle("");
       setCreating(false);
 
@@ -273,7 +344,7 @@ export default function TablesDashboardClient(): React.ReactElement {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`/api/tables/${encodeURIComponent(tableId)}`, {
+      const res = await fetch(`/api/tables/tables/${encodeURIComponent(tableId)}/`, {
         method: "DELETE",
         headers,
       });
@@ -383,6 +454,12 @@ export default function TablesDashboardClient(): React.ReactElement {
           <h1 style={{ margin: 0, fontSize: 22 }}>Мои таблицы</h1>
           <div style={{ color: "#667085", fontSize: 13 }}>
             Управление вашими таблицами
+            {" "}
+            {profile && (
+              <span style={{ marginLeft: 10, fontSize: 12, color: "#2d3748" }}>
+                Лимит: {profile.max_tables ?? profile.tables_limit ?? 1} таблиц
+              </span>
+            )}
           </div>
         </div>
 

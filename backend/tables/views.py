@@ -1,10 +1,11 @@
-# backend/tables/views.py
+# backend/tables/views.py (фрагменты — замените класс ProgressTableViewSet)
 from rest_framework import viewsets, status, permissions
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, SAFE_METHODS
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db import IntegrityError, transaction
+from django.core.exceptions import ObjectDoesNotExist
 
 from .models import ProgressTable, DailyProgress
 from .serializers import ProgressTableSerializer, DailyProgressSerializer
@@ -41,11 +42,51 @@ class ProgressTableViewSet(viewsets.ModelViewSet):
         # анонимным — пустой список
         return qs.none()
 
+    def create(self, request, *args, **kwargs):
+        """
+        Перед созданием проверяем лимит таблиц пользователя.
+        Если лимит исчерпан — возвращаем 409 с телом { error: "user_has_table", existing: <существующая таблица> }
+        """
+        user = request.user
+        if not user or not user.is_authenticated:
+            return Response({"detail": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Получаем профиль и лимит (поддерживаем оба имени)
+        tables_limit = 1
+        try:
+            profile = getattr(user, "profile", None)
+            if profile is not None:
+                # prefer max_tables, fallback to tables_limit
+                tables_limit = getattr(profile, "max_tables", None) or getattr(profile, "tables_limit", 1) or 1
+            else:
+                tables_limit = 1
+        except Exception:
+            tables_limit = 1
+
+        # сколько таблиц уже у пользователя?
+        current_count = ProgressTable.objects.filter(user=user).count()
+
+        if current_count >= int(tables_limit):
+            # вернём существующую первую таблицу (для фронта)
+            existing = ProgressTable.objects.filter(user=user).first()
+            existing_serialized = ProgressTableSerializer(existing).data if existing is not None else None
+            return Response({"error": "user_has_table", "existing": existing_serialized}, status=status.HTTP_409_CONFLICT)
+
+        # лимит не исчерпан — продолжаем
+        try:
+            with transaction.atomic():
+                # serializer.save(user=user) — но используем стандартный create flow
+                serializer = self.get_serializer(data=request.data)
+                serializer.is_valid(raise_exception=True)
+                self.perform_create(serializer)
+                headers = self.get_success_headers(serializer.data)
+                return Response({"data": {"table": serializer.data}}, status=status.HTTP_201_CREATED, headers=headers)
+        except IntegrityError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
     def perform_create(self, serializer):
         # пользователь должен быть авторизован
         user = self.request.user
-        if not user or not user.is_authenticated:
-            raise permissions.PermissionDenied("Authentication required")
         serializer.save(user=user)
 
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
@@ -56,41 +97,3 @@ class ProgressTableViewSet(viewsets.ModelViewSet):
         table = get_object_or_404(self.get_queryset(), pk=id)
         serializer = DailyProgressSerializer(table.progress_entries.all(), many=True)
         return Response(serializer.data)
-
-
-class DailyProgressViewSet(viewsets.ModelViewSet):
-    """
-    /api/tables/progress/
-    - Этот ViewSet позволяет создавать/редактировать записи прогресса.
-    - Для создания: необходимо поле 'table' (uuid) + date + data
-    """
-    queryset = DailyProgress.objects.all().select_related('table')
-    serializer_class = DailyProgressSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        user = self.request.user
-        table_id = self.request.query_params.get('table')
-        if user.is_authenticated and user.is_staff:
-            if table_id:
-                return qs.filter(table__id=table_id)
-            return qs
-        if not user.is_authenticated:
-            return qs.none()
-        # обычный пользователь — только свои
-        if table_id:
-            return qs.filter(table__id=table_id, table__user=user)
-        return qs.filter(table__user=user)
-
-    def perform_create(self, serializer):
-        # проверяем, что пользователь владеет таблицей
-        table = serializer.validated_data.get('table')
-        user = self.request.user
-        if table.user != user and not user.is_staff:
-            raise permissions.PermissionDenied("You don't own that table")
-        try:
-            with transaction.atomic():
-                serializer.save()
-        except IntegrityError as e:
-            raise serializers.ValidationError({"detail": str(e)})
