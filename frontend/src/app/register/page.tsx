@@ -1,3 +1,4 @@
+// frontend/src/app/register/page.tsx
 "use client";
 
 import React, { useState } from "react";
@@ -41,7 +42,7 @@ export default function RegisterPage(): React.ReactElement {
 
     try {
       // Create user using Supabase client (anon key)
-      const { data, error: signErr } = await supabase.auth.signUp({
+      const { data: signData, error: signErr } = await supabase.auth.signUp({
         email,
         password,
       } as any);
@@ -52,35 +53,67 @@ export default function RegisterPage(): React.ReactElement {
         return;
       }
 
+      // Try to obtain the Supabase user id.
+      // signData.user.id is the usual place. If it's not present (e.g. email confirm flow),
+      // try to get currently signed-in user as fallback.
+      let supabaseUserId: string | null = (signData as any)?.user?.id ?? null;
+
+      if (!supabaseUserId) {
+        try {
+          const { data: getUserData, error: getUserErr } = await supabase.auth.getUser();
+          if (!getUserErr && (getUserData as any)?.user?.id) {
+            supabaseUserId = (getUserData as any).user.id;
+          }
+        } catch (err) {
+          // ignore — we'll still attempt server upsert without uid
+          console.warn("Could not fetch supabase user after signUp:", err);
+        }
+      }
+
       // Try to upsert profile via server-side endpoint.
-      // Server endpoint must use service_role key to write into profiles.
+      // Server endpoint must use service_role key to write into protected tables.
       try {
+        const payload: any = {
+          email,
+          full_name: fullName || null,
+          about: about || null,
+          birthday: birthday || null,
+          consent_given: !!consent,
+          consent_at: new Date().toISOString(),
+        };
+
+        // include supabase uid if we have it — this allows profiles.id = auth.users.id
+        if (supabaseUserId) {
+          payload.supabase_uid = supabaseUserId;
+        }
+
         const res = await fetch("/api/profiles", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email,
-            full_name: fullName || null,
-            about: about || null,
-            birthday: birthday || null,
-            consent_given: !!consent,
-            consent_at: new Date().toISOString(),
-          }),
+          body: JSON.stringify(payload),
         });
+
         const j = await res.json().catch(() => null);
         if (!res.ok) {
           console.warn("Server profile upsert failed", j);
-          // Not fatal for auth flow. Show info.
-          setInfo("Регистрация прошла. Профиль не создан автоматически (сервер вернул ошибку).");
+          // Not fatal for auth flow. Provide informative message to user.
+          // If signUp requires email confirmation, let the user know as well.
+          const needsConfirm = !!((signData as any)?.user?.confirmation_sent_at || (signData as any)?.user?.email_confirmed_at === null);
+          setInfo(
+            needsConfirm
+              ? "Регистрация завершена. На e-mail отправлено письмо подтверждения. Профиль не был создан автоматически (сервер вернул ошибку)."
+              : "Регистрация прошла. Профиль не создан автоматически (сервер вернул ошибку)."
+          );
         } else {
           setInfo("Регистрация успешно завершена. Профиль создан.");
         }
       } catch (upsertErr) {
         console.warn("Profile upsert request error", upsertErr);
+        // Non-blocking: user was created in Supabase; profile save failed.
         setInfo("Регистрация прошла. Попытка сохранить профиль на сервере не удалась.");
       }
 
-      // After signUp we redirect to home. If you prefer redirect to dashboard, change URL.
+      // Redirect after signUp. If email confirmation required, you may prefer a page that explains next steps.
       router.push("/");
     } catch (err: any) {
       console.error("register error", err);
@@ -128,8 +161,8 @@ export default function RegisterPage(): React.ReactElement {
               <span>Я соглашаюсь на использование и обработку моих персональных данных</span>
             </label>
 
-            {error && <div className="error">{error}</div>}
-            {info && <div className="info">{info}</div>}
+            {error && <div className="error" role="alert">{error}</div>}
+            {info && <div className="info" role="status">{info}</div>}
 
             <div className="actions">
               <button type="submit" className="primary" disabled={loading}>
@@ -140,9 +173,9 @@ export default function RegisterPage(): React.ReactElement {
           </form>
 
           <div className="mt-6">
-        <p className="text-center text-sm text-gray-600 mb-2">Или войдите через Telegram:</p>
-        <TelegramLoginButton />
-      </div>
+            <p className="text-center text-sm text-gray-600 mb-2">Или войдите через Telegram:</p>
+            <TelegramLoginButton />
+          </div>
         </div>
       </main>
 
