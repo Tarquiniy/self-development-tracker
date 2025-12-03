@@ -5,13 +5,13 @@ set -o errexit
 #pip install --upgrade pip
 #pip install -r requirements.txt
 
-echo "=== Collecting static files ==="
-python manage.py collectstatic --noinput
+#echo "=== Collecting static files ==="
+#python manage.py collectstatic --noinput
 
-echo "=== Making migrations ==="
-python manage.py makemigrations
+#echo "=== Making migrations ==="
+#python manage.py makemigrations
 
-echo "=== Applying database migrations ==="
-python manage.py migrate
+#echo "=== Applying database migrations ==="
+#python manage.py migrate
 
 echo "=== Build completed successfully ==="
