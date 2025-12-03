@@ -46,8 +46,13 @@ class CustomUser(AbstractUser):
 
 class UserProfile(models.Model):
     user = models.OneToOneField('CustomUser', on_delete=models.CASCADE, related_name='profile')
+
     subscription_active = models.BooleanField(default=False)
     subscription_expires = models.DateTimeField(null=True, blank=True)
+
+    # 🔥 Вот добавляемое поле:
+    max_tables = models.PositiveIntegerField(default=3, help_text="Максимальное количество таблиц, которые пользователь может создать")
+
     tables_limit = models.IntegerField(default=1)
     
     # Дополнительные поля профиля
