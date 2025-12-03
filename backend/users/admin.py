@@ -3,6 +3,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth import get_user_model
 from django import forms
+from django.utils.html import format_html
 
 from .models import CustomUser, UserProfile
 
@@ -15,16 +16,14 @@ class UserProfileForm(forms.ModelForm):
         fields = "__all__"
 
     def clean_max_tables(self):
-        # если поля нет в форме (модель не содержит max_tables) — пропускаем
         if "max_tables" not in self.fields:
             return self.cleaned_data.get("max_tables", None)
-
         value = self.cleaned_data.get("max_tables")
         if value is None:
             return 1
         if value < 1:
             raise forms.ValidationError("Минимальное значение — 1")
-        if value > 1000:
+        if value > 10000:
             raise forms.ValidationError("Слишком большое значение")
         return value
 
@@ -38,12 +37,12 @@ class UserProfileInline(admin.StackedInline):
 
     def get_fields(self, request, obj=None):
         fields = []
-        # первыми показываем лимит (поддерживаем оба варианта)
+        # показываем сначала лимит (поддерживаем оба варианта)
         if hasattr(self.model, "max_tables"):
             fields.append("max_tables")
-        if hasattr(self.model, "tables_limit") and "tables_limit" not in fields:
-            fields.append("tables_limit")
-
+        if hasattr(self.model, "tables_limit"):
+            if "tables_limit" not in fields:
+                fields.append("tables_limit")
         extras = ["subscription_active", "subscription_expires", "phone", "website", "location", "email_notifications", "language"]
         for f in extras:
             if hasattr(self.model, f):
@@ -63,17 +62,12 @@ class CustomUserAdmin(DjangoUserAdmin):
         "email_verified",
         "get_max_tables",
     )
+
     list_filter = ("is_staff", "is_superuser", "is_active", "email_verified")
     search_fields = ("email", "username")
     ordering = ("-date_joined",)
 
-    readonly_fields = (
-        "last_login",
-        "date_joined",
-        "supabase_uid",
-        "verification_sent_at",
-        "reset_sent_at",
-    )
+    readonly_fields = ("last_login", "date_joined", "supabase_uid", "verification_sent_at", "reset_sent_at",)
 
     fieldsets = (
         ("Основная информация", {"fields": ("email", "username", "password")}),
@@ -94,15 +88,14 @@ class CustomUserAdmin(DjangoUserAdmin):
 
     inlines = [UserProfileInline]
 
-    # helper: безопасно получить значение лимита (max_tables или tables_limit)
     def get_max_from_profile(self, user):
         try:
             profile = getattr(user, "profile", None)
             if not profile:
                 return None
-            if hasattr(profile, "max_tables") and profile.max_tables is not None:
+            if getattr(profile, "max_tables", None) is not None:
                 return profile.max_tables
-            if hasattr(profile, "tables_limit") and profile.tables_limit is not None:
+            if getattr(profile, "tables_limit", None) is not None:
                 return profile.tables_limit
             return None
         except Exception:
@@ -111,11 +104,11 @@ class CustomUserAdmin(DjangoUserAdmin):
     def get_max_tables(self, obj):
         val = self.get_max_from_profile(obj)
         if val is None:
-            return "—"
+            return format_html('<span style="color:#9ca3af;">{}</span>', "—")
         return val
     get_max_tables.short_description = "Лимит таблиц"
 
-    # гарантируем создание профиля перед отображением change page (чтобы inline был)
+    # гарантируем создание профиля перед отображением change page (чтобы inline всегда был виден)
     def change_view(self, request, object_id, form_url='', extra_context=None):
         try:
             user = User.objects.get(pk=object_id)
@@ -124,7 +117,6 @@ class CustomUserAdmin(DjangoUserAdmin):
             pass
         return super().change_view(request, object_id, form_url, extra_context)
 
-    # при сохранении пользователя через админ — также создаём профиль
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         try:
@@ -133,26 +125,22 @@ class CustomUserAdmin(DjangoUserAdmin):
             pass
 
 
-# Регистрируем в default admin site
+# Регистрируем в доступных admin site
+# 1) основной admin.site
+try:
+    admin.site.unregister(CustomUser)
+except Exception:
+    pass
 admin.site.register(CustomUser, CustomUserAdmin)
 
-# Если у вас есть кастомный admin site (например custom_admin_site в core.admin), попытаемся зарегистрировать в нём тоже
-_custom_sites_to_try = [
-    "core.admin",
-    "custom_admin.admin",
-    "admin_site",
-    "project.admin",
-    "backend.core.admin",
-]
-for module_path in _custom_sites_to_try:
+# 2) если в проекте есть custom_admin_site, зарегистрируем в нём тоже (без падения, если его нет)
+try:
+    from core.admin import custom_admin_site
     try:
-        module = __import__(module_path, fromlist=["*"])
-        candidate = getattr(module, "custom_admin_site", None) or getattr(module, "custom_site", None) or getattr(module, "admin_site", None)
-        if candidate:
-            try:
-                candidate.register(CustomUser, CustomUserAdmin)
-            except Exception:
-                # возможно уже зарегистрировано, пропускаем
-                pass
-    except ImportError:
-        continue
+        custom_admin_site.unregister(CustomUser)
+    except Exception:
+        pass
+    custom_admin_site.register(CustomUser, CustomUserAdmin)
+except Exception:
+    # если custom_admin_site отсутствует — ничего не делаем
+    pass
