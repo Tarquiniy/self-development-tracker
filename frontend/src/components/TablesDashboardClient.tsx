@@ -49,9 +49,11 @@ export default function TablesDashboardClient(): React.ReactElement {
   // профиль с лимитом
   const [profile, setProfile] = useState<{ max_tables?: number; tables_limit?: number } | null>(null);
 
+  // единый базовый путь для таблиц (без завершающего слеша — backend поддерживает оба варианта)
+  const TABLES_BASE = "/api/tables/tables";
+
   useEffect(() => {
     (async () => {
-      // получаем токен и профиль, затем таблицы — избегаем race condition
       const { token } = await getOwnerAndToken();
       await fetchUserProfile(token);
       await fetchTables(token);
@@ -59,7 +61,6 @@ export default function TablesDashboardClient(): React.ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Возвращаем токен и userId, а также устанавливаем их в state
   async function getOwnerAndToken(): Promise<{ userId: string | null; token: string | null }> {
     try {
       const sessRes = await supabase.auth.getSession();
@@ -67,14 +68,12 @@ export default function TablesDashboardClient(): React.ReactElement {
 
       if (session && session.user) {
         const userId = session.user.id ?? null;
-        // supabase v2: session.access_token
         const token = (session as any)?.access_token ?? null;
         setCurrentUserId(userId);
         setAccessToken(token);
         return { userId, token };
       }
 
-      // fallback: getUser (older versions)
       const userRes = await supabase.auth.getUser();
       const user = (userRes as any)?.data?.user ?? null;
       if (user) {
@@ -94,13 +93,10 @@ export default function TablesDashboardClient(): React.ReactElement {
     }
   }
 
-  // -------- получить профиль пользователя (max_tables/tables_limit) --------
   async function fetchUserProfile(tokenParam?: string | null) {
     try {
       const token = tokenParam ?? accessToken;
-      // Если нет токена — попробуем загрузить профиль через сессию Supabase (клиент-side)
       if (!token) {
-        // Попытка — получить профиль из таблицы profiles через supabase client (anon key)
         try {
           const { data: userData } = await supabase.auth.getUser();
           const user = (userData as any)?.user ?? null;
@@ -120,7 +116,6 @@ export default function TablesDashboardClient(): React.ReactElement {
         return;
       }
 
-      // Если есть серверный endpoint, используем его (в проекте он доступен по /api/auth/profile/)
       try {
         const res = await fetch("/api/auth/profile/", {
           headers: {
@@ -129,7 +124,6 @@ export default function TablesDashboardClient(): React.ReactElement {
           },
         });
         if (!res.ok) {
-          // не фатально, попытаемся клиентским способом
           return;
         }
         const j = await res.json().catch(() => null);
@@ -148,60 +142,22 @@ export default function TablesDashboardClient(): React.ReactElement {
     }
   }
 
-  // fetchTables принимает token (если передан) и использует его в Authorization-заголовке
   async function fetchTables(tokenParam?: string | null) {
     setLoading(true);
     setError(null);
     try {
       const token = tokenParam ?? accessToken;
-      const authHeaders: Record<string, string> = {};
-      if (token) authHeaders["Authorization"] = `Bearer ${token}`;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      // Мы ожидаем защищённый роут /api/tables, который требует токен
-      let res: Response | null = null;
-      try {
-        res = await fetch("/api/tables", {
-          headers: {
-            ...authHeaders,
-            "Content-Type": "application/json",
-          },
-        });
-      } catch (e) {
-        console.warn("fetch /api/tables failed:", e);
-        res = null;
-      }
-
-      // Если /api/tables вернул 401 missing_token или 401 invalid_token,
-      // можно попробовать /api/user/tables (если у вас реализован)
-      if (!res || !res.ok) {
-        // если у нас токен — не пытаться публичный фолбэк (чтобы не показывать чужие таблицы)
-        if (!token) {
-          // без токена пробуем публичный /api/tables (фолбэк для публичных инстансов)
-          try {
-            res = await fetch("/api/tables");
-          } catch (e) {
-            throw new Error("Failed to fetch tables from server (no token)");
-          }
-        } else {
-          // попробуем /api/user/tables с токеном (если есть)
-          try {
-            res = await fetch("/api/user/tables", {
-              headers: { ...authHeaders, "Content-Type": "application/json" },
-            });
-          } catch (e) {
-            // если не удалось — падаем
-            throw new Error("Failed to fetch tables with token");
-          }
-        }
-      }
-
-      if (!res || !res.ok) {
-        const txt = await (res ? res.text().catch(() => "") : Promise.resolve(""));
-        throw new Error(`Failed fetching tables (${res ? res.status : "no-res"}): ${txt}`);
+      // Используем TABLES_BASE (без завершающего slash). Backend поддерживает оба варианта.
+      const res = await fetch(TABLES_BASE, { headers });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`Failed fetching tables (${res.status}): ${txt}`);
       }
 
       const j = await res.json().catch(() => ({}));
-
       const arr: any[] = Array.isArray(j?.data)
         ? j.data
         : Array.isArray(j)
@@ -223,7 +179,6 @@ export default function TablesDashboardClient(): React.ReactElement {
         }))
         .filter((x: TableItem) => Boolean(x.id));
 
-      // если есть currentUserId — фильтруем по нему
       let filteredByOwner = normalized;
       if (currentUserId) {
         filteredByOwner = normalized.filter((t) => String(t.owner ?? "") === String(currentUserId));
@@ -253,9 +208,6 @@ export default function TablesDashboardClient(): React.ReactElement {
     return out;
   }, [tables, query, sortBy]);
 
-  // ------------------------------
-  // Создание таблицы
-  // ------------------------------
   async function handleCreate() {
     if (!newTitle.trim()) return;
 
@@ -263,16 +215,13 @@ export default function TablesDashboardClient(): React.ReactElement {
     setError(null);
 
     try {
-      // убедимся, что есть token (получаем новый если нужно)
       let token = accessToken;
       if (!token) {
         const got = await getOwnerAndToken();
         token = got.token;
       }
 
-      // вычисляем предел, который мы будем использовать:
       const maxAllowed = profile?.max_tables ?? profile?.tables_limit ?? 1;
-
       if (tables.length >= Number(maxAllowed)) {
         setError(`Вы можете создать максимум ${maxAllowed} таблиц. Попросите администратора увеличить лимит.`);
         setCreating(false);
@@ -285,13 +234,13 @@ export default function TablesDashboardClient(): React.ReactElement {
 
       const payload = { title: newTitle.trim() };
 
-      const res = await fetch("/api/tables/tables/", {
+      // POST на TABLES_BASE (backend теперь поддерживает варианты с/без slash)
+      const res = await fetch(TABLES_BASE, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
 
-      // если backend возвращает 409 + { error: "user_has_table", existing: {...} } — обрабатываем
       if (res.status === 409) {
         const j409 = await res.json().catch(() => ({}));
         if (j409?.error === "user_has_table") {
@@ -304,7 +253,6 @@ export default function TablesDashboardClient(): React.ReactElement {
       }
 
       const j = await res.json().catch(() => ({}));
-
       if (!res.ok) {
         throw new Error(j?.detail ?? j?.error ?? "Ошибка создания таблицы");
       }
@@ -312,7 +260,6 @@ export default function TablesDashboardClient(): React.ReactElement {
       const created = j?.data?.table ?? j?.data ?? j;
 
       await fetchTables(token);
-      // refresh profile as admin might have changed limit
       await fetchUserProfile(token);
 
       setNewTitle("");
@@ -334,7 +281,6 @@ export default function TablesDashboardClient(): React.ReactElement {
   async function handleDelete(tableId: string) {
     if (!confirm("Удалить таблицу? Это действие необратимо.")) return;
     try {
-      // получаем token если нужно
       let token = accessToken;
       if (!token) {
         const got = await getOwnerAndToken();
@@ -344,7 +290,7 @@ export default function TablesDashboardClient(): React.ReactElement {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`/api/tables/tables/${encodeURIComponent(tableId)}/`, {
+      const res = await fetch(`${TABLES_BASE}/${encodeURIComponent(tableId)}`, {
         method: "DELETE",
         headers,
       });
@@ -358,7 +304,7 @@ export default function TablesDashboardClient(): React.ReactElement {
     }
   }
 
-  // UI helpers
+  // renderCard / renderListRow same as before...
   function renderCard(t: TableItem) {
     return (
       <div
@@ -528,7 +474,7 @@ export default function TablesDashboardClient(): React.ReactElement {
   );
 }
 
-// styles
+// styles (unchanged)
 const primaryBtnStyle: React.CSSProperties = {
   padding: "10px 14px",
   borderRadius: 10,
