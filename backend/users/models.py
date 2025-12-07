@@ -48,7 +48,8 @@ class UserProfile(models.Model):
     user = models.OneToOneField('CustomUser', on_delete=models.CASCADE, related_name='profile')
     subscription_active = models.BooleanField(default=False)
     subscription_expires = models.DateTimeField(null=True, blank=True)
-    tables_limit = models.IntegerField(default=1)
+    #tables_limit = models.IntegerField(default=1)
+    tables_limit = models.IntegerField(default=1, null=True, blank=True, help_text="Максимум таблиц (число), -1 = неограниченно")
     
     # Дополнительные поля профиля
     phone = models.CharField(max_length=20, blank=True)
