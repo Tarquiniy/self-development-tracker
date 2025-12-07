@@ -13,8 +13,10 @@
   },
   "license": "ISC",
   "author": "",
-  "type": "commonjs",
-  "main": "next.config.js",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -40,7 +42,6 @@
     "next": "^16.0.7",
     "next-pwa": "^5.6.0",
     "next-themes": "^0.4.6",
-    "node-fetch": "^2.7.0",
     "radix-ui": "^1.4.3",
     "react": "^19.2.1",
     "react-chartjs-2": "^5.3.1",
@@ -48,7 +49,8 @@
     "react-spring": "^10.0.3",
     "recharts": "^3.3.0",
     "tailwind-merge": "^3.3.1",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@tailwindcss/line-clamp": "^0.4.4",
@@ -56,7 +58,7 @@
     "@tailwindcss/typography": "^0.5.19",
     "@types/lodash": "^4.17.20",
     "@types/node": "^20",
-    "@types/node-fetch": "^2.6.13",
+    "@types/node-fetch": "^3.0.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.21",
