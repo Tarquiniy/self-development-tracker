@@ -5,8 +5,9 @@ from .models import CustomUser, UserProfile
 
 class UserProfileInline(admin.StackedInline):
     model = UserProfile
-    can_delete = False
+    extra = 0
     fk_name = "user"
+    can_delete = False
 
     fields = (
         "subscription_active",
