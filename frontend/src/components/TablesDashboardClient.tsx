@@ -14,12 +14,14 @@ type TableItem = {
   updated_at?: string | null | undefined;
   owner?: string | null;
   created_at?: string | null | undefined;
+  user_id?: string | null;
 };
 
 function friendlyDate(d?: string | null): string {
   if (!d) return "";
   try {
-    return new Date(d).toLocaleString();
+    const dt = new Date(d);
+    return dt.toLocaleString();
   } catch {
     return d ?? "";
   }
@@ -44,93 +46,169 @@ export default function TablesDashboardClient(): React.ReactElement {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
-  // -------------------------------
-  // Load user + fetch tables
-  // -------------------------------
+  // allowedLimit: number | Infinity. null = unknown (treat as default 1 later)
+  const [allowedLimit, setAllowedLimit] = useState<number | typeof Infinity | null>(null);
+
   useEffect(() => {
     (async () => {
-      const { userId, token } = await getOwnerAndToken();
+      const sess = await supabase.auth.getSession();
+      const session = (sess as any)?.data?.session ?? null;
+      const token = session ? (session as any)?.access_token ?? null : null;
+      const userId = session ? session.user?.id ?? null : ((await supabase.auth.getUser()) as any)?.data?.user?.id ?? null;
 
-      if (!userId) {
-        setError("Пользователь не авторизован");
-        return;
-      }
+      setCurrentUserId(userId);
+      setAccessToken(token);
 
-      await fetchTables(userId, token);
+      await fetchProfile(token, userId);
+      await fetchTables(token, userId);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function getOwnerAndToken(): Promise<{
-    userId: string | null;
-    token: string | null;
-  }> {
+  // ---- fetch user profile to get tables_limit ----
+  async function fetchProfile(token?: string | null, userIdParam?: string | null) {
     try {
-      const sess = await supabase.auth.getSession();
-      const session = sess?.data?.session ?? null;
+      const tokenToUse = token ?? accessToken;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (tokenToUse) headers["Authorization"] = `Bearer ${tokenToUse}`;
 
-      if (session?.user) {
-        const id = session.user.id ?? null;
-        const token = (session as any)?.access_token ?? null;
-        setCurrentUserId(id);
-        setAccessToken(token);
-        return { userId: id, token };
+      // endpoint that returns current user's profile — in your backend it is available as /api/auth/profile/
+      const res = await fetch("/api/auth/profile/", { headers });
+      if (!res.ok) {
+        // fallback: try without trailing slash
+        const res2 = await fetch("/api/auth/profile", { headers }).catch(() => null);
+        if (!res2 || !res2.ok) {
+          // cannot fetch profile -> leave allowedLimit null
+          setAllowedLimit(null);
+          return;
+        } else {
+          const j = await res2.json().catch(() => ({}));
+          const p = j?.data ?? j?.profile ?? j;
+          normalizeAndSetLimit(p?.tables_limit);
+          return;
+        }
       }
-
-      return { userId: null, token: null };
-    } catch {
-      return { userId: null, token: null };
+      const j = await res.json().catch(() => ({}));
+      const p = j?.data ?? j?.profile ?? j;
+      normalizeAndSetLimit(p?.tables_limit);
+    } catch (e) {
+      // ignore — we'll use default
+      setAllowedLimit(null);
     }
   }
 
-  // -------------------------------
-  // Fetch only user tables
-  // -------------------------------
-  async function fetchTables(userId: string, token: string | null) {
+  function normalizeAndSetLimit(raw: any) {
+    // follow same semantics as backend:
+    // - if null/undefined -> default 1
+    // - if numeric negative -> Infinity
+    // - else integer floor
+    let val = null as number | typeof Infinity | null;
+    if (raw === null || raw === undefined) val = null;
+    else {
+      const n = Number(raw);
+      if (!Number.isFinite(n)) val = null;
+      else if (n < 0) val = Infinity;
+      else val = Math.floor(n);
+    }
+    // if no value found, backend default is 1 (legacy) — but keep null to indicate unknown
+    setAllowedLimit(val);
+  }
+
+  // ---- fetch tables (filtered by owner on frontend) ----
+  async function fetchTables(tokenParam?: string | null, userIdParam?: string | null) {
     setLoading(true);
     setError(null);
-
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
+      const token = tokenParam ?? accessToken;
+      const authHeaders: Record<string, string> = {};
+      if (token) authHeaders["Authorization"] = `Bearer ${token}`;
 
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-
-      const url = `/api/tables?owner=${encodeURIComponent(userId)}`;
-
-      const res = await fetch(url, { headers });
-
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`Ошибка загрузки таблиц: ${txt}`);
+      let res: Response | null = null;
+      try {
+        res = await fetch("/api/tables", {
+          headers: {
+            ...authHeaders,
+            "Content-Type": "application/json",
+          },
+        });
+      } catch {
+        res = null;
       }
 
-      const j = await res.json();
-      const arr: any[] = Array.isArray(j?.data) ? j.data : [];
+      if (!res || !res.ok) {
+        // try user-specific endpoint
+        try {
+          res = await fetch("/api/user/tables", {
+            headers: { ...authHeaders, "Content-Type": "application/json" },
+          });
+        } catch (e) {
+          // ignore
+        }
+      }
 
-      const normalized: TableItem[] = arr.map((t) => ({
-        id: String(t.id),
-        title: t.title ?? "Без названия",
-        description: t.description ?? null,
-        categories: t.categories ?? [],
-        updated_at: t.updated_at ?? t.created_at,
-        owner: t.owner,
-        created_at: t.created_at,
-      }));
+      if (!res || !res.ok) {
+        // final attempt: public /api/tables without auth
+        try {
+          res = await fetch("/api/tables");
+        } catch (e) {
+          res = null;
+        }
+      }
 
-      // Больше не фильтруем на фронте — backend уже гарантирует только текущего пользователя
-      setTables(normalized);
+      if (!res || !res.ok) {
+        const txt = await (res ? res.text().catch(() => "") : Promise.resolve("no-res"));
+        throw new Error(`Failed fetching tables (${res ? res.status : "no-res"}): ${txt}`);
+      }
+
+      const j = await res.json().catch(() => ({}));
+      const arr: any[] = Array.isArray(j?.data)
+        ? j.data
+        : Array.isArray(j)
+        ? j
+        : Array.isArray(j?.tables)
+        ? j.tables
+        : [];
+
+      const normalized: TableItem[] = arr
+        .map((t: any) => ({
+          id: String(t?.id ?? t?.table_id ?? t?._id ?? ""),
+          title: t?.title ?? t?.name ?? "Без названия",
+          description: t?.description ?? null,
+          categories: t?.categories ?? t?.cats ?? [],
+          updated_at: t?.updated_at ?? t?.created_at ?? t?.createdAt ?? undefined,
+          owner: t?.owner ?? t?.user ?? null,
+          created_at: t?.created_at ?? null,
+          user_id: t?.user_id ?? null,
+        }))
+        .filter((x: TableItem) => Boolean(x.id));
+
+      // If we have currentUserId, filter to show only user's tables (safer than showing everyone)
+      let filteredByOwner = normalized;
+      const ownerToUse = userIdParam ?? currentUserId;
+      if (ownerToUse) {
+        filteredByOwner = normalized.filter((t) => String(t.owner ?? "") === String(ownerToUse));
+      }
+
+      setTables(filteredByOwner);
     } catch (e: any) {
-      setError(e?.message ?? "Ошибка загрузки таблиц");
+      setError(String(e?.message ?? e));
       setTables([]);
     } finally {
       setLoading(false);
     }
   }
 
-  // -------------------------------
-  // Create table
-  // -------------------------------
+  // helper: whether user reached limit
+  function hasReachedLimit(): boolean {
+    // if unknown allowedLimit -> backend legacy default is 1; treat null as 1 (to be safe)
+    const limit = allowedLimit === null ? 1 : allowedLimit;
+    if (limit === Infinity) return false;
+    return tables.length >= Number(limit);
+  }
+
+  // ------------------------------
+  // Создание таблицы
+  // ------------------------------
   async function handleCreate() {
     if (!newTitle.trim()) return;
 
@@ -138,28 +216,44 @@ export default function TablesDashboardClient(): React.ReactElement {
     setError(null);
 
     try {
-      if (!currentUserId) throw new Error("missing_user");
+      // ensure we have user id and token
+      if (!currentUserId) {
+        const usr = await supabase.auth.getUser();
+        const userId = (usr as any)?.data?.user?.id ?? null;
+        setCurrentUserId(userId);
+      }
+
+      // pre-check on client side: if reached limit, show modal and do NOT call API
+      if (hasReachedLimit()) {
+        // show duplicate modal (you already have this UX)
+        setExistingTable(tables[0] ?? null);
+        setModalVisible(true);
+        setCreating(false);
+        return;
+      }
+
+      // call backend — backend will also enforce limit and can return 409 as additional protection
+      const payload = { title: newTitle.trim(), owner: currentUserId };
 
       const token = accessToken;
-      if (!token) throw new Error("missing_token");
-
-      const payload = { title: newTitle.trim(), owner: currentUserId };
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
 
       const res = await fetch("/api/tables", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify(payload),
       });
 
-      const j = await res.json();
+      const j = await res.json().catch(() => ({}));
 
       if (res.status === 409 && j?.error === "user_has_table") {
-        setExistingTable(j.existing ?? null);
+        // backend says user already has reached limit — show modal
+        setExistingTable(j.existing ?? tables[0] ?? null);
         setModalVisible(true);
         setCreating(false);
+        // refresh tables to keep UI in sync
+        await fetchTables(accessToken, currentUserId);
         return;
       }
 
@@ -167,13 +261,13 @@ export default function TablesDashboardClient(): React.ReactElement {
         throw new Error(j?.detail ?? j?.error ?? "Ошибка создания таблицы");
       }
 
-      const created = j?.data;
+      const created = j?.data?.table ?? j?.data ?? j;
 
-      await fetchTables(currentUserId, token);
+      await fetchTables(accessToken, currentUserId);
       setNewTitle("");
       setCreating(false);
 
-      if (created?.id) {
+      if (created && created.id) {
         router.push(`/tables/${encodeURIComponent(created.id)}`);
       }
     } catch (e: any) {
@@ -182,145 +276,48 @@ export default function TablesDashboardClient(): React.ReactElement {
     }
   }
 
-  async function handleQuickEdit(id: string) {
-    router.push(`/tables/${encodeURIComponent(id)}`);
+  async function handleQuickEdit(tableId: string) {
+    router.push(`/tables/${encodeURIComponent(tableId)}`);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Удалить таблицу?")) return;
-
+  async function handleDelete(tableId: string) {
+    if (!confirm("Удалить таблицу? Это действие необратимо.")) return;
     try {
-      const token = accessToken;
-      if (!token) throw new Error("missing_token");
+      // include token if available
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
 
-      const res = await fetch(`/api/tables/${encodeURIComponent(id)}`, {
+      const res = await fetch(`/api/tables/${encodeURIComponent(tableId)}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
       });
-
-      if (!res.ok) throw new Error("Не удалось удалить таблицу");
-
-      if (currentUserId) await fetchTables(currentUserId, token);
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`Удаление не удалось (${res.status}): ${txt}`);
+      }
+      // refresh
+      await fetchTables(accessToken, currentUserId);
     } catch (e: any) {
       setError(String(e?.message ?? e));
     }
   }
 
-  // -------------------------------
-  // Filtering + sorting
-  // -------------------------------
   const filtered = useMemo(() => {
-    let out = tables.slice();
     const q = query.trim().toLowerCase();
-
+    let out = tables.slice();
     if (q) {
       out = out.filter(
         (t) =>
-          t.title?.toLowerCase().includes(q) ||
-          t.description?.toLowerCase().includes(q)
+          (t.title ?? "").toLowerCase().includes(q) ||
+          (t.description ?? "").toLowerCase().includes(q)
       );
     }
-
-    if (sortBy === "alpha") {
-      out.sort((a, b) => (a.title ?? "").localeCompare(b.title ?? ""));
-    } else {
-      out.sort((a, b) =>
-        (b.updated_at ?? "").localeCompare(a.updated_at ?? "")
-      );
-    }
-
+    if (sortBy === "alpha") out.sort((a, b) => (a.title ?? "").localeCompare(b.title ?? ""));
+    else out.sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
     return out;
   }, [tables, query, sortBy]);
 
-  // -------------------------------
-  // Renders
-  // -------------------------------
-
-  function renderCard(t: TableItem) {
-    return (
-      <div
-        key={t.id}
-        style={{
-          padding: 14,
-          borderRadius: 12,
-          background: "#fff",
-          boxShadow: "0 8px 24px rgba(15,23,42,0.04)",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-        }}
-      >
-        <div>
-          <div style={{ fontWeight: 700 }}>{t.title}</div>
-          <div style={{ color: "#667085", fontSize: 13, minHeight: 30 }}>
-            {t.description ?? "—"}
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginTop: 12,
-            gap: 8,
-          }}
-        >
-          <div style={{ color: "#94a3b8", fontSize: 12 }}>
-            {friendlyDate(t.updated_at)}
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => handleQuickEdit(t.id)} style={smallBtnStyle}>
-              Открыть
-            </button>
-            <button
-              onClick={() => handleDelete(t.id)}
-              style={smallDangerBtnStyle}
-            >
-              Удалить
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  function renderListRow(t: TableItem) {
-    return (
-      <div
-        key={t.id}
-        style={{
-          padding: 12,
-          borderRadius: 10,
-          background: "#fff",
-          boxShadow: "0 6px 18px rgba(15,23,42,0.03)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-        }}
-      >
-        <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ fontWeight: 700 }}>{t.title}</div>
-        </div>
-
-        <div style={{ display: "flex", gap: 8 }}>
-          <div style={{ color: "#94a3b8", fontSize: 12 }}>
-            {friendlyDate(t.updated_at)}
-          </div>
-          <button onClick={() => handleQuickEdit(t.id)} style={smallBtnStyle}>
-            Открыть
-          </button>
-          <button
-            onClick={() => handleDelete(t.id)}
-            style={smallDangerBtnStyle}
-          >
-            Удалить
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+  // ---------------- UI ----------------
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 12px" }}>
       <DuplicateTableModal
@@ -330,63 +327,98 @@ export default function TablesDashboardClient(): React.ReactElement {
         userId={currentUserId}
       />
 
-      <h1 style={{ fontSize: 22 }}>Мои таблицы</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 18 }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 22 }}>Мои таблицы</h1>
+          <div style={{ color: "#667085", fontSize: 13 }}>Управление вашими таблицами</div>
+        </div>
 
-      {/* Create form */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <input
-          placeholder="Название новой таблицы"
-          value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-          style={{
-            padding: 10,
-            borderRadius: 10,
-            border: "1px solid #ddd",
-            flex: "1 1 auto",
-          }}
-        />
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input placeholder="Поиск таблиц..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ padding: 8, borderRadius: 8, border: "1px solid #e6eef9" }} />
 
-        <button onClick={handleCreate} disabled={creating} style={primaryBtnStyle}>
-          {creating ? "Создаём..." : "Создать таблицу"}
-        </button>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} style={{ padding: 8, borderRadius: 8 }}>
+            <option value="recent">Сначала недавно</option>
+            <option value="alpha">По названию</option>
+          </select>
+
+          <button onClick={() => setView(view === "grid" ? "list" : "grid")} style={{ padding: 8, borderRadius: 8 }}>
+            {view === "grid" ? "Список" : "Плитка"}
+          </button>
+        </div>
       </div>
 
-      {error && <div style={{ color: "crimson" }}>{error}</div>}
+      {/* создание */}
+      <div style={{ marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
+        <input placeholder="Название новой таблицы" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} style={{ padding: 10, borderRadius: 10, border: "1px solid #e5e7eb", flex: "1 1 auto" }} />
+        <button onClick={handleCreate} disabled={creating} style={{ ...primaryBtnStyle, opacity: creating ? 0.6 : 1 }}>
+  {creating ? "Создаём..." : "Создать таблицу"}
+</button>
+      </div>
+
+      {allowedLimit !== null && (
+        <div style={{ marginBottom: 8, color: "#64748b", fontSize: 13 }}>
+          Лимит таблиц: {allowedLimit === Infinity ? "∞" : allowedLimit} • Создано: {tables.length}
+        </div>
+      )}
+
+      {error && <div style={{ color: "crimson", marginBottom: 12 }}>{error}</div>}
 
       {loading ? (
-        <div>Загрузка...</div>
+        <div style={{ color: "#64748b" }}>Загрузка...</div>
       ) : filtered.length === 0 ? (
-        <div
-          style={{
-            background: "#fff",
-            padding: 30,
-            borderRadius: 12,
-            textAlign: "center",
-          }}
-        >
-          У вас пока нет таблиц.
+        <div style={{ padding: 24, borderRadius: 12, background: "#fff", boxShadow: "0 8px 24px rgba(15,23,42,0.04)" }}>
+          <h3 style={{ marginTop: 0 }}>Таблицы не найдены</h3>
+          <p style={{ margin: 0, color: "#64748b" }}>У вас пока нет таблиц. Создайте первую таблицу через форму выше.</p>
         </div>
       ) : view === "grid" ? (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))",
-            gap: 12,
-          }}
-        >
-          {filtered.map((t) => renderCard(t))}
-        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 12 }}>{filtered.map((t) => renderCard(t))}</div>
       ) : (
-        <div style={{ display: "grid", gap: 10 }}>
-          {filtered.map((t) => renderListRow(t))}
-        </div>
+        <div style={{ display: "grid", gap: 10 }}>{filtered.map((t) => renderListRow(t))}</div>
       )}
     </div>
   );
+
+  function renderCard(t: TableItem) {
+    return (
+      <div key={t.id} style={{ padding: 14, borderRadius: 12, background: "#fff", boxShadow: "0 8px 24px rgba(15,23,42,0.04)", display: "flex", flexDirection: "column", justifyContent: "space-between", minWidth: 220 }}>
+        <div>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>{t.title}</div>
+          <div style={{ color: "#667085", fontSize: 13, minHeight: 38 }}>{t.description ?? "—"}</div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, gap: 8 }}>
+          <div style={{ color: "#94a3b8", fontSize: 12 }}>{friendlyDate(t.updated_at ?? t.created_at)}</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => handleQuickEdit(t.id)} style={smallBtnStyle}>Открыть</button>
+            <button onClick={() => handleDelete(t.id)} style={smallDangerBtnStyle}>Удалить</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderListRow(t: TableItem) {
+    return (
+      <div key={t.id} style={{ padding: 12, borderRadius: 10, background: "#fff", boxShadow: "0 6px 18px rgba(15,23,42,0.03)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <div style={{ width: 8, height: 40, borderRadius: 6, background: "#e6eef9" }} />
+          <div>
+            <div style={{ fontWeight: 700 }}>{t.title}</div>
+            <div style={{ color: "#64748b", fontSize: 13 }}>{t.description ?? "—"}</div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ color: "#94a3b8", fontSize: 12 }}>{friendlyDate(t.updated_at ?? t.created_at)}</div>
+          <button onClick={() => handleQuickEdit(t.id)} style={smallBtnStyle}>Открыть</button>
+          <button onClick={() => handleDelete(t.id)} style={smallDangerBtnStyle}>Удалить</button>
+        </div>
+      </div>
+    );
+  }
 }
 
-// ==== styles ====
-
+// styles
 const primaryBtnStyle: React.CSSProperties = {
   padding: "10px 14px",
   borderRadius: 10,
@@ -407,6 +439,6 @@ const smallBtnStyle: React.CSSProperties = {
 
 const smallDangerBtnStyle: React.CSSProperties = {
   ...smallBtnStyle,
+  border: "1px solid rgba(220, 38, 38, 0.12)",
   color: "#dc2626",
-  borderColor: "rgba(220,38,38,0.3)",
 };
