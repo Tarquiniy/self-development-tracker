@@ -3,19 +3,51 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import CustomUser, UserProfile
 
+
+# -----------------------------
+# INLINE для профиля пользователя
+# -----------------------------
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    fk_name = "user"
+
+    # Поля, которые будут отображаться в инлайн-форме
+    fields = (
+        "subscription_active",
+        "subscription_expires",
+        "tables_limit",
+    )
+
+
+# -----------------------------
+# Админка CustomUser
+# -----------------------------
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
-    list_display = ('email', 'username', 'supabase_uid', 'registration_method', 'is_staff')
+    list_display = (
+        'email',
+        'username',
+        'supabase_uid',
+        'registration_method',
+        'is_staff',
+    )
     list_filter = ('registration_method', 'is_staff', 'is_superuser')
     search_fields = ('email', 'username', 'supabase_uid')
 
     fieldsets = UserAdmin.fieldsets + (
-        ('Additional Info', {
+        ('Дополнительно', {
             'fields': ('supabase_uid', 'registration_method'),
         }),
     )
 
+    # Добавляем инлайн профиль
+    inlines = [UserProfileInline]
 
+
+# -----------------------------
+# Админка UserProfile (отдельная)
+# -----------------------------
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = (
@@ -26,7 +58,6 @@ class UserProfileAdmin(admin.ModelAdmin):
     )
     search_fields = ('user__email', 'user__username')
 
-    # ❗ ЭТО ГЛАВНОЕ — поля, доступные для редактирования:
     fields = (
         'user',
         'subscription_active',
@@ -34,12 +65,11 @@ class UserProfileAdmin(admin.ModelAdmin):
         'tables_limit',
     )
 
-    # Если нужно запретить менять user:
     readonly_fields = ('user',)
 
 
 # -----------------------------
-# Сигналы создания профиля (как у тебя)
+# Сигналы создания профиля
 # -----------------------------
 from django.db.models.signals import post_save
 from django.dispatch import receiver
