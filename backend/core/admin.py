@@ -2,9 +2,12 @@
 from django.contrib import admin
 from django.urls import path, reverse
 from django.utils.html import format_html
+from django.shortcuts import redirect
 import logging
 
+
 from users.admin_views import tables_limits_admin
+from .models import TableLimitsProxy
 
 logger = logging.getLogger(__name__)
 
@@ -109,3 +112,10 @@ except Exception as e:
 
 
 __all__ = ["custom_admin_site", "CustomAdminSite"]
+
+
+@admin.register(TableLimitsProxy, site=admin.site)
+class TableLimitsAdmin(admin.ModelAdmin):
+    def changelist_view(self, request, extra_context=None):
+        url = reverse("custom_admin:tables_limits_admin")
+        return redirect(url)
