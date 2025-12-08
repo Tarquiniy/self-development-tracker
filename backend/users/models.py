@@ -68,13 +68,16 @@ def create_user_profile(sender, instance, created, **kwargs):
         UserProfile.objects.get_or_create(user=instance)
 
 
-# Proxy model to show an admin menu item (no DB table will be created)
-class UserTableLimitsProxy(models.Model):
+class UserTableLimitsProxy(CustomUser):
+    """
+    Proxy model based on CustomUser so Django ORM accepts registration.
+    Uses no extra DB table (proxy=True) and will appear under the 'users' app.
+    """
     class Meta:
         proxy = True
-        app_label = "users"  # оставляем app_label users, чтобы пункт виделся в секции users
+        app_label = "users"
         verbose_name = "Лимиты таблиц"
         verbose_name_plural = "Лимиты таблиц"
 
     def __str__(self):
-        return "Лимиты таблиц"
+        return f"Лимиты таблиц (переход)"

@@ -1,6 +1,7 @@
 # backend/core/admin.py
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, reverse
+from django.shortcuts import redirect
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ class CustomAdminSite(admin.AdminSite):
         """
         Add optional blog admin views (dashboard, media library, stats) lazily.
         Import blog.admin module and attach existing views if present.
-        Also add our tables-limits view into the admin site.
+        Also add our tables-limits view into the admin site (import inside to avoid circular imports).
         """
         urls = super().get_urls()
         custom_urls = []
@@ -58,6 +59,39 @@ class CustomAdminSite(admin.AdminSite):
 
 # create site
 custom_admin_site = CustomAdminSite(name="custom_admin")
+
+
+# -----------------------------
+# Register proxy admin AFTER custom_admin_site is created.
+# This avoids import cycles and ensures the item appears in the left menu.
+# -----------------------------
+try:
+    # import proxy model lazily
+    from users.models import UserTableLimitsProxy
+
+    class UserTableLimitsProxyAdmin(admin.ModelAdmin):
+        list_display = ("__str__",)
+
+        # When clicking the model in left menu, redirect to our admin view
+        def changelist_view(self, request, extra_context=None):
+            try:
+                url = reverse("custom_admin:tables_limits_admin")
+                return redirect(url)
+            except Exception:
+                return redirect("/admin/")
+
+    # Register into our custom admin site so it appears in the left menu of custom_admin_site
+    try:
+        custom_admin_site.register(UserTableLimitsProxy, UserTableLimitsProxyAdmin)
+        logger.info("Registered UserTableLimitsProxy in custom_admin_site")
+    except Exception as e:
+        # fallback: register in default admin if custom site fails
+        admin.site.register(UserTableLimitsProxy, UserTableLimitsProxyAdmin)
+        logger.debug("Registered UserTableLimitsProxy in default admin (fallback): %s", e)
+
+except Exception as e:
+    logger.debug("Could not register UserTableLimitsProxy admin (models may not be loaded yet): %s", e)
+
 
 # TRY to register blog models into custom_admin_site using blog.admin.register_admin_models
 try:
