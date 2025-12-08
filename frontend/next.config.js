@@ -13,6 +13,6 @@ const nextConfig = {
       'positive-theta.onrender.com'
     ],
   },
-}
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;
