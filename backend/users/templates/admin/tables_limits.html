@@ -1,42 +1,48 @@
 {% extends "admin/base_site.html" %}
+{% load static %}
 
 {% block content %}
-<h1>Управление лимитами таблиц</h1>
+  <h1>Управление лимитами таблиц</h1>
 
-<table class="admin-table" style="width:100%; border-collapse: collapse; margin-top:20px;">
-    <tr>
-        <th style="padding:8px; border-bottom:1px solid #ccc;">ID</th>
-        <th style="padding:8px; border-bottom:1px solid #ccc;">Email</th>
-        <th style="padding:8px; border-bottom:1px solid #ccc;">Текущий лимит</th>
-        <th style="padding:8px; border-bottom:1px solid #ccc;">Изменить</th>
-    </tr>
-
-    {% for user in users %}
-    <tr>
-        <td style="padding:8px;">{{ user.id }}</td>
-        <td style="padding:8px;">{{ user.email }}</td>
-
-        <td style="padding:8px;">
-            {% if user.profile %}
-                {{ user.profile.tables_limit }}
-            {% else %}
-                <em style="color:red;">Нет профиля!</em>
-            {% endif %}
-        </td>
-
-        <td style="padding:8px;">
-            <form method="post" action="">
-                {% csrf_token %}
-                <input type="hidden" name="user_id" value="{{ user.id }}">
-                <input type="number" name="tables_limit"
-                       value="{{ user.profile.tables_limit|default:1 }}"
-                       style="padding:5px; width:100px;">
-                <button type="submit" class="default" style="padding:6px 12px;">
-                    Сохранить
-                </button>
-            </form>
-        </td>
-    </tr>
+  {% if messages %}
+    {% for message in messages %}
+      <div class="messagelist">
+        <div class="{{ message.tags }}">{{ message }}</div>
+      </div>
     {% endfor %}
-</table>
+  {% endif %}
+
+  <table class="adminlist" style="width:100%; border-collapse: collapse;">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Email</th>
+        <th>Текущий лимит</th>
+        <th>Действия</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr>
+        <td>{{ user.id }}</td>
+        <td>{{ user.email }}</td>
+        <td>
+          {% if user.profile %}
+            {{ user.profile.tables_limit }}
+          {% else %}
+            <em style="color:red;">Нет профиля</em>
+          {% endif %}
+        </td>
+        <td>
+          <form method="post" style="display:inline-block;">
+            {% csrf_token %}
+            <input type="hidden" name="user_id" value="{{ user.id }}">
+            <input type="number" name="tables_limit" value="{{ user.profile.tables_limit|default_if_none:1 }}" style="width:100px; margin-right:6px;">
+            <button class="button" type="submit">Сохранить</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 {% endblock %}

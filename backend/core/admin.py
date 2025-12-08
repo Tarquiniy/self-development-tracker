@@ -1,47 +1,11 @@
 # backend/core/admin.py
 from django.contrib import admin
-from django.urls import path, reverse
-from django.utils.html import format_html
-from django.shortcuts import redirect
+from django.urls import path
 import logging
-
-
-from users.admin_views import tables_limits_admin
-from .models import TableLimitsProxy
 
 logger = logging.getLogger(__name__)
 
 
-# ------------------------------------------------------------
-# ВИРТУАЛЬНАЯ МОДЕЛЬ ДЛЯ ЛЕВОГО МЕНЮ
-# ------------------------------------------------------------
-class TableLimitsDummyModel:
-    """
-    Пустая заглушка, чтобы пункт "Лимиты таблиц"
-    появился в левом меню админки.
-    """
-    _meta = type("Meta", (), {"app_label": "Users", "model_name": "Table Limits"})
-
-
-@admin.register(TableLimitsDummyModel, site=admin.site)
-class TableLimitsAdmin(admin.ModelAdmin):
-    """
-    Админ-класс, который просто делает redirect в наш кастомный view.
-    """
-    verbose_name = "Лимиты таблиц"
-    verbose_name_plural = "Лимиты таблиц"
-
-    change_list_template = "admin/tables_limits_dummy.html"
-
-    def changelist_view(self, request, extra_context=None):
-        url = reverse("custom_admin:tables_limits_admin")
-        from django.shortcuts import redirect
-        return redirect(url)
-
-
-# ------------------------------------------------------------
-# Кастомная админка
-# ------------------------------------------------------------
 class CustomAdminSite(admin.AdminSite):
     site_header = "Positive Theta Admin"
     site_title = "Positive Theta"
@@ -49,18 +13,20 @@ class CustomAdminSite(admin.AdminSite):
 
     def get_urls(self):
         """
-        Добавляем кастомные админские URL.
+        Add optional blog admin views (dashboard, media library, stats) lazily.
+        Import blog.admin module and attach existing views if present.
+        Also add our tables-limits view into the admin site.
         """
         urls = super().get_urls()
-        custom_urls = [
-            path(
-                "tables-limits/",
-                self.admin_view(tables_limits_admin),
-                name="tables_limits_admin",
-            ),
-        ]
+        custom_urls = []
 
-        # Поддержка blog.admin, как у тебя было
+        # add tables-limits route (import inside to avoid circular imports)
+        try:
+            from users.admin_views import tables_limits_admin
+            custom_urls.append(path("tables-limits/", self.admin_view(tables_limits_admin), name="tables_limits_admin"))
+        except Exception as e:
+            logger.debug("Could not import tables_limits_admin: %s", e)
+
         try:
             from blog import admin as blog_admin
 
@@ -90,12 +56,10 @@ class CustomAdminSite(admin.AdminSite):
         return custom_urls + urls
 
 
+# create site
 custom_admin_site = CustomAdminSite(name="custom_admin")
 
-
-# ------------------------------------------------------------
-# РЕГИСТРАЦИЯ БЛОГ-МОДЕЛЕЙ
-# ------------------------------------------------------------
+# TRY to register blog models into custom_admin_site using blog.admin.register_admin_models
 try:
     from blog import admin as blog_admin_module
     register_fn = getattr(blog_admin_module, "register_admin_models", None)
@@ -112,10 +76,3 @@ except Exception as e:
 
 
 __all__ = ["custom_admin_site", "CustomAdminSite"]
-
-
-@admin.register(TableLimitsProxy, site=admin.site)
-class TableLimitsAdmin(admin.ModelAdmin):
-    def changelist_view(self, request, extra_context=None):
-        url = reverse("custom_admin:tables_limits_admin")
-        return redirect(url)

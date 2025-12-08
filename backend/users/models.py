@@ -66,3 +66,15 @@ class UserProfile(models.Model):
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
         UserProfile.objects.get_or_create(user=instance)
+
+
+# Proxy model to show an admin menu item (no DB table will be created)
+class UserTableLimitsProxy(models.Model):
+    class Meta:
+        proxy = True
+        app_label = "users"  # оставляем app_label users, чтобы пункт виделся в секции users
+        verbose_name = "Лимиты таблиц"
+        verbose_name_plural = "Лимиты таблиц"
+
+    def __str__(self):
+        return "Лимиты таблиц"
