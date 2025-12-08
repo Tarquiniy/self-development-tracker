@@ -7,6 +7,7 @@ from django.conf.urls.static import static
 from .admin import custom_admin_site
 from blog import views as blog_views
 from django.views.generic import TemplateView
+from users.admin_views import tables_limits_admin
     
 # Попытка импортировать админ-views из blog.admin (dashboard, stats, post update, media library)
 admin_dashboard_view = None
@@ -52,6 +53,7 @@ urlpatterns = [
     path('summernote/', include('django_summernote.urls')),
     path('api/auth/profile/', ProfileView.as_view(), name='profile'),
     path('preview/<str:token>/', blog_views.preview_by_token, name='post-preview'),
+    path("admin/tables-limits/", tables_limits_admin, name="tables_limits_admin"),
 ]
 
 # Регистрируем /admin/media-library/ ДО admin.urls, чтобы не перехватывался
