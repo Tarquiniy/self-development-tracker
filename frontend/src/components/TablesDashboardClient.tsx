@@ -46,63 +46,148 @@ export default function TablesDashboardClient(): React.ReactElement {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
-  // allowedLimit: number | Infinity. null = unknown (treat as default 1 later)
+  // allowedLimit: number | Infinity | null
   const [allowedLimit, setAllowedLimit] = useState<number | typeof Infinity | null>(null);
+  const [currentCount, setCurrentCount] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
-      const sess = await supabase.auth.getSession();
-      const session = (sess as any)?.data?.session ?? null;
+      // Get current session and user id
+      const { data: sessData } = await supabase.auth.getSession();
+      const session = (sessData as any)?.session ?? null;
       const token = session ? (session as any)?.access_token ?? null : null;
-      const userId = session ? session.user?.id ?? null : ((await supabase.auth.getUser()) as any)?.data?.user?.id ?? null;
+      const userId =
+        session
+          ? session.user?.id ?? null
+          : ((await supabase.auth.getUser()) as any)?.data?.user?.id ?? null;
 
       setCurrentUserId(userId);
       setAccessToken(token);
 
-      await fetchProfile(token, userId);
-      await fetchTables(token, userId);
+      if (userId) {
+        await Promise.all([fetchProfileFromSupabase(userId), fetchTablesFromSupabase(userId)]);
+      } else {
+        // fallback: fetch public tables
+        await fetchTables();
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- fetch user profile to get tables_limit ----
-  async function fetchProfile(token?: string | null, userIdParam?: string | null) {
-    try {
-      const tokenToUse = token ?? accessToken;
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (tokenToUse) headers["Authorization"] = `Bearer ${tokenToUse}`;
+  // ---------- supabase reads ----------
 
-      // endpoint that returns current user's profile — in your backend it is available as /api/auth/profile/
-      const res = await fetch("/api/auth/profile/", { headers });
-      if (!res.ok) {
-        // fallback: try without trailing slash
-        const res2 = await fetch("/api/auth/profile", { headers }).catch(() => null);
-        if (!res2 || !res2.ok) {
-          // cannot fetch profile -> leave allowedLimit null
-          setAllowedLimit(null);
-          return;
-        } else {
-          const j = await res2.json().catch(() => ({}));
-          const p = j?.data ?? j?.profile ?? j;
-          normalizeAndSetLimit(p?.tables_limit);
-          return;
-        }
+  // Read tables_limit directly from Supabase profiles table
+  async function fetchProfileFromSupabase(userId: string) {
+    try {
+      const { data, error } = await supabase.from("profiles").select("tables_limit").eq("id", userId).maybeSingle();
+
+      if (error) {
+        console.warn("fetchProfileFromSupabase error:", error);
+        setAllowedLimit(null);
+        return;
       }
-      const j = await res.json().catch(() => ({}));
-      const p = j?.data ?? j?.profile ?? j;
-      normalizeAndSetLimit(p?.tables_limit);
+
+      const raw = data?.tables_limit ?? null;
+      normalizeAndSetLimit(raw);
     } catch (e) {
-      // ignore — we'll use default
+      console.warn("fetchProfileFromSupabase failed:", e);
       setAllowedLimit(null);
     }
   }
 
+  // Read count and rows from Supabase user_tables; returns normalized rows
+  async function fetchTablesFromSupabase(userId: string): Promise<TableItem[]> {
+    setLoading(true);
+    setError(null);
+    try {
+      // count only for performance
+      const tablesRes = await supabase.from("user_tables").select("id", { count: "exact" }).eq("owner", userId);
+
+      if (tablesRes.error) {
+        console.warn("fetchTablesFromSupabase error (count):", tablesRes.error);
+        // fallback to public fetch
+        await fetchTables();
+        return [];
+      }
+
+      const count =
+        typeof tablesRes.count === "number" ? tablesRes.count : Array.isArray(tablesRes.data) ? tablesRes.data.length : 0;
+      setCurrentCount(count);
+
+      // fetch actual rows to display (ordered newest first)
+      const rowsRes = await supabase.from("user_tables").select("*").eq("owner", userId).order("created_at", { ascending: false });
+
+      if (rowsRes.error) {
+        console.warn("rowsRes error:", rowsRes.error);
+        setTables([]);
+        return [];
+      } else {
+        const arr = Array.isArray(rowsRes.data) ? rowsRes.data : [];
+        const normalized: TableItem[] = arr
+          .map((t: any) => ({
+            id: String(t?.id ?? t?.table_id ?? t?.ID ?? ""),
+            title: t?.title ?? "Без названия",
+            description: t?.description ?? null,
+            categories: t?.categories ?? [],
+            updated_at: t?.updated_at ?? t?.created_at ?? undefined,
+            owner: t?.owner ?? null,
+            created_at: t?.created_at ?? null,
+            user_id: t?.user_id ?? null,
+          }))
+          .filter((x) => Boolean(x.id));
+        setTables(normalized);
+        return normalized;
+      }
+    } catch (e: any) {
+      console.warn("fetchTablesFromSupabase failed:", e);
+      setTables([]);
+      setCurrentCount(null);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // fallback: fetch public tables via /api/tables
+  async function fetchTables(): Promise<TableItem[]> {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/tables");
+      if (!res.ok) {
+        setTables([]);
+        setLoading(false);
+        return [];
+      }
+      const j = await res.json().catch(() => ({}));
+      const arr: any[] = Array.isArray(j?.data) ? j.data : [];
+      const normalized: TableItem[] = arr
+        .map((t: any) => ({
+          id: String(t?.id ?? t?.table_id ?? t?.ID ?? ""),
+          title: t?.title ?? "Без названия",
+          description: t?.description ?? null,
+          categories: t?.categories ?? [],
+          updated_at: t?.updated_at ?? t?.created_at ?? undefined,
+          owner: t?.owner ?? null,
+          created_at: t?.created_at ?? null,
+          user_id: t?.user_id ?? null,
+        }))
+        .filter((x) => Boolean(x.id));
+      setTables(normalized);
+      setCurrentCount(normalized.length);
+      return normalized;
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+      setTables([]);
+      setCurrentCount(null);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function normalizeAndSetLimit(raw: any) {
-    // follow same semantics as backend:
-    // - if null/undefined -> default 1
-    // - if numeric negative -> Infinity
-    // - else integer floor
-    let val = null as number | typeof Infinity | null;
+    let val: number | typeof Infinity | null = null;
     if (raw === null || raw === undefined) val = null;
     else {
       const n = Number(raw);
@@ -110,100 +195,15 @@ export default function TablesDashboardClient(): React.ReactElement {
       else if (n < 0) val = Infinity;
       else val = Math.floor(n);
     }
-    // if no value found, backend default is 1 (legacy) — but keep null to indicate unknown
     setAllowedLimit(val);
-  }
-
-  // ---- fetch tables (filtered by owner on frontend) ----
-  async function fetchTables(tokenParam?: string | null, userIdParam?: string | null) {
-    setLoading(true);
-    setError(null);
-    try {
-      const token = tokenParam ?? accessToken;
-      const authHeaders: Record<string, string> = {};
-      if (token) authHeaders["Authorization"] = `Bearer ${token}`;
-
-      let res: Response | null = null;
-      try {
-        res = await fetch("/api/tables", {
-          headers: {
-            ...authHeaders,
-            "Content-Type": "application/json",
-          },
-        });
-      } catch {
-        res = null;
-      }
-
-      if (!res || !res.ok) {
-        // try user-specific endpoint
-        try {
-          res = await fetch("/api/user/tables", {
-            headers: { ...authHeaders, "Content-Type": "application/json" },
-          });
-        } catch (e) {
-          // ignore
-        }
-      }
-
-      if (!res || !res.ok) {
-        // final attempt: public /api/tables without auth
-        try {
-          res = await fetch("/api/tables");
-        } catch (e) {
-          res = null;
-        }
-      }
-
-      if (!res || !res.ok) {
-        const txt = await (res ? res.text().catch(() => "") : Promise.resolve("no-res"));
-        throw new Error(`Failed fetching tables (${res ? res.status : "no-res"}): ${txt}`);
-      }
-
-      const j = await res.json().catch(() => ({}));
-      const arr: any[] = Array.isArray(j?.data)
-        ? j.data
-        : Array.isArray(j)
-        ? j
-        : Array.isArray(j?.tables)
-        ? j.tables
-        : [];
-
-      const normalized: TableItem[] = arr
-        .map((t: any) => ({
-          id: String(t?.id ?? t?.table_id ?? t?._id ?? ""),
-          title: t?.title ?? t?.name ?? "Без названия",
-          description: t?.description ?? null,
-          categories: t?.categories ?? t?.cats ?? [],
-          updated_at: t?.updated_at ?? t?.created_at ?? t?.createdAt ?? undefined,
-          owner: t?.owner ?? t?.user ?? null,
-          created_at: t?.created_at ?? null,
-          user_id: t?.user_id ?? null,
-        }))
-        .filter((x: TableItem) => Boolean(x.id));
-
-      // If we have currentUserId, filter to show only user's tables (safer than showing everyone)
-      let filteredByOwner = normalized;
-      const ownerToUse = userIdParam ?? currentUserId;
-      if (ownerToUse) {
-        filteredByOwner = normalized.filter((t) => String(t.owner ?? "") === String(ownerToUse));
-      }
-
-      setTables(filteredByOwner);
-    } catch (e: any) {
-      setError(String(e?.message ?? e));
-      setTables([]);
-    } finally {
-      setLoading(false);
-    }
   }
 
   // helper: whether user reached limit
   function hasReachedLimit(): boolean {
-    // if unknown allowedLimit -> backend legacy default is 1; treat null as 1 (to be safe)
     const limit = allowedLimit === null ? 1 : allowedLimit;
     if (limit === Infinity) return false;
-    return tables.length >= Number(limit);
+    if (currentCount === null) return false; // unknown count -> allow (server will protect)
+    return currentCount >= Number(limit);
   }
 
   // ------------------------------
@@ -216,59 +216,81 @@ export default function TablesDashboardClient(): React.ReactElement {
     setError(null);
 
     try {
-      // ensure we have user id and token
+      // ensure current user id
       if (!currentUserId) {
-        const usr = await supabase.auth.getUser();
-        const userId = (usr as any)?.data?.user?.id ?? null;
+        const ures = await supabase.auth.getUser();
+        const userId = (ures as any)?.data?.user?.id ?? null;
         setCurrentUserId(userId);
       }
 
-      // pre-check on client side: if reached limit, show modal and do NOT call API
+      // client-side check: show modal if reached
       if (hasReachedLimit()) {
-        // show duplicate modal (you already have this UX)
         setExistingTable(tables[0] ?? null);
         setModalVisible(true);
         setCreating(false);
         return;
       }
 
-      // call backend — backend will also enforce limit and can return 409 as additional protection
+      // call backend
       const payload = { title: newTitle.trim(), owner: currentUserId };
-
-      const token = accessToken;
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-
       const res = await fetch("/api/tables", {
         method: "POST",
-        headers,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
+      // parse response
       const j = await res.json().catch(() => ({}));
 
-      if (res.status === 409 && j?.error === "user_has_table") {
-        // backend says user already has reached limit — show modal
-        setExistingTable(j.existing ?? tables[0] ?? null);
-        setModalVisible(true);
-        setCreating(false);
-        // refresh tables to keep UI in sync
-        await fetchTables(accessToken, currentUserId);
-        return;
-      }
-
       if (!res.ok) {
-        throw new Error(j?.detail ?? j?.error ?? "Ошибка создания таблицы");
+        // handle 409 specially
+        if (res.status === 409 && j?.error === "user_has_table") {
+          setExistingTable(j.existing ?? tables[0] ?? null);
+          setModalVisible(true);
+          setCreating(false);
+          // refresh counts
+          if (currentUserId) await fetchTablesFromSupabase(currentUserId);
+          return;
+        }
+        throw new Error(j?.detail ?? j?.error ?? `Ошибка создания таблицы (${res.status})`);
       }
 
-      const created = j?.data?.table ?? j?.data ?? j;
+      // Successful creation — try to pick id from different locations
+      const createdCandidate = j?.data?.table ?? j?.data ?? j;
+      let newId: string | null = null;
 
-      await fetchTables(accessToken, currentUserId);
+      if (createdCandidate) {
+        newId = String(
+          createdCandidate?.id ??
+            createdCandidate?.ID ??
+            createdCandidate?.table_id ??
+            createdCandidate?.table?.id ??
+            createdCandidate?.table?.ID ??
+            createdCandidate?._id ??
+            ""
+        );
+        if (!newId) newId = null;
+      }
+
+      // If no id returned by API — fallback: query supabase for newest table of user
+      if (!newId) {
+        if (currentUserId) {
+          const newest = await fetchTablesFromSupabase(currentUserId);
+          newId = newest?.[0]?.id ?? null;
+        }
+      }
+
+      // Refresh local state anyway
+      if (currentUserId) await fetchTablesFromSupabase(currentUserId);
       setNewTitle("");
       setCreating(false);
 
-      if (created && created.id) {
-        router.push(`/tables/${encodeURIComponent(created.id)}`);
+      if (newId) {
+        router.push(`/tables/${encodeURIComponent(newId)}`);
+      } else {
+        // nothing to navigate to — show helpful error and log response
+        console.error("Could not determine created table id. Server response:", j);
+        setError("Таблица создана, но не удалось открыть её автоматически — перейдите в «Мои таблицы».");
       }
     } catch (e: any) {
       setError(String(e?.message ?? e));
@@ -283,20 +305,33 @@ export default function TablesDashboardClient(): React.ReactElement {
   async function handleDelete(tableId: string) {
     if (!confirm("Удалить таблицу? Это действие необратимо.")) return;
     try {
-      // include token if available
+      // Попробуем получить токен из supabase клиента (v2 API)
+      let token: string | null = null;
+      try {
+        const sessionRes = await supabase.auth.getSession();
+        token = sessionRes?.data?.session?.access_token ?? null;
+      } catch {
+        // ignore
+      }
+
       const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
 
       const res = await fetch(`/api/tables/${encodeURIComponent(tableId)}`, {
         method: "DELETE",
         headers,
+        credentials: "same-origin", // отправит cookies, если сессия в cookie
       });
+
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
         throw new Error(`Удаление не удалось (${res.status}): ${txt}`);
       }
-      // refresh
-      await fetchTables(accessToken, currentUserId);
+
+      // обновляем список таблиц
+      if (currentUserId) await fetchTablesFromSupabase(currentUserId);
     } catch (e: any) {
       setError(String(e?.message ?? e));
     }
@@ -319,7 +354,7 @@ export default function TablesDashboardClient(): React.ReactElement {
 
   // ---------------- UI ----------------
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 12px" }}>
+    <div className="tables-dashboard">
       <DuplicateTableModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
@@ -327,118 +362,272 @@ export default function TablesDashboardClient(): React.ReactElement {
         userId={currentUserId}
       />
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 18 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22 }}>Мои таблицы</h1>
-          <div style={{ color: "#667085", fontSize: 13 }}>Управление вашими таблицами</div>
+      <div className="header-row">
+        <div className="heading">
+          <h1>Мои таблицы</h1>
+          <div className="heading-sub">Управление вашими таблицами</div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input placeholder="Поиск таблиц..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ padding: 8, borderRadius: 8, border: "1px solid #e6eef9" }} />
+        <div className="controls">
+          <input
+            className="search-input"
+            placeholder="Поиск таблиц..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Поиск таблиц"
+          />
 
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} style={{ padding: 8, borderRadius: 8 }}>
+          <select className="select" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
             <option value="recent">Сначала недавно</option>
             <option value="alpha">По названию</option>
           </select>
 
-          <button onClick={() => setView(view === "grid" ? "list" : "grid")} style={{ padding: 8, borderRadius: 8 }}>
+          <button className="toggle-view" onClick={() => setView(view === "grid" ? "list" : "grid")}>
             {view === "grid" ? "Список" : "Плитка"}
           </button>
         </div>
       </div>
 
       {/* создание */}
-      <div style={{ marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
-        <input placeholder="Название новой таблицы" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} style={{ padding: 10, borderRadius: 10, border: "1px solid #e5e7eb", flex: "1 1 auto" }} />
-        <button onClick={handleCreate} disabled={creating} style={{ ...primaryBtnStyle, opacity: creating ? 0.6 : 1 }}>
-  {creating ? "Создаём..." : "Создать таблицу"}
-</button>
+      <div className="create-row">
+        <input
+          className="create-input"
+          placeholder="Название новой таблицы"
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+        />
+        <button className="primary-btn" onClick={handleCreate} disabled={creating}>
+          {creating ? "Создаём..." : "Создать таблицу"}
+        </button>
       </div>
 
       {allowedLimit !== null && (
-        <div style={{ marginBottom: 8, color: "#64748b", fontSize: 13 }}>
-          Лимит таблиц: {allowedLimit === Infinity ? "∞" : allowedLimit} • Создано: {tables.length}
-        </div>
+        <div className="limit-info">Лимит таблиц: {allowedLimit === Infinity ? "∞" : allowedLimit} • Создано: {currentCount ?? tables.length}</div>
       )}
 
-      {error && <div style={{ color: "crimson", marginBottom: 12 }}>{error}</div>}
+      {error && <div className="error-text">{error}</div>}
 
       {loading ? (
-        <div style={{ color: "#64748b" }}>Загрузка...</div>
+        <div className="muted">Загрузка...</div>
       ) : filtered.length === 0 ? (
-        <div style={{ padding: 24, borderRadius: 12, background: "#fff", boxShadow: "0 8px 24px rgba(15,23,42,0.04)" }}>
-          <h3 style={{ marginTop: 0 }}>Таблицы не найдены</h3>
-          <p style={{ margin: 0, color: "#64748b" }}>У вас пока нет таблиц. Создайте первую таблицу через форму выше.</p>
+        <div className="empty-state">
+          <h3>Таблицы не найдены</h3>
+          <p>У вас пока нет таблиц. Создайте первую таблицу через форму выше.</p>
         </div>
       ) : view === "grid" ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 12 }}>{filtered.map((t) => renderCard(t))}</div>
+        <div className="cards-grid">{filtered.map((t) => renderCard(t))}</div>
       ) : (
-        <div style={{ display: "grid", gap: 10 }}>{filtered.map((t) => renderListRow(t))}</div>
+        <div className="list-grid">{filtered.map((t) => renderListRow(t))}</div>
       )}
+
+      <style jsx>{`
+        .tables-dashboard {
+          width: 100%;
+          max-width: 1100px;
+          margin: 0 auto;
+          padding: 18px 12px;
+          box-sizing: border-box;
+        }
+
+        .header-row {
+          display: flex;
+          gap: 12px;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 18px;
+          flex-direction: column;
+        }
+        .heading h1 { margin: 0; font-size: 22px; }
+        .heading-sub { color: #64748b; font-size: 13px; margin-top: 6px; }
+
+        .controls {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          width: 100%;
+          margin-top: 12px;
+        }
+
+        .search-input {
+          flex: 1 1 auto;
+          padding: 8px;
+          border-radius: 8px;
+          border: 1px solid #e6eef9;
+          min-width: 0;
+        }
+
+        .select {
+          padding: 8px;
+          border-radius: 8px;
+          border: 1px solid #e6eef9;
+          background: white;
+        }
+
+        .toggle-view {
+          padding: 8px 10px;
+          border-radius: 8px;
+          border: 1px solid #e6eef9;
+          background: white;
+          cursor: pointer;
+        }
+
+        .create-row {
+          margin-bottom: 16px;
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          flex-direction: column;
+        }
+        .create-input {
+          padding: 10px;
+          border-radius: 10px;
+          border: 1px solid #e5e7eb;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        .primary-btn {
+          padding: 10px 14px;
+          border-radius: 10px;
+          border: none;
+          background: #0f1724;
+          color: #fff;
+          font-weight: 700;
+          cursor: pointer;
+          width: 100%;
+          box-sizing: border-box;
+        }
+
+        .limit-info { margin-bottom: 8px; color: #64748b; font-size: 13px; }
+
+        .error-text { color: crimson; margin-bottom: 12px; }
+
+        .muted { color: #64748b; }
+
+        .empty-state {
+          padding: 24px;
+          border-radius: 12px;
+          background: #fff;
+          box-shadow: 0 8px 24px rgba(15,23,42,0.04);
+        }
+        .empty-state h3 { margin-top: 0; }
+
+        /* cards grid: 1 col mobile, 2 col tablet, 3 col desktop */
+        .cards-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 12px;
+        }
+        .list-grid {
+          display: grid;
+          gap: 10px;
+        }
+
+        @media (min-width: 640px) {
+          .header-row { flex-direction: row; }
+          .controls { width: auto; margin-top: 0; }
+          .create-row { flex-direction: row; }
+          .create-input { flex: 1 1 auto; }
+          .primary-btn { width: auto; }
+          .cards-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (min-width: 1024px) {
+          .cards-grid { grid-template-columns: repeat(3, 1fr); }
+          .tables-dashboard { padding: 24px; }
+        }
+
+        /* card/list styles reused by renderCard / renderListRow via element selectors */
+        .card-item {
+          padding: 14px;
+          border-radius: 12px;
+          background: #fff;
+          box-shadow: 0 8px 24px rgba(15,23,42,0.04);
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          box-sizing: border-box;
+        }
+        .card-title { font-weight: 700; margin-bottom: 6px; word-break: break-word; }
+        .card-desc { color: #667085; font-size: 13px; min-height: 38px; word-break: break-word; }
+
+        .card-footer {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 12px;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .list-row {
+          padding: 12px;
+          border-radius: 10px;
+          background: #fff;
+          box-shadow: 0 6px 18px rgba(15,23,42,0.03);
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          box-sizing: border-box;
+          flex-wrap: wrap;
+        }
+        .list-left { display:flex; gap:12px; align-items:center; min-width:0; }
+        .list-left .meta { font-weight:700; word-break: break-word; }
+
+        .small-actions { display:flex; gap:8px; align-items:center; }
+
+        .small-btn {
+          padding: 6px 10px;
+          border-radius: 8px;
+          border: 1px solid #e6e7eb;
+          background: #fff;
+          cursor: pointer;
+          min-width: 64px;
+        }
+        .small-danger {
+          border: 1px solid rgba(220, 38, 38, 0.12);
+          color: #dc2626;
+        }
+      `}</style>
     </div>
   );
 
   function renderCard(t: TableItem) {
     return (
-      <div key={t.id} style={{ padding: 14, borderRadius: 12, background: "#fff", boxShadow: "0 8px 24px rgba(15,23,42,0.04)", display: "flex", flexDirection: "column", justifyContent: "space-between", minWidth: 220 }}>
+      <article key={t.id} className="card-item">
         <div>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>{t.title}</div>
-          <div style={{ color: "#667085", fontSize: 13, minHeight: 38 }}>{t.description ?? "—"}</div>
+          <div className="card-title">{t.title}</div>
+          <div className="card-desc">{t.description ?? "—"}</div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, gap: 8 }}>
+        <div className="card-footer">
           <div style={{ color: "#94a3b8", fontSize: 12 }}>{friendlyDate(t.updated_at ?? t.created_at)}</div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => handleQuickEdit(t.id)} style={smallBtnStyle}>Открыть</button>
-            <button onClick={() => handleDelete(t.id)} style={smallDangerBtnStyle}>Удалить</button>
+            <button className="small-btn" onClick={() => handleQuickEdit(t.id)}>Открыть</button>
+            <button className="small-btn small-danger" onClick={() => handleDelete(t.id)}>Удалить</button>
           </div>
         </div>
-      </div>
+      </article>
     );
   }
 
   function renderListRow(t: TableItem) {
     return (
-      <div key={t.id} style={{ padding: 12, borderRadius: 10, background: "#fff", boxShadow: "0 6px 18px rgba(15,23,42,0.03)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+      <div key={t.id} className="list-row">
+        <div className="list-left">
           <div style={{ width: 8, height: 40, borderRadius: 6, background: "#e6eef9" }} />
-          <div>
-            <div style={{ fontWeight: 700 }}>{t.title}</div>
+          <div style={{ minWidth: 0 }}>
+            <div className="meta">{t.title}</div>
             <div style={{ color: "#64748b", fontSize: 13 }}>{t.description ?? "—"}</div>
           </div>
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div style={{ color: "#94a3b8", fontSize: 12 }}>{friendlyDate(t.updated_at ?? t.created_at)}</div>
-          <button onClick={() => handleQuickEdit(t.id)} style={smallBtnStyle}>Открыть</button>
-          <button onClick={() => handleDelete(t.id)} style={smallDangerBtnStyle}>Удалить</button>
+          <div className="small-actions">
+            <button className="small-btn" onClick={() => handleQuickEdit(t.id)}>Открыть</button>
+            <button className="small-btn small-danger" onClick={() => handleDelete(t.id)}>Удалить</button>
+          </div>
         </div>
       </div>
     );
   }
 }
-
-// styles
-const primaryBtnStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 10,
-  border: "none",
-  background: "#0f1724",
-  color: "#fff",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const smallBtnStyle: React.CSSProperties = {
-  padding: "6px 10px",
-  borderRadius: 8,
-  border: "1px solid #e6e7eb",
-  background: "#fff",
-  cursor: "pointer",
-};
-
-const smallDangerBtnStyle: React.CSSProperties = {
-  ...smallBtnStyle,
-  border: "1px solid rgba(220, 38, 38, 0.12)",
-  color: "#dc2626",
-};

@@ -12,8 +12,9 @@ export default function CreateTableForm(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [allowedLimit, setAllowedLimit] = useState<number | typeof Infinity | null>(null);
+  const [currentCount, setCurrentCount] = useState<number | null>(null);
+
   const [existingTable, setExistingTable] = useState<any | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -21,39 +22,45 @@ export default function CreateTableForm(): React.ReactElement {
 
   useEffect(() => {
     (async () => {
-      const sess = await supabase.auth.getSession();
-      const session = (sess as any)?.data?.session ?? null;
-      const token = session ? (session as any)?.access_token ?? null : null;
+      const { data: sessData } = await supabase.auth.getSession();
+      const session = (sessData as any)?.session ?? null;
       const userId = session ? session.user?.id ?? null : ((await supabase.auth.getUser()) as any)?.data?.user?.id ?? null;
       setCurrentUserId(userId);
-      setAccessToken(token);
-      await fetchProfile(token);
+      if (userId) {
+        await Promise.all([fetchProfileFromSupabase(userId), fetchCountFromSupabase(userId)]);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function fetchProfile(token?: string | null) {
+  async function fetchProfileFromSupabase(userId: string) {
     try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-      const res = await fetch("/api/auth/profile/", { headers });
-      if (!res.ok) {
-        const res2 = await fetch("/api/auth/profile", { headers }).catch(() => null);
-        if (!res2 || !res2.ok) {
-          setAllowedLimit(null);
-          return;
-        } else {
-          const j = await res2.json().catch(() => ({}));
-          const p = j?.data ?? j?.profile ?? j;
-          normalizeAndSetLimit(p?.tables_limit);
-          return;
-        }
+      const { data, error } = await supabase.from("profiles").select("tables_limit").eq("id", userId).maybeSingle();
+      if (error) {
+        console.warn("fetchProfileFromSupabase:", error);
+        setAllowedLimit(null);
+        return;
       }
-      const j = await res.json().catch(() => ({}));
-      const p = j?.data ?? j?.profile ?? j;
-      normalizeAndSetLimit(p?.tables_limit);
-    } catch {
+      const raw = (data as any)?.tables_limit ?? null;
+      normalizeAndSetLimit(raw);
+    } catch (e) {
+      console.warn("fetchProfileFromSupabase failed:", e);
       setAllowedLimit(null);
+    }
+  }
+
+  async function fetchCountFromSupabase(userId: string) {
+    try {
+      const res = await supabase.from("user_tables").select("id", { count: "exact" }).eq("owner", userId);
+      if (res.error) {
+        console.warn("fetchCountFromSupabase error:", res.error);
+        setCurrentCount(null);
+        return;
+      }
+      setCurrentCount(typeof res.count === "number" ? res.count : (Array.isArray(res.data) ? (res.data as any[]).length : 0));
+    } catch (e) {
+      console.warn("fetchCountFromSupabase failed:", e);
+      setCurrentCount(null);
     }
   }
 
@@ -69,52 +76,49 @@ export default function CreateTableForm(): React.ReactElement {
     setAllowedLimit(val);
   }
 
-  // Fetch current count to show on the form
-  const [currentCount, setCurrentCount] = useState<number | null>(null);
-  useEffect(() => {
-    if (currentUserId !== null) fetchCount();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUserId]);
-
-  async function fetchCount() {
-    try {
-      const res = await fetch("/api/user/tables", {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-      });
-      if (!res.ok) {
-        // fallback to public /api/tables
-        const res2 = await fetch("/api/tables");
-        if (!res2.ok) {
-          setCurrentCount(null);
-          return;
-        }
-        const j2 = await res2.json().catch(() => ({}));
-        const arr2 = Array.isArray(j2?.data) ? j2.data : [];
-        setCurrentCount(arr2.length);
-        return;
-      }
-      const j = await res.json().catch(() => ({}));
-      const arr = Array.isArray(j?.data) ? j.data : [];
-      setCurrentCount(arr.length);
-    } catch {
-      setCurrentCount(null);
-    }
-  }
-
   function hasReachedLimit(): boolean {
     const limit = allowedLimit === null ? 1 : allowedLimit;
     if (limit === Infinity) return false;
-    if (currentCount === null) return false; // unknown count -> allow (server will protect)
+    if (currentCount === null) return false;
     return currentCount >= Number(limit);
+  }
+
+  // helper to fetch newest table for user (returns id or null)
+  async function fetchNewestTableId(userId: string): Promise<string | null> {
+    try {
+      const rowsRes = await supabase
+        .from("user_tables")
+        .select("id,created_at")
+        .eq("owner", userId)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (rowsRes.error) {
+        console.warn("fetchNewestTableId error:", rowsRes.error);
+        return null;
+      }
+
+      const arr: any[] = Array.isArray(rowsRes.data) ? (rowsRes.data as any[]) : [];
+      const row = arr[0] as any | undefined;
+      if (!row) return null;
+
+      // Normalise possible id fields (id, table_id, ID, _id...)
+      const candidate = row.id ?? row.table_id ?? row.ID ?? row._id ?? null;
+      return candidate ? String(candidate) : null;
+    } catch (e) {
+      console.warn("fetchNewestTableId failed:", e);
+      return null;
+    }
   }
 
   async function handleSubmit(e?: React.FormEvent) {
     if (e) e.preventDefault();
     if (!title.trim()) return;
+
     setCreating(true);
     setError(null);
 
-    // client-side check
+    // client-side check -> show modal if reached
     if (hasReachedLimit()) {
       setModalVisible(true);
       setCreating(false);
@@ -123,38 +127,47 @@ export default function CreateTableForm(): React.ReactElement {
 
     try {
       const payload = { title: title.trim(), owner: currentUserId };
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-
       const res = await fetch("/api/tables", {
         method: "POST",
-        headers,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       const j = await res.json().catch(() => ({}));
-      if (res.status === 409 && j?.error === "user_has_table") {
-        setExistingTable(j.existing ?? null);
-        setModalVisible(true);
-        setCreating(false);
-        await fetchCount();
-        return;
-      }
-
       if (!res.ok) {
-        throw new Error(j?.detail ?? j?.error ?? "Ошибка создания таблицы");
+        if (res.status === 409 && j?.error === "user_has_table") {
+          setExistingTable(j.existing ?? null);
+          setModalVisible(true);
+          setCreating(false);
+          if (currentUserId) await fetchCountFromSupabase(currentUserId);
+          return;
+        }
+        throw new Error(j?.detail ?? j?.error ?? `Ошибка создания таблицы (${res.status})`);
       }
 
-      const created = j?.data?.table ?? j?.data ?? j;
-      await fetchCount();
+      // success — try to get id
+      const createdCandidate = j?.data?.table ?? j?.data ?? j;
+      let newId: string | null = null;
+      if (createdCandidate) {
+        const c = createdCandidate as any;
+        newId = String(c?.id ?? c?.ID ?? c?.table_id ?? c?.table?.id ?? c?._id ?? "");
+        if (!newId) newId = null;
+      }
+
+      // fallback: fetch newest created by user
+      if (!newId && currentUserId) {
+        newId = await fetchNewestTableId(currentUserId);
+      }
+
+      if (currentUserId) await fetchCountFromSupabase(currentUserId);
       setTitle("");
       setCreating(false);
 
-      if (created && created.id) {
-        router.push(`/tables/${created.id}`);
+      if (newId) {
+        router.push(`/tables/${encodeURIComponent(newId)}`);
       } else {
-        // go back to tables list
-        router.push("/tables");
+        console.error("Could not determine created table id. Server response:", j);
+        setError("Таблица создана, но не удалось открыть её автоматически — перейдите в «Мои таблицы».");
       }
     } catch (e: any) {
       setError(String(e?.message ?? e));
@@ -173,7 +186,7 @@ export default function CreateTableForm(): React.ReactElement {
         </label>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button type="submit" disabled={creating} style={{ ...primaryBtnStyle, opacity: creating || hasReachedLimit() ? 0.6 : 1 }}>
+          <button type="submit" disabled={creating} style={{ ...primaryBtnStyle, opacity: creating ? 0.6 : 1 }}>
             {creating ? "Создаём..." : "Создать таблицу"}
           </button>
 

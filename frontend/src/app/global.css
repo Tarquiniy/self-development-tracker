@@ -24,8 +24,18 @@
   --shadow-lg: 0 20px 50px rgba(2,6,23,0.12);
 
   --header-height: 64px;
+
+  /* viewport fallback var — can be set on client by JS: --vh = window.innerHeight * 0.01px */
+  --vh: 1vh;
+
+  /* convenience */
+  --site-max-width: 1100px;
+  --safe-gap: 16px;
+  --btn-min-size: 44px;
+  --max-chart-size: 360px;
 }
 
+/* dark theme variables (override) */
 .dark {
   --background: 0 0% 100%;
   --foreground: 222 47% 11%;
@@ -46,13 +56,17 @@
 }
 
 /* ===========================
-   Base styles
+   Global resets & box-sizing (mobile-first)
    =========================== */
-html, body {
-  height: 100%;
+
+/* ensure consistent box-sizing across components (protects against overflow) */
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
-body {
+/* base HTML/body */
+html, body {
+  height: 100%;
   margin: 0;
   padding: 0;
   background-color: hsl(var(--background));
@@ -62,44 +76,59 @@ body {
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.6;
   word-wrap: break-word;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+  /* PROTECTION: prevent accidental horizontal scroll globally.
+     Note: aggressive — if you intentionally need horizontal scrolling for complex tables,
+     wrap that area in .horizontal-scroll */
+  overflow-x: hidden;
 }
+
+/* Optional: if header is fixed across app and overlap occurs, enable body top padding.
+   Uncomment if you want automatic push-down for content under fixed header.
+body { padding-top: var(--header-height); }
+*/
 
 /* ===========================
-   FIX: Inputs — always light background
+   Images / Media / Content helpers
    =========================== */
-input,
-textarea,
-select {
-  background: #ffffff !important; /* FIX */
-  color: hsl(var(--foreground)) !important; /* FIX */
-  border: 1px solid hsl(var(--border)) !important; /* FIX */
-  border-radius: 8px !important; /* FIX */
-  padding: 10px !important; /* FIX */
+img, picture, video, canvas, svg {
+  max-width: 100%;
+  display: block;
+  height: auto;
 }
 
-input:focus,
-textarea:focus,
-select:focus {
-  outline: none !important;
-  border-color: hsl(var(--primary)) !important;
-  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.25);
+/* Ensure iframes/embeds not overflow */
+iframe, object, embed {
+  max-width: 100%;
+  width: 100%;
 }
 
-/* ===========================
-   Container
-   =========================== */
+/* Prevent long words/URLs from breaking layout */
+.break-word {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* Generic content container helper */
 .container {
   width: 100%;
   box-sizing: border-box;
-  max-width: 80rem;
+  max-width: var(--site-max-width);
   margin-left: auto;
   margin-right: auto;
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
+  padding-left: max(env(safe-area-inset-left), 1.5rem);
+  padding-right: max(env(safe-area-inset-right), 1.5rem);
+}
+
+/* More narrow container */
+.container--narrow {
+  max-width: 760px;
 }
 
 /* ===========================
-   Links
+   Links & interaction
    =========================== */
 a {
   color: hsl(var(--primary));
@@ -126,6 +155,8 @@ a:hover {
   transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
   white-space: nowrap;
   padding: 0.5rem 1rem;
+  min-height: var(--btn-min-size); /* recommended touch target */
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
 }
 
 .btn:disabled {
@@ -154,21 +185,28 @@ a:hover {
 }
 
 /* ===========================
-   FIX: Category buttons always visible
+   FIX: Inputs — always light background (kept per your previous fix)
    =========================== */
-button,
-button * {
-  color: #0b2336 !important; /* FIX: dark text */
-}
-
-button {
-  background: #ffffff !important; /* FIX: always white */
+input,
+textarea,
+select {
+  background: #ffffff !important; /* FIX */
+  color: hsl(var(--foreground)) !important; /* FIX */
   border: 1px solid hsl(var(--border)) !important; /* FIX */
-  border-radius: 10px !important;
+  border-radius: 8px !important; /* FIX */
+  padding: 10px !important; /* FIX */
+  min-height: 40px;
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
 }
 
-button:hover:not(:disabled) {
-  background: hsl(var(--muted)) !important; /* FIX */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none !important;
+  border-color: hsl(var(--primary)) !important;
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.12);
 }
 
 /* ===========================
@@ -195,7 +233,7 @@ p {
 }
 
 /* ===========================
-   Prose
+   Prose/content
    =========================== */
 .prose {
   max-width: none;
@@ -300,6 +338,11 @@ p {
   max-width: 56ch;
 }
 
+/* Make hero padding scale better on small phones */
+@media (max-width: 420px) {
+  .hero { padding: calc(3rem + env(safe-area-inset-top)); }
+}
+
 /* ===========================
    Footer
    =========================== */
@@ -310,7 +353,7 @@ p {
 }
 
 /* ===========================
-   Posts grid / etc.
+   Posts grid / responsive layout
    =========================== */
 .posts-grid {
   display: grid;
@@ -356,7 +399,266 @@ p {
   min-height: 100%;
 }
 
-/* small helpers */
+/* ===========================
+   Tables and code responsiveness
+   =========================== */
+/* Wrap tables to allow horizontal scroll on small screens */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* IMPORTANT: previous min-width caused mobile overflow — reduce it to allow table shrink.
+   If a table must remain wide, wrap it explicitly in .horizontal-scroll */
+.table-wrapper table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: auto; /* was 600px, changed to prevent forced overflow on small screens */
+  table-layout: auto;
+  max-width: 100%;
+}
+
+/* code blocks: horizontal scroll and preserve white-space */
+pre, code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+  font-size: 0.9rem;
+}
+pre {
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ===========================
+   Mobile menu / navigation helpers
+   =========================== */
+
+/* Generic mobile menu container — safe, scrollable, and not overflowing viewport */
+.mobileMenu,
+.mobile-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--header-height));
+  display: block;
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 320ms ease, opacity 220ms ease, transform 240ms ease;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* When open */
+.mobileMenu.show,
+.mobile-menu.open {
+  /* Use JS-set --vh when available; fallback to 100vh */
+  max-height: calc(100 * var(--vh, 1vh) - var(--header-height) - 16px);
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Inner container with safe-area support and internal scrolling */
+.mobileInner,
+.mobile-menu__inner {
+  background: var(--card);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  padding-bottom: env(safe-area-inset-bottom);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  max-height: calc(100 * var(--vh, 1vh) - var(--header-height) - 32px);
+}
+
+/* Make each mobile menu link a block, centered and full-width */
+.mobileInner > a,
+.mobile-menu__inner > a,
+.mobile-menu .menu-item {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 12px 8px;
+  border-radius: 8px;
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+  white-space: normal; /* allow wrapping */
+}
+
+/* Hover backgrounds adapted to theme */
+.nav-contrast-light .mobileInner > a,
+.nav-contrast-light .mobile-menu__inner > a {
+  background: transparent;
+}
+.nav-contrast-light .mobileInner > a:hover,
+.nav-contrast-light .mobile-menu__inner > a:hover {
+  background: color-mix(in srgb, hsl(var(--muted)) 92%, transparent 8%);
+}
+.nav-contrast-dark .mobileInner > a:hover,
+.nav-contrast-dark .mobile-menu__inner > a:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+/* Mobile action group — vertical, centered, limited width on large phones */
+.mobileActions,
+.mobile-menu .ctas {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.mobileActions .actionPrimary,
+.mobileActions .actionBtn,
+.mobile-menu .ctas .btn {
+  width: 100%;
+  max-width: 360px;
+  min-width: 160px;
+  text-align: center;
+  padding: 12px 14px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+/* Theme-aware mobile button colors */
+.nav-contrast-dark .mobileActions .actionPrimary { background: var(--card-foreground); color: var(--card); border: 1px solid rgba(255,255,255,0.06); }
+.nav-contrast-dark .mobileActions .actionBtn { background: transparent; color: var(--card-foreground); border: 1px solid rgba(255,255,255,0.12); }
+
+.nav-contrast-light .mobileActions .actionPrimary { background: var(--card-foreground); color: var(--card); border: 1px solid rgba(15,23,36,0.06); }
+.nav-contrast-light .mobileActions .actionBtn { background: transparent; color: var(--card-foreground); border: 1px solid rgba(15,23,36,0.08); }
+
+/* Prevent the menu from causing page horizontal scroll */
+.mobileInner, .mobile-menu__inner { width: 100%; max-width: 100%; }
+
+/* ===========================
+   Safety helpers for Table Editor page
+   =========================== */
+/* container for page to enforce no horizontal overflow */
+.table-editor-root {
+  overflow-x: hidden;
+  padding-left: max(env(safe-area-inset-left), 12px);
+  padding-right: max(env(safe-area-inset-right), 12px);
+  box-sizing: border-box;
+}
+
+/* PetalChart / Canvas wrapper safety */
+.petal-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Ensure petal chart root inside wrapper doesn't exceed container */
+.petal-wrapper > * {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* Calendar and categories safety wrappers */
+.calendar-wrapper, .cats-wrapper {
+  width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* Journal items safety */
+.journal-item {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Horizontal scroll utility (for deliberate wide content) */
+.horizontal-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Utility to explicitly allow overflow where needed:
+   wrap content that must be wide with <div class="horizontal-scroll">...</div> */
+
+/* ===========================
+   Utilities
+   =========================== */
+.no-scroll {
+  overflow: hidden !important;
+  height: 100% !important;
+}
+
+/* Accessibility: focus */
+:focus {
+  outline: none;
+  box-shadow: 0 0 0 6px rgba(10,120,210,0.06);
+  border-radius: 6px;
+}
+
+/* Motion preference */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; }
+}
+
+/* ===========================
+   Desktop adjustments
+   =========================== */
+@media (min-width: 768px) {
+  .posts-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+  }
+
+  /* mobile menu is hidden on desktop by default if components expect that */
+  .mobileMenu, .mobile-menu { display: none !important; }
+}
+@media (min-width: 1024px) {
+  .posts-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+  .container { max-width: 1000px; padding-left: 24px; padding-right: 24px; }
+}
+@media (min-width: 1100px) {
+  .container { max-width: 80rem; }
+}
+
+/* ===========================
+   Small helpers (utility classes)
+   =========================== */
 .u-mt-8 { margin-top: 2rem; }
 .u-mt-12 { margin-top: 3rem; }
 .u-mb-6 { margin-bottom: 1.5rem; }
+
+/* ===========================
+   Small-screen tweaks (extra protections)
+   =========================== */
+@media (max-width: 620px) {
+  /* reduce large paddings to conserve width */
+  .container { padding-left: 12px; padding-right: 12px; }
+
+  /* ensure calendar / petal wrapper keep small on tiny phones */
+  .petal-wrapper > * { max-width: min(320px, 90vw) !important; height: auto !important; }
+
+  /* avoid forced wide table */
+  .table-wrapper table { min-width: auto; font-size: 14px; }
+}
+
+/* ===========================
+   Notes for integration
+   ===========================
+   - For better 100vh handling on iOS/Android, set --vh via JS:
+     document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+   - Ensure <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"> is present in <head>.
+   - If you need an element to intentionally scroll horizontally (wide tables, charts), wrap it with <div class="horizontal-scroll">...</div>.
+   - If something still overflows, inspect it in DevTools; the offending element usually has a fixed width/min-width or absolute positioning — I can patch specific components if you paste them here.
+*/

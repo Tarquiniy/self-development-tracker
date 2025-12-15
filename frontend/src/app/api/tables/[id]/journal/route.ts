@@ -21,11 +21,31 @@ function adminClient() {
  *
  * POST /api/tables/:id/journal
  * body: { date: 'YYYY-MM-DD', category_id?: string, text: string, meta?: any, points?: number }
+ *
+ * NOTE: route sometimes receives external absolute URL requests (depending on env).
+ * So we try ctx.params first, then fall back to parsing the URL path.
  */
+
+function extractTableId(ctx: any, reqUrl: string) {
+  // 1) prefer params if present
+  const pId = String(ctx?.params?.id ?? "").trim();
+  if (pId) return pId;
+
+  // 2) fallback: parse from request URL path (/api/tables/:id/journal)
+  try {
+    const url = new URL(reqUrl);
+    const m = url.pathname.match(/\/api\/tables\/([^\/]+)\/journal/);
+    if (m && m[1]) return decodeURIComponent(m[1]);
+  } catch (e) {
+    // ignore
+  }
+
+  return "";
+}
 
 export async function GET(req: Request, ctx: any) {
   try {
-    const tableId = String(ctx?.params?.id ?? "");
+    const tableId = String(extractTableId(ctx, req.url) ?? "");
     if (!tableId) return NextResponse.json({ error: "missing_table_id" }, { status: 400 });
 
     const url = new URL(req.url);
@@ -61,7 +81,7 @@ export async function GET(req: Request, ctx: any) {
 
 export async function POST(req: Request, ctx: any) {
   try {
-    const tableId = String(ctx?.params?.id ?? "");
+    const tableId = String(extractTableId(ctx, req.url) ?? "");
     if (!tableId) return NextResponse.json({ error: "missing_table_id" }, { status: 400 });
 
     let body: any;

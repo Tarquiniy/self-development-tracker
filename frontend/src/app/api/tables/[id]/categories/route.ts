@@ -6,7 +6,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABAS
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
-  console.warn("Supabase admin not configured for /api/tables/[id]/categories");
+  console.warn("[categories.route] Supabase admin not configured (missing env vars)");
 }
 
 function admin() {
@@ -16,21 +16,57 @@ function admin() {
 }
 
 /**
- * GET /api/tables/:id/categories?day=YYYY-MM-DD
- * POST /api/tables/:id/categories
- *
- * GET: возвращает категории + value (берёт points из category_cells для day or today)
- * POST: обновляет мета-поля категории (title, color, max, position). Тело JSON:
- *  { category_id: string, title?: string, color?: string, max?: number|null, position?: number }
- *
- * Подход: проверяем принадлежность категории table_id, затем обновляем запрошенные поля.
+ * Try to extract tableId:
+ *  - prefer params.id
+ *  - fallback: parse reqUrl pathname and extract /api/tables/:id/...
  */
+function extractTableId(params: any, reqUrl: string): string | null {
+  try {
+    const pId = String(params?.id ?? "").trim();
+    if (pId && pId !== "undefined" && pId !== "null") return pId;
 
-// GET (оставляем прежнюю логику — возвращаем value из category_cells)
+    // parse URL and try to find /api/tables/:id/ segment
+    const url = new URL(reqUrl);
+    const m = url.pathname.match(/\/api\/tables\/([^\/]+)(\/|$)/);
+    if (m && m[1]) {
+      const candidate = decodeURIComponent(String(m[1]));
+      if (candidate && candidate !== "undefined" && candidate !== "null") return candidate;
+    }
+  } catch (e) {
+    // ignore parsing errors
+    console.warn("[categories.route] extractTableId parse failed", String(e));
+  }
+  return null;
+}
+
+/** Simple UUID v4-ish validator (hex groups) */
+function isUuidCandidate(s: string): boolean {
+  if (!s || typeof s !== "string") return false;
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(s);
+}
+
+/**
+ * GET /api/tables/:id/categories?day=YYYY-MM-DD
+ * returns categories merged with daily points (from category_cells)
+ */
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const tableId = params?.id;
-    if (!tableId) return NextResponse.json({ error: "Missing table id" }, { status: 400 });
+    const tableIdRaw = extractTableId(params, req.url);
+    if (!tableIdRaw) {
+      return NextResponse.json({ error: "Missing table id" }, { status: 400 });
+    }
+
+    // reject obvious placeholders that come from client-side template strings
+    if (tableIdRaw === "undefined" || tableIdRaw === "null" || tableIdRaw.trim() === "") {
+      console.warn("[categories.route] received invalid table id (placeholder)", tableIdRaw);
+      return NextResponse.json({ error: "Missing table id" }, { status: 400 });
+    }
+
+    // validate UUID format early to avoid DB errors
+    if (!isUuidCandidate(tableIdRaw)) {
+      console.warn("[categories.route] table id not uuid:", tableIdRaw);
+      return NextResponse.json({ error: "Invalid table id format (expected uuid)" }, { status: 400 });
+    }
 
     const url = new URL(req.url);
     const dayParam = url.searchParams.get("day");
@@ -38,26 +74,39 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const supabase = admin();
 
+    // load categories
     const catRes = await supabase
       .from("tables_categories")
       .select("id, title, max, color, position")
-      .eq("table_id", tableId)
+      .eq("table_id", tableIdRaw)
       .order("position", { ascending: true });
 
-    if (catRes.error) return NextResponse.json({ error: catRes.error.message }, { status: 500 });
+    if (catRes.error) {
+      console.error("[categories.route] tables_categories select error:", catRes.error);
+      // don't return raw DB error to client, give friendly message
+      return NextResponse.json({ error: "Failed to load categories" }, { status: 500 });
+    }
+
     const cats = Array.isArray(catRes.data) ? catRes.data : [];
-    if (cats.length === 0) return NextResponse.json({ data: [] }, { status: 200 });
+    if (cats.length === 0) {
+      return NextResponse.json({ data: [] }, { status: 200 });
+    }
 
     const ids = cats.map((c: any) => c.id);
 
+    // load category_cells for the day (if table has none, fall back to zeros)
     const cellsRes = await supabase
       .from("category_cells")
       .select("category_id, points")
-      .eq("table_id", tableId)
+      .eq("table_id", tableIdRaw)
       .eq("day", day)
       .in("category_id", ids);
 
-    // ignore cellsRes.error here (we'll fall back to zeros)
+    // If DB error on cells, log and continue (we'll fallback to zero)
+    if (cellsRes.error) {
+      console.warn("[categories.route] category_cells select warning:", cellsRes.error.message);
+    }
+
     const cells = Array.isArray(cellsRes.data) ? cellsRes.data : [];
     const valuesMap = new Map<string, number>();
     for (const r of cells) {
@@ -75,15 +124,20 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     return NextResponse.json({ data: result }, { status: 200 });
   } catch (err: any) {
+    console.error("[categories.route] unexpected error:", err);
     return NextResponse.json({ error: String(err?.message ?? err) }, { status: 500 });
   }
 }
 
-// POST — обновление метаданных категории
+/**
+ * POST: update category metadata
+ * body: { category_id: string, title?: string, color?: string|null, max?: number|null, position?: number }
+ */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const tableId = params?.id;
-    if (!tableId) return NextResponse.json({ error: "Missing table id" }, { status: 400 });
+    const tableIdRaw = extractTableId(params, req.url);
+    if (!tableIdRaw) return NextResponse.json({ error: "Missing table id" }, { status: 400 });
+    if (!isUuidCandidate(tableIdRaw)) return NextResponse.json({ error: "Invalid table id format (expected uuid)" }, { status: 400 });
 
     let body: any;
     try {
@@ -92,26 +146,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: "invalid_json", detail: String(e) }, { status: 400 });
     }
 
-    // robust category_id resolution
-let category_id =
-  body?.category_id ??
-  body?.categoryId ??
-  body?.id ??
-  body?.category?.id ??
-  null;
+    let category_id =
+      body?.category_id ??
+      body?.categoryId ??
+      body?.id ??
+      body?.category?.id ??
+      null;
 
-// if frontend sends whole category object
-if (typeof category_id === "object" && category_id !== null && category_id.id) {
-  category_id = category_id.id;
-}
+    if (typeof category_id === "object" && category_id !== null && category_id.id) {
+      category_id = category_id.id;
+    }
 
-// final validation
-if (!category_id || typeof category_id !== "string") {
-  return NextResponse.json({ error: "missing_category_id", received: body }, { status: 400 });
-}
+    if (!category_id || typeof category_id !== "string") {
+      return NextResponse.json({ error: "missing_category_id", received: body }, { status: 400 });
+    }
 
+    if (!isUuidCandidate(category_id)) {
+      return NextResponse.json({ error: "invalid_category_id_format" }, { status: 400 });
+    }
 
-    // only allow updatable fields
     const allowed: Record<string, any> = {};
     if (body.title !== undefined) allowed.title = String(body.title);
     if (body.color !== undefined) allowed.color = body.color === null ? null : String(body.color);
@@ -139,13 +192,15 @@ if (!category_id || typeof category_id !== "string") {
       .eq("id", category_id)
       .maybeSingle();
 
-    if (fetchRes.error) return NextResponse.json({ error: fetchRes.error.message }, { status: 500 });
+    if (fetchRes.error) {
+      console.error("[categories.route] category fetch error:", fetchRes.error);
+      return NextResponse.json({ error: "Failed to verify category" }, { status: 500 });
+    }
     if (!fetchRes.data) return NextResponse.json({ error: "category_not_found" }, { status: 404 });
-    if (String(fetchRes.data.table_id) !== String(tableId)) {
+    if (String(fetchRes.data.table_id) !== String(tableIdRaw)) {
       return NextResponse.json({ error: "category_table_mismatch" }, { status: 403 });
     }
 
-    // perform update
     const updRes = await supabase
       .from("tables_categories")
       .update(allowed)
@@ -153,10 +208,14 @@ if (!category_id || typeof category_id !== "string") {
       .select()
       .maybeSingle();
 
-    if (updRes.error) return NextResponse.json({ error: updRes.error.message }, { status: 500 });
+    if (updRes.error) {
+      console.error("[categories.route] category update error:", updRes.error);
+      return NextResponse.json({ error: "Failed to update category" }, { status: 500 });
+    }
 
     return NextResponse.json({ data: updRes.data }, { status: 200 });
   } catch (err: any) {
+    console.error("[categories.route] unexpected POST error:", err);
     return NextResponse.json({ error: String(err?.message ?? err) }, { status: 500 });
   }
 }

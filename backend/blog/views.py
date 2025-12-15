@@ -85,15 +85,43 @@ class PostViewSet(viewsets.ModelViewSet):
         return PostCreateUpdateSerializer
 
     def get_queryset(self):
+        """
+        Base queryset with defensive filters:
+        - select_related + prefetch for performance
+        - for anonymous users, only published posts with non-null published_at and published_at <= now()
+        """
         qs = Post.objects.select_related('author').prefetch_related('categories', 'tags')
         user = getattr(self.request, 'user', None)
         if not (user and getattr(user, 'is_staff', False)):
-            qs = qs.filter(dj_models.Q(status='published', published_at__lte=timezone.now()))
-        return qs   
+            now = timezone.now()
+            try:
+                qs = qs.filter(status='published', published_at__isnull=False, published_at__lte=now)
+            except Exception:
+                # In case of unexpected DB issues, log and fallback to safer filter
+                logger.exception("Error applying published filter on Post queryset; falling back to status-only filter")
+                try:
+                    qs = qs.filter(status='published')
+                except Exception:
+                    logger.exception("Fallback filter also failed; returning empty queryset")
+                    return Post.objects.none()
+        return qs
 
     def perform_create(self, serializer):
         user = self.request.user if self.request.user.is_authenticated else None
         serializer.save(author=user)
+
+    def list(self, request, *args, **kwargs):
+        """
+        Override list to catch unexpected serialization errors and log them clearly.
+        This prevents a raw 500 traceback leaking to the client and helps debugging.
+        """
+        try:
+            return super().list(request, *args, **kwargs)
+        except Exception as e:
+            tb = traceback.format_exc()
+            logger.exception("PostViewSet.list failed: %s", tb)
+            # Return a safe error response with minimal detail (do not leak sensitive internals)
+            return Response({'detail': 'Internal server error while listing posts'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def add_comment(self, request, slug=None):
@@ -109,8 +137,6 @@ class PostViewSet(viewsets.ModelViewSet):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()

@@ -4,29 +4,78 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 /**
  * DELETE /api/tables/:id
- * - Требует Authorization: Bearer <token>
+ * - Требует Authorization: Bearer <token> (попытка также прочитать токен из cookie)
  * - Удаляет связанные записи (entries, categories) и саму таблицу,
  *   только если текущий пользователь является owner.
+ *
+ * Этот обработчик устойчив к случаям, когда params.id отсутствует:
+ *  - пытаемся извлечь id из params, затем из URL, затем из body (JSON).
  */
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
-  try {
-    const id = params?.id;
-    if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
 
+export async function DELETE(req: Request, { params }: { params: { id?: string } }) {
+  try {
+    // --- 1) try params, fallback to url path or JSON body ---
+    let id = params?.id ?? "";
+
+    // если нет — попробовать извлечь из req.url (на случай запуска в другом окружении)
+    if (!id) {
+      try {
+        const u = new URL(req.url);
+        // паттерн: /api/tables/<id>(/...) — захватим первый сегмент после /api/tables/
+        const m = u.pathname.match(/\/api\/tables\/([^\/\?]+)/i);
+        if (m && m[1]) {
+          id = decodeURIComponent(m[1]);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // если всё ещё нет — попробовать тело JSON { id: "..."}
+    if (!id) {
+      try {
+        const body = await req.json().catch(() => null);
+        if (body && (body.id || body.tableId || body.table_id)) {
+          id = String(body.id ?? body.tableId ?? body.table_id);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!id) {
+      return NextResponse.json({ error: "missing_id" }, { status: 400 });
+    }
+
+    // --- 2) авторизация: Authorization header -> cookie fallback ---
     const authHeader = req.headers.get("authorization") || "";
     const match = authHeader.match(/^Bearer\s+(.+)$/i);
-    const token = match ? match[1] : null;
+    let token = match ? match[1] : null;
+
+    // fallback: попробовать прочитать из cookie (например, если вы храните токен в cookie)
+    if (!token) {
+      const cookieHeader = req.headers.get("cookie") || "";
+      // ищем несколько возможных имён токена (наиболее распространённые)
+      const cookieMatch =
+        cookieHeader.match(/(?:sb-access-token|access_token|token|sb:token)=([^;]+)/) ||
+        cookieHeader.match(/(?:sb-access-token|access_token|token|sb:token)\s*=\s*"?([^;"]+)"/);
+      if (cookieMatch) {
+        token = decodeURIComponent(cookieMatch[1]);
+      }
+    }
+
     if (!token) {
       return NextResponse.json({ error: "missing_token" }, { status: 401 });
     }
 
-    const userRes = await supabaseAdmin.auth.getUser(token);
+    // --- 3) получить user через supabase admin ---
+    const userRes = await supabaseAdmin.auth.getUser(token as string);
     if (userRes.error || !userRes.data?.user) {
       return NextResponse.json({ error: "invalid_token", detail: userRes.error?.message ?? null }, { status: 401 });
     }
     const user = userRes.data.user;
 
-    // проверяем, что таблица принадлежит пользователю
+    // --- 4) проверяем, что таблица принадлежит пользователю ---
     const tableRes = await supabaseAdmin
       .from("user_tables")
       .select("id, owner")
@@ -47,12 +96,11 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       return NextResponse.json({ error: "forbidden", detail: "not table owner" }, { status: 403 });
     }
 
-    // best-effort: удалить связанные записи (entries, categories), если такие таблицы есть
+    // --- 5) best-effort удалить связанные записи (entries, categories), если они есть ---
     try {
-      // entries
       await supabaseAdmin.from("entries").delete().eq("table_id", id);
     } catch (e) {
-      // игнорируем ошибку — возможно таблицы нет
+      // игнорируем — возможно таблицы нет или нет прав — главное, продолжить
       console.warn("Failed deleting entries for table", id, e);
     }
     try {
@@ -61,7 +109,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       console.warn("Failed deleting categories for table", id, e);
     }
 
-    // удалить саму таблицу
+    // --- 6) удалить саму таблицу ---
     const delRes = await supabaseAdmin.from("user_tables").delete().eq("id", id);
     if (delRes.error) {
       return NextResponse.json({ error: "delete_failed", detail: delRes.error.message }, { status: 500 });
@@ -72,11 +120,3 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     return NextResponse.json({ error: "internal", detail: String(e?.message ?? e) }, { status: 500 });
   }
 }
-
-/**
- * (Опционально) GET /api/tables/:id — возвращает таблицу по id для текущего пользователя
- * Если нужен — можно раскомментировать и вернуть.
- */
-// export async function GET(req: Request, { params }: { params: { id: string } }) {
-//   // аналогично: проверка токена -> select * where id = params.id and owner = user.id
-// }

@@ -28,45 +28,64 @@ class CommentSerializer(serializers.ModelSerializer):
 class AttachmentSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
     filename = serializers.SerializerMethodField()
+
     class Meta:
         model = PostAttachment
         fields = ('id', 'title', 'filename', 'url', 'uploaded_at', 'post_id')
 
     def get_url(self, obj):
         try:
-            return obj.file.url
+            if getattr(obj, 'file', None):
+                return obj.file.url
         except Exception:
             return None
+        return None
 
     def get_filename(self, obj):
         try:
-            return obj.file.name and obj.file.name.split('/')[-1]
+            name = getattr(obj, 'file', None) and getattr(obj.file, 'name', '')
+            if name:
+                return name.split('/')[-1]
         except Exception:
-            return None
+            pass
+        return None
 
 class PostListSerializer(serializers.ModelSerializer):
-    excerpt = serializers.CharField()
+    excerpt = serializers.SerializerMethodField()
     featured_image = serializers.SerializerMethodField()
     categories = CategorySerializer(many=True, read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     url = serializers.SerializerMethodField()
+
     class Meta:
         model = Post
         fields = ('id', 'title', 'slug', 'excerpt', 'featured_image', 'categories', 'tags', 'published_at', 'url')
 
     def get_url(self, obj):
-        return obj.get_absolute_url()
+        try:
+            return obj.get_absolute_url()
+        except Exception:
+            # Fallback: construct simple url if possible
+            try:
+                slug = getattr(obj, 'slug', None)
+                if slug:
+                    return f"/blog/{slug}/"
+            except Exception:
+                pass
+        return None
 
     def _file_url(self, file_like):
         if not file_like:
             return None
         try:
+            # FileField or similar
             url = getattr(file_like, 'url', None)
             if url:
                 return url
         except Exception:
             pass
         try:
+            # raw string (already a URL)
             if isinstance(file_like, str) and file_like.strip():
                 return file_like
         except Exception:
@@ -74,7 +93,7 @@ class PostListSerializer(serializers.ModelSerializer):
         return None
 
     def get_featured_image(self, obj):
-        # If featured_image (string URL) provided — return it (may be full URL)
+        # If featured_image (string URL or FileField) provided — return it (may be full URL)
         try:
             val = getattr(obj, 'featured_image', None)
             url = self._file_url(val)
@@ -82,7 +101,8 @@ class PostListSerializer(serializers.ModelSerializer):
                 return url
         except Exception:
             pass
-        # fallback to first attachment
+
+        # fallback to first attachment (defensive)
         try:
             if hasattr(obj, 'attachments'):
                 first_obj = obj.attachments.all().order_by('id').first()
@@ -90,11 +110,28 @@ class PostListSerializer(serializers.ModelSerializer):
                     try:
                         return first_obj.file.url
                     except Exception:
-                        # as very last resort, return name
                         return getattr(first_obj.file, 'name', None)
         except Exception:
             pass
         return None
+
+    def get_excerpt(self, obj):
+        # Prefer explicit excerpt; else build short snippet from content (safe)
+        try:
+            excerpt = getattr(obj, 'excerpt', None)
+            if excerpt:
+                return excerpt
+        except Exception:
+            pass
+        try:
+            content = getattr(obj, 'content', '') or ''
+            # naive html-stripping could be added but keep simple: plain text slice
+            snippet = content.strip()
+            if len(snippet) > 240:
+                return snippet[:237].rsplit(' ', 1)[0] + '...'
+            return snippet or ''
+        except Exception:
+            return ''
 
 class PostDetailSerializer(PostListSerializer):
     author = serializers.StringRelatedField(read_only=True)
@@ -108,10 +145,13 @@ class PostDetailSerializer(PostListSerializer):
 
     def get_likes_count(self, obj):
         try:
-            reaction = obj.reactions.get()
-            return reaction.likes_count()
-        except PostReaction.DoesNotExist:
-            return 0
+            # safer: don't assume exactly one PostReaction object
+            reaction = obj.reactions.all().first()
+            if reaction:
+                return reaction.likes_count()
+        except Exception:
+            pass
+        return 0
 
 class PostCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:

@@ -9,14 +9,29 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+/** Robust extractor: prefer params.id, fallback to parsing req.url pathname /api/tables/:id/... */
+function extractTableId(params: any, reqUrl: string): string | null {
+  const pId = String(params?.id ?? "").trim();
+  if (pId) return pId;
+  try {
+    const url = new URL(reqUrl);
+    const m = url.pathname.match(/\/api\/tables\/([^\/]+)(\/|$)/);
+    if (m && m[1]) return decodeURIComponent(m[1]);
+  } catch (e) {
+    // ignore
+  }
+  return null;
+}
+
 /**
  * GET /api/tables/:id/cells?day=YYYY-MM-DD
  * Returns category_cells for that day merged with tables_categories meta
  */
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const tableId = String(params?.id ?? "");
-    const day = req.nextUrl.searchParams.get("day");
+    const tableId = extractTableId(params, req.url);
+    const day = req.nextUrl ? req.nextUrl.searchParams.get("day") : new URL(req.url).searchParams.get("day");
+
     if (!tableId) return NextResponse.json({ error: "missing_table_id" }, { status: 400 });
     if (!day) return NextResponse.json({ error: "missing ?day=" }, { status: 400 });
 
@@ -27,7 +42,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       .eq("table_id", tableId)
       .eq("day", day);
 
-    if (cellsRes.error) return NextResponse.json({ error: cellsRes.error.message }, { status: 500 });
+    if (cellsRes.error) {
+      console.error("category_cells select error:", cellsRes.error);
+      return NextResponse.json({ error: cellsRes.error.message }, { status: 500 });
+    }
 
     // fetch categories meta
     const catsRes = await supabaseAdmin
@@ -35,7 +53,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       .select("id, title, max, color")
       .eq("table_id", tableId);
 
-    if (catsRes.error) return NextResponse.json({ error: catsRes.error.message }, { status: 500 });
+    if (catsRes.error) {
+      console.error("tables_categories select error:", catsRes.error);
+      return NextResponse.json({ error: catsRes.error.message }, { status: 500 });
+    }
 
     const cats = Array.isArray(catsRes.data) ? catsRes.data : [];
 
@@ -66,6 +87,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     return NextResponse.json({ data: merged }, { status: 200 });
   } catch (err: any) {
+    console.error("cells route error:", err);
     return NextResponse.json({ error: String(err?.message ?? err) }, { status: 500 });
   }
 }
