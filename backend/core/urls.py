@@ -8,6 +8,7 @@ from .admin import custom_admin_site
 from blog import views as blog_views
 from django.views.generic import TemplateView
 from users.admin_views import tables_limits_admin
+from users.views_social import yandex_callback
     
 # Попытка импортировать админ-views из blog.admin (dashboard, stats, post update, media library)
 admin_dashboard_view = None
@@ -48,6 +49,7 @@ urlpatterns = [
     path("admin/", custom_admin_site.urls),
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', LoginView.as_view(), name='login'),
+    path('api/auth/yandex/callback', yandex_callback, name='yandex-callback'),
     path('api/blog/', include(('blog.urls', 'blog'), namespace='blog')),
     path('api/tables/', include(('tables.urls', 'tables'), namespace='tables')),
     path('summernote/', include('django_summernote.urls')),

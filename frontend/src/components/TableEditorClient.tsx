@@ -296,6 +296,22 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
     }
   }
 
+  // open create modal helper (used by the new button)
+  function openCreateCategoryModal() {
+    try {
+      // preferred: helper exposed by CategoriesManager (if present)
+      const w = window as any;
+      if (typeof w.openCategoryManager === "function") {
+        w.openCategoryManager();
+        return;
+      }
+      // fallback: dispatch legacy event (tableEditor:editCategory with null means "create")
+      window.dispatchEvent(new CustomEvent("tableEditor:editCategory", { detail: { categoryId: null } }));
+    } catch (e) {
+      console.warn("openCreateCategoryModal failed", e);
+    }
+  }
+
   const radarCats = useMemo(() => categories.map((c) => ({ id: c.id, title: c.title, value: safeNum(c.value, 0), max: c.max ?? null, color: c.color ?? undefined })), [categories]);
 
   if (resolving) return <div style={{ color: "#64748b" }}>Идёт поиск таблицы…</div>;
@@ -320,6 +336,11 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
             <button onClick={() => fetchAllDataForDate(selectedDate, resolvedTableId)} style={{ padding: "10px 14px", borderRadius: 10, minWidth: 48, fontSize: 14, touchAction: "manipulation" }} aria-label="Обновить данные">
               Обновить
             </button>
+
+            <button onClick={() => openCreateCategoryModal()} style={{ padding: "10px 14px", borderRadius: 10, minWidth: 48, fontSize: 14, touchAction: "manipulation", background: "#0b1720", color: "#fff", fontWeight: 700 }} aria-label="Добавить цель">
+              Добавить цель
+            </button>
+
             <button onClick={() => (window.location.href = `/tables/${encodeURIComponent(resolvedTableId)}/journal`)} style={{ padding: "10px 14px", borderRadius: 10, minWidth: 48, fontSize: 14, touchAction: "manipulation" }} aria-label="Открыть журнал">
               Журнал
             </button>
@@ -399,9 +420,24 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
                 })}
               </div>
 
-              {/* Keep CategoriesManager mounted but hidden to preserve existing flows */}
-              <div style={{ display: "none" }}>
-                <CategoriesManager tableId={resolvedTableId} selectedDate={selectedDate} onChange={(items) => { const normalized = (items || []).map((r: any) => ({ id: String(r.id), title: r.title ?? "", max: typeof r.max === "number" ? r.max : null, value: typeof r.value === "number" ? r.value : 0, color: r.color ?? undefined })); setCategories(normalized); }} onDelta={handleAddDelta} disabledMap={addingMap} />
+              {/* CategoriesManager mounted (it renders hidden sentinel when not open). */}
+              <div style={{ display: "block", marginTop: 12 }}>
+                <CategoriesManager
+                  tableId={resolvedTableId}
+                  selectedDate={selectedDate}
+                  onChange={(items) => {
+                    const normalized = (items || []).map((r: any) => ({
+                      id: String(r.id),
+                      title: r.title ?? "",
+                      max: typeof r.max === "number" ? r.max : null,
+                      value: typeof r.value === "number" ? r.value : 0,
+                      color: r.color ?? undefined,
+                    }));
+                    setCategories(normalized);
+                  }}
+                  onDelta={handleAddDelta}
+                  disabledMap={addingMap}
+                />
               </div>
             </div>
           </div>

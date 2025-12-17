@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-import TelegramLoginButton from "@/components/TelegramLoginButton";
+import SocialLoginButtons from "@/components/SocialLoginButtons";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -18,6 +18,32 @@ export default function LoginPage(): React.ReactElement {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      try {
+        const payload = e.data;
+        if (!payload) return;
+
+        // ожидаем объект { type: 'social_auth', provider: 'yandex', action_link: '...' }
+        if (payload?.type === "social_auth" && typeof payload?.action_link === "string") {
+          // Дополнительная минимальная проверка безопасности:
+          // убедимся, что action_link выглядит как URL (начинается с http)
+          if (/^https?:\/\//i.test(payload.action_link)) {
+            // перенаправляем пользователя на magic-link / action_link
+            window.location.href = payload.action_link;
+          } else {
+            console.warn("social_auth action_link не похож на URL:", payload.action_link);
+          }
+        }
+      } catch (err) {
+        console.warn("Ошибка обработки postMessage:", err);
+      }
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
@@ -99,9 +125,9 @@ export default function LoginPage(): React.ReactElement {
           </form>
 
           <div className="mt-6">
-        <p className="text-center text-sm text-gray-600 mb-2">Или войдите через Telegram:</p>
-        <TelegramLoginButton />
-      </div>
+            <p className="text-center text-sm text-gray-600 mb-2">Или войдите через соцсеть:</p>
+            <SocialLoginButtons />
+          </div>
         </div>
       </main>
 

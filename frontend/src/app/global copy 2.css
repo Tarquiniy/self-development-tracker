@@ -2,38 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===========================
+   FORCEFUL GLOBAL BACKGROUND - SPIRAL (CONIC) + WHITE OVERLAY
+   - html::before / body::before: глобальный декоративный фон (fixed, pointer-events:none).
+   - Белый оверлей поверх спирали (прозрачный) — tweakable via --overlay-alpha.
+   - Работает на всех страницах; корневые контейнеры подняты над фоновой прослойкой.
+   =========================== */
 
 /* ===========================
    Theme & config variables
    =========================== */
 :root{
-  /* White overlay opacity (0..1) */
+  /* White overlay opacity (0..1). Уменьшайте чтобы цвет просвечивал сильнее */
   --overlay-alpha: 0.88;
+
+  /* Background attachment */
   --bg-attachment: fixed;
 
-  /* Spiral accent colors (H S L) */
+  /* Spiral accent colors (H S L) — tweak these for hue/saturation/lightness */
   --accent-a: 6 100% 65%;
   --accent-b: 220 100% 65%;
   --accent-c: 140 90% 55%;
 
-  /* CTA (canonical: black bg / white text) */
-  --cta-bg: 0 0% 0%;
-  --cta-fg: 0 0% 100%;
-  --cta-radius: 14px;
-  --cta-padding-y: 0.7rem;
-  --cta-padding-x: 1.2rem;
-  --cta-min-height: 48px;
-  --cta-shadow: 0 10px 30px rgba(0,0,0,0.18);
-  --cta-shadow-hover: 0 18px 45px rgba(0,0,0,0.28);
-
-  /* Tables */
-  --table-bg: 0 0% 100%;
-  --table-border: 220 14% 86%;
-  --table-head-bg: 220 14% 96%;
-  --table-row-alt: 220 14% 98%;
-  --table-text: 222 18% 12%;
-
-  /* Base theme vars */
+  /* Preserve other app variables for compatibility */
   --background: 0 0% 100%;
   --foreground: 222 47% 11%;
   --card: 0 0% 100%;
@@ -58,8 +49,7 @@
   --max-chart-size: 360px;
 }
 
-
-/* dark overrides */
+/* dark overrides (if used) */
 .dark {
   --overlay-alpha: 0.86;
 
@@ -70,11 +60,7 @@
   --radius-lg: 1rem;
   --shadow-sm: 0 6px 18px rgba(2,6,23,0.06);
   --shadow-lg: 0 20px 50px rgba(2,6,23,0.12);
-
-  --cta-shadow: 0 8px 24px rgba(0,0,0,0.16);
-  --cta-shadow-hover: 0 16px 40px rgba(0,0,0,0.24);
 }
-
 
 /* ===========================
    Basic resets
@@ -83,10 +69,11 @@
 
 html {
   height: 100%;
-  background-color: hsl(var(--background));
-  position: relative;
+  background-color: hsl(var(--background)); /* fallback */
+  position: relative; /* allow negative z-index pseudo behind content */
 }
 
+/* Keep body transparent — decorative bg lives in pseudo-elements */
 body {
   min-height: 100%;
   margin: 0;
@@ -104,10 +91,13 @@ body {
   position: relative;
 }
 
-
 /* ===========================
-   Global decorative background
+   Global decorative background:
+   - html::before primary (furthest back)
+   - body::before backup (slightly above)
+   - overlay (linear) goes first so it's drawn on top of spiral
    =========================== */
+
 html::before,
 body::before {
   content: "";
@@ -118,6 +108,7 @@ body::before {
   background-attachment: var(--bg-attachment);
   background-size: cover;
   will-change: transform;
+  /* mild smoothing so spiral looks soft and premium */
   filter: blur(38px) saturate(1.12);
 }
 
@@ -125,10 +116,13 @@ body::before {
 html::before {
   z-index: -9999;
   background-image:
+    /* White overlay on top (first layer) */
     linear-gradient(
       rgba(255,255,255,var(--overlay-alpha)),
       rgba(255,255,255,var(--overlay-alpha))
     ),
+
+    /* Spiral (conic) below the overlay */
     conic-gradient(
       from 210deg at 50% 50%,
       hsl(var(--accent-a)) 0deg,
@@ -157,7 +151,6 @@ body::before {
   transform: scale(1.15);
 }
 
-
 /* Ensure app roots are above the decorative bg and transparent */
 #__next,
 #root,
@@ -175,39 +168,31 @@ html, body, #__next, #root, main, .app-root, [data-app-root] {
   background-image: none !important;
 }
 
-
 /* Print: hide heavy background for clarity */
 @media print {
   html::before, body::before { display: none !important; }
 }
 
-
 /* ===========================
-   HERO — прозрачный фон, чёрный текст
-   (homepage override; uses !important to ensure homepage hero text is black)
+   PAGE-SPECIFIC: HOMEPAGE (.hero)
+   - Убираем цветную заливку/градиент у .hero (где текст "Платформа ...")
+   - Делаем текст в блоке чёрным.
    =========================== */
+
+/* Убираем фон у hero — теперь он прозрачный и будет стоять поверх глобального фона */
 .hero {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 5.5rem 1.25rem;
-  color: inherit;
-  border-bottom-left-radius: 2.5rem;
-  border-bottom-right-radius: 2.5rem;
-  box-shadow: 0 8px 30px rgba(12, 17, 43, 0.08);
   background-image: none !important;
   background: transparent !important;
-  color: #000 !important;
+  box-shadow: none !important;
+  color: #000 !important; /* текст — чёрный */
 }
 
+/* Подзаголовок в hero — тоже чёрный */
 .hero .hero-sub {
-  margin-top: 1rem;
   color: #000 !important;
-  font-size: 1.05rem;
-  max-width: 56ch;
 }
 
+/* На случай, если внутри hero есть кнопки/тексты с светлой палитрой, принудительно переопределим */
 .hero a,
 .hero .btn,
 .hero p,
@@ -217,17 +202,6 @@ html, body, #__next, #root, main, .app-root, [data-app-root] {
   color: #000 !important;
   background: transparent !important;
 }
-
-.hero,
-.hero * {
-  background: transparent !important;
-  color: #000 !important;
-}
-
-@media (max-width: 420px) {
-  .hero { padding: calc(3rem + env(safe-area-inset-top)); }
-}
-
 
 /* ===========================
    Images / Media / Content helpers
@@ -249,7 +223,6 @@ iframe, object, embed {
   hyphens: auto;
 }
 
-
 /* Generic content container helper */
 .container {
   width: 100%;
@@ -265,7 +238,6 @@ iframe, object, embed {
   max-width: 760px;
 }
 
-
 /* ===========================
    Links & interaction
    =========================== */
@@ -280,81 +252,50 @@ a:hover {
   text-underline-offset: 4px;
 }
 
-
 /* ===========================
-   ACTION BUTTONS (GLOBAL, NON-NAV)
-   - Canonical: black bg + white text
-   - Explicit and consistent; navbar is excluded below
+   Buttons
    =========================== */
-button,
-.btn,
-a.btn,
-.action-btn {
+.btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: .5rem;
-  min-height: var(--cta-min-height);
-  padding: var(--cta-padding-y) var(--cta-padding-x);
-  background: hsl(var(--cta-bg)) !important; /* black */
-  color: hsl(var(--cta-fg)) !important;       /* white */
-  border-radius: var(--cta-radius) !important;
-  font-weight: 700;
-  border: none !important;
+  border: 0;
   cursor: pointer;
-  box-shadow: var(--cta-shadow);
-  transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+  font-weight: 600;
+  border-radius: 9999px;
+  transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+  white-space: nowrap;
+  padding: 0.5rem 1rem;
+  min-height: var(--btn-min-size);
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
 }
 
-button:hover,
-.btn:hover,
-a.btn:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--cta-shadow-hover);
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-button:active,
-.btn:active,
-a.btn:active {
-  transform: translateY(0);
+.btn-primary {
+  color: hsl(var(--primary-foreground));
+  background-image: linear-gradient(135deg, hsl(var(--gradient-start)), hsl(var(--gradient-end)));
+  box-shadow: var(--shadow-sm);
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.03);
+  box-shadow: var(--shadow-lg);
 }
 
-/* Keep navbar buttons untouched */
-nav button,
-nav .btn,
-.navbar button,
-.navbar .btn,
-.header .btn,
-.site-nav .btn {
-  background: transparent !important;
-  color: inherit !important;
-  box-shadow: none !important;
-  padding: 0.5rem 1rem !important;
-  border-radius: 9999px !important;
-}
-
-/* Secondary / light CTA */
-.btn-action--light,
-main .btn.btn--light,
-.container .btn.btn--light {
-  background: hsl(var(--background));
+.btn-secondary {
+  background-color: hsl(var(--muted));
   color: hsl(var(--foreground));
-  border: 1px solid rgba(0,0,0,0.06);
-  box-shadow: 0 6px 18px rgba(2,6,23,0.04);
 }
-
-/* Small CTA */
-.btn-action--sm,
-.btn--sm {
-  padding: 0.45rem 0.8rem;
-  min-height: 36px;
-  font-size: 0.9rem;
-  border-radius: 10px;
+.btn-secondary:hover {
+  background-color: color-mix(in srgb, hsl(var(--muted)) 85%, black 10%);
 }
-
 
 /* ===========================
-   Inputs — always light background (UX fix)
+   FIX: Inputs — always light background
    =========================== */
 input,
 textarea,
@@ -378,7 +319,6 @@ select:focus {
   box-shadow: 0 0 0 2px hsl(var(--primary) / 0.12);
 }
 
-
 /* ===========================
    Typography
    =========================== */
@@ -401,7 +341,9 @@ p {
   color: hsl(var(--foreground));
 }
 
-/* Prose */
+/* ===========================
+   Prose/content
+   =========================== */
 .prose {
   max-width: none;
   color: hsl(var(--muted-foreground));
@@ -413,7 +355,6 @@ p {
   margin-bottom: 0.6rem;
 }
 .prose a { color: hsl(var(--primary)); }
-
 
 /* ===========================
    Cards
@@ -476,15 +417,40 @@ p {
   overflow: hidden;
 }
 
+/* footer */
 .card-footer {
   padding: 1rem 1.25rem;
   border-top: 1px solid hsl(var(--border));
   display: flex;
   gap: 0.75rem;
-  align-items: center;
-  justify-content: space-between;
 }
 
+/* ===========================
+   Hero section (kept for other uses but homepage override above wins)
+   =========================== */
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 5.5rem 1.25rem;
+  /* background was removed on homepage by specific rule above */
+  color: inherit;
+  border-bottom-left-radius: 2.5rem;
+  border-bottom-right-radius: 2.5rem;
+  box-shadow: 0 8px 30px rgba(12, 17, 43, 0.08);
+}
+.hero .hero-sub {
+  margin-top: 1rem;
+  color: rgba(255,255,255,0.92);
+  font-size: 1.05rem;
+  max-width: 56ch;
+}
+
+/* Make hero padding scale better on small phones */
+@media (max-width: 420px) {
+  .hero { padding: calc(3rem + env(safe-area-inset-top)); }
+}
 
 /* ===========================
    Footer
@@ -494,7 +460,6 @@ p {
   padding: 2rem 0;
   text-align: center;
 }
-
 
 /* ===========================
    Posts grid / responsive layout
@@ -524,271 +489,40 @@ p {
   margin-top: 3.5rem;
 }
 
+@media (min-width: 768px) {
+  .posts-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+  }
+}
+@media (min-width: 1024px) {
+  .posts-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+}
+
 .posts-grid > * {
   margin: 0;
   min-height: 100%;
 }
 
-
 /* ===========================
-   TABLES — structure & UX polish
+   Tables and code responsiveness
    =========================== */
 .table-wrapper {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  background: hsl(var(--table-bg));
-  border-radius: 14px;
-  padding: 0.5rem;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid hsl(var(--table-border));
 }
-
-/* Inner table card */
-.table-wrapper .table-card {
-  overflow: auto;
-  border-radius: 10px;
-}
-
-/* Table visuals */
 .table-wrapper table {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  background: #fff;
-  border: 1px solid hsl(var(--border));
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.06);
-  min-width: 600px;
+  border-collapse: collapse;
+  min-width: auto;
+  table-layout: auto;
+  max-width: 100%;
 }
 
-/* Sticky header (UX) */
-.table-wrapper thead th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: linear-gradient(180deg, hsl(var(--table-head-bg)) 0%, hsl(var(--table-bg)) 100%);
-  color: #000;
-  font-weight: 700;
-  text-align: left;
-  padding: 14px 16px;
-  border-bottom: 1px solid hsl(var(--table-border));
-  font-size: 0.9rem;
-}
-
-/* Cells */
-.table-wrapper td {
-  padding: 12px 14px;
-  border-bottom: 1px solid hsl(var(--table-border));
-  color: hsl(var(--table-text));
-  vertical-align: middle;
-}
-
-/* Zebra & hover */
-.table-wrapper tbody tr:nth-child(odd) {
-  background: hsl(var(--table-row-alt));
-}
-.table-wrapper tbody tr:hover {
-  background: rgba(0,0,0,0.04);
-}
-
-/* Action buttons inside table (compact CTA by default) */
-.table-wrapper .btn,
-.table-wrapper button {
-  padding: 6px 12px !important;
-  font-size: 0.85rem;
-  border-radius: 10px !important;
-  background: hsl(var(--cta-bg)) !important;
-  color: hsl(var(--cta-fg)) !important;
-  box-shadow: 0 8px 18px rgba(0,0,0,0.12);
-}
-
-/* Compact variant */
-.table-wrapper.table--compact td,
-.table-wrapper.table--compact th {
-  padding: 8px 10px;
-  font-size: 0.9rem;
-}
-
-/* Table toolbar & pagination */
-.table-toolbar {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.625rem;
-  margin-bottom: 0.375rem;
-}
-.table-pagination {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.table-pagination .btn {
-  padding: 0.45rem 0.75rem;
-  min-height: 36px;
-  border-radius: 10px;
-  font-weight: 700;
-}
-
-/* Empty state */
-.table-empty {
-  padding: 2rem;
-  text-align: center;
-  color: hsl(var(--muted-foreground));
-}
-
-/* Responsive table */
-@media (max-width: 720px) {
-  .table-wrapper table { min-width: 520px; }
-  .table-toolbar { flex-direction: column; align-items: stretch; gap: 8px; }
-}
-
-
-/* ===========================
-   TABLE-PAGE: LIGHT BUTTONS & CALENDAR THEME
-   - Overrides global black CTA only inside table/editor pages
-   =========================== */
-
-/* Primary override: ensure anything inside these containers is light-themed */
-.table-wrapper .btn,
-.table-editor-root .btn,
-.table-wrapper button,
-.table-editor-root button,
-.table-toolbar .btn,
-.table-pagination .btn,
-.cats-area .text-btn,
-.cat-card .text-btn,
-.cat-card .icon-btn,
-.cat-controls button,
-.cat-controls .text-btn,
-.cat-controls .icon-btn {
-  background: #fff !important;        /* white */
-  color: #0b1720 !important;          /* dark text */
-  border: 1px solid rgba(12,20,30,0.06) !important;
-  box-shadow: 0 6px 18px rgba(15,23,42,0.06) !important;
-  padding: 8px 12px !important;
-  font-weight: 700 !important;
-  border-radius: 10px !important;
-  min-height: 40px !important;
-}
-
-/* Hover & active for light CTAs */
-.table-wrapper .btn:hover,
-.table-editor-root .btn:hover,
-.table-wrapper button:hover,
-.table-editor-root button:hover,
-.cat-card .text-btn:hover,
-.cat-card .icon-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(15,23,42,0.08);
-  filter: brightness(0.98);
-}
-
-/* Primary variant inside table/editor (colored) */
-.table-wrapper .btn--primary,
-.table-editor-root .btn--primary {
-  background: linear-gradient(135deg, hsl(var(--gradient-start)), hsl(var(--gradient-end))) !important;
-  color: hsl(var(--primary-foreground)) !important;
-  border: 0 !important;
-  box-shadow: 0 10px 30px rgba(2,6,23,0.08) !important;
-}
-
-/* Danger variant for Delete */
-.table-wrapper .btn--danger,
-.table-editor-root .btn--danger,
-.cat-card .text-btn.danger {
-  background: hsl(0 78% 93%) !important;
-  color: hsl(0 60% 24%) !important;
-  border: 1px solid rgba(0,0,0,0.06) !important;
-  box-shadow: none !important;
-}
-
-/* Icon buttons */
-.table-wrapper .btn-icon,
-.table-editor-root .btn-icon,
-.cat-card .icon-btn {
-  padding: 6px !important;
-  width: 36px;
-  height: 36px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 8px !important;
-}
-
-/* Calendar wrapper + inputs (react-datepicker / flatpickr / native) */
-.calendar-wrapper,
-.table-editor-root .calendar-wrapper,
-.calendar {
-  background: hsl(var(--table-bg));
-  color: hsl(var(--table-text));
-  border: 1px solid hsl(var(--table-border));
-  border-radius: 10px;
-  padding: 8px;
-  box-shadow: 0 8px 24px rgba(15,23,42,0.04);
-}
-
-/* react-datepicker */
-.react-datepicker__header {
-  background: hsl(var(--table-head-bg));
-  border-bottom: 1px solid hsl(var(--table-border));
-}
-.react-datepicker__day,
-.react-datepicker__day-name {
-  color: hsl(var(--table-text));
-}
-.react-datepicker__navigation {
-  color: hsl(var(--table-text));
-}
-.react-datepicker__day--selected {
-  background: linear-gradient(135deg, hsl(var(--gradient-start)), hsl(var(--gradient-end))) !important;
-  color: white !important;
-}
-
-/* flatpickr */
-.flatpickr-calendar {
-  background: hsl(var(--table-bg));
-  color: hsl(var(--table-text));
-  border: 1px solid hsl(var(--table-border));
-  box-shadow: 0 10px 30px rgba(15,23,42,0.06);
-}
-.flatpickr-day.selected {
-  background: linear-gradient(135deg, hsl(var(--gradient-start)), hsl(var(--gradient-end))) !important;
-  color: white !important;
-}
-
-/* date inputs */
-.table-editor-root input[type="date"],
-.table-editor-root input[type="text"].date-input,
-.table-wrapper input[type="date"],
-.table-wrapper input[type="text"].date-input {
-  background: hsl(var(--table-bg));
-  color: hsl(var(--table-text));
-  border: 1px solid hsl(var(--table-border));
-  border-radius: 8px;
-  padding: 8px 10px;
-}
-
-/* Ensure CTA black style is NOT applied inside .table-wrapper/.table-editor-root (more specific) */
-.table-wrapper .btn-action,
-.table-editor-root .btn-action {
-  background: #fff !important;
-  color: #0b1720 !important;
-  border: 1px solid rgba(12,20,30,0.06) !important;
-}
-
-/* Focus style for light CTAs */
-.table-wrapper .btn:focus,
-.table-editor-root .btn:focus {
-  box-shadow: 0 0 0 6px rgba(34, 120, 255, 0.08) !important;
-  outline: none !important;
-}
-
-
-/* ===========================
-   Code blocks
-   =========================== */
 pre, code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
   font-size: 0.9rem;
@@ -800,10 +534,8 @@ pre {
   -webkit-overflow-scrolling: touch;
 }
 
-
 /* ===========================
    Mobile menu / navigation helpers
-   - ensure mobile menu uses card colors so items and CTAs are visible
    =========================== */
 .mobileMenu,
 .mobile-menu {
@@ -829,11 +561,9 @@ pre {
   pointer-events: auto;
 }
 
-/* Use hsl(var(--card)) for mobile menu bg and card-foreground for text */
 .mobileInner,
 .mobile-menu__inner {
-  background: hsl(var(--card));
-  color: hsl(var(--card-foreground));
+  background: var(--card);
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
   box-shadow: var(--shadow-sm);
@@ -848,18 +578,6 @@ pre {
   max-height: calc(100 * var(--vh, 1vh) - var(--header-height) - 32px);
 }
 
-/* Ensure buttons inside mobile menu are visible (override global black if necessary) */
-.mobileInner .btn,
-.mobile-menu__inner .btn,
-.mobileInner button,
-.mobile-menu__inner button {
-  background: hsl(var(--card-foreground)) !important;
-  color: hsl(var(--card)) !important;
-  border: 0 !important;
-  box-shadow: 0 8px 22px rgba(2,6,23,0.06) !important;
-}
-
-/* Items */
 .mobileInner > a,
 .mobile-menu__inner > a,
 .mobile-menu .menu-item {
@@ -868,7 +586,7 @@ pre {
   text-align: center;
   padding: 12px 8px;
   border-radius: 8px;
-  color: hsl(var(--card-foreground));
+  color: inherit;
   text-decoration: none;
   font-weight: 600;
   white-space: normal;
@@ -910,14 +628,13 @@ pre {
   font-weight: 700;
 }
 
-.nav-contrast-dark .mobileActions .actionPrimary { background: hsl(var(--card-foreground)); color: hsl(var(--card)); border: 1px solid rgba(255,255,255,0.06); }
-.nav-contrast-dark .mobileActions .actionBtn { background: transparent; color: hsl(var(--card-foreground)); border: 1px solid rgba(255,255,255,0.12); }
+.nav-contrast-dark .mobileActions .actionPrimary { background: var(--card-foreground); color: var(--card); border: 1px solid rgba(255,255,255,0.06); }
+.nav-contrast-dark .mobileActions .actionBtn { background: transparent; color: var(--card-foreground); border: 1px solid rgba(255,255,255,0.12); }
 
-.nav-contrast-light .mobileActions .actionPrimary { background: hsl(var(--card-foreground)); color: hsl(var(--card)); border: 1px solid rgba(15,23,36,0.06); }
-.nav-contrast-light .mobileActions .actionBtn { background: transparent; color: hsl(var(--card-foreground)); border: 1px solid rgba(15,23,36,0.08); }
+.nav-contrast-light .mobileActions .actionPrimary { background: var(--card-foreground); color: var(--card); border: 1px solid rgba(15,23,36,0.06); }
+.nav-contrast-light .mobileActions .actionBtn { background: transparent; color: var(--card-foreground); border: 1px solid rgba(15,23,36,0.08); }
 
 .mobileInner, .mobile-menu__inner { width: 100%; max-width: 100%; }
-
 
 /* ===========================
    Safety helpers for Table Editor page
@@ -957,7 +674,6 @@ pre {
   -webkit-overflow-scrolling: touch;
 }
 
-
 /* ===========================
    Utilities
    =========================== */
@@ -976,7 +692,6 @@ pre {
   * { transition: none !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; }
 }
 
-
 /* ===========================
    Desktop adjustments
    =========================== */
@@ -986,6 +701,7 @@ pre {
     gap: 1.25rem;
   }
 
+  /* mobile menu is hidden on desktop by default if components expect that */
   .mobileMenu, .mobile-menu { display: none !important; }
 }
 @media (min-width: 1024px) {
@@ -1010,82 +726,10 @@ pre {
   .table-wrapper table { min-width: auto; font-size: 14px; }
 }
 
-
 /* ===========================
-   FIX FOR EDIT BUTTONS & CREATE UI (specific, append to global.css)
-   - enables pointer-events and visible cursor for controls inside table/editor/cats
-   - ensures input & button z-index/contrast
+   Notes:
+   - После замены файла: убедись, что app/layout.tsx импортирует './global.css'.
+   - Сделай жесткое обновление страницы (Ctrl/Shift+F5), чтобы сбросить кэш стилей.
+   - Чтобы сделать overlay прозрачнее/плотнее — изменяй --overlay-alpha в :root.
+   - Хотите анимацию (медленное вращение) или вариант для dark mode — скажите, добавлю.
    =========================== */
-
-.table-wrapper,
-.table-editor-root,
-.cats-area,
-.cat-card,
-.cat-controls {
-  position: relative;
-}
-
-/* Ensure interactive elements inside these sections are clickable and visible */
-.table-wrapper button,
-.table-editor-root button,
-.cats-area button,
-.cat-card button,
-.cat-controls button,
-.table-wrapper .btn,
-.table-editor-root .btn,
-.cat-card .text-btn,
-.cat-card .icon-btn {
-  pointer-events: auto !important;
-  cursor: pointer !important;
-}
-
-/* Ensure inputs are on top and have full opacity */
-.table-wrapper input,
-.table-editor-root input,
-.cats-area input,
-.cat-card input {
-  pointer-events: auto !important;
-  opacity: 1 !important;
-  z-index: 3;
-  position: relative;
-}
-
-/* If any overlay accidentally covers the editor, move controls above it */
-.table-wrapper .controls-overlay,
-.table-editor-root .controls-overlay {
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* Create button style for the table page — light themed and visible */
-.table-create-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 12px;
-}
-.table-create-row input[type="text"] {
-  flex: 1;
-  min-width: 180px;
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid hsl(var(--table-border));
-  background: hsl(var(--table-bg));
-  color: hsl(var(--table-text));
-}
-.table-create-row .btn-create {
-  background: #fff !important;
-  color: #0b1720 !important;
-  border: 1px solid rgba(12,20,30,0.06) !important;
-  padding: 8px 12px !important;
-  border-radius: 10px !important;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.06);
-}
-
-/* Focus accessibility for create/edit inputs */
-.table-create-row input:focus,
-.cat-card input:focus,
-.table-editor-root input:focus {
-  box-shadow: 0 0 0 6px rgba(34, 120, 255, 0.08) !important;
-  outline: none;
-}

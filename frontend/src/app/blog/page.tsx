@@ -24,62 +24,26 @@ export default function BlogPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // BUILD-TIME env var (may be empty). Keep it trimmed (no trailing slash).
-  const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
-
-  // Runtime helper: build correct absolute URL with safe fallback.
-  function getApiUrl(path: string) {
-    if (API_BASE) {
-      return `${API_BASE}${path}`;
-    }
-    // Fallback to same-origin (works when backend is proxied or served from same host)
-    if (typeof window !== "undefined") {
-      return `${window.location.origin}${path}`;
-    }
-    return path; // last resort (server-side — but this is client component)
-  }
 
   useEffect(() => {
-    let cancelled = false;
-
     async function loadPosts() {
       setLoading(true);
-      setErrorMsg(null);
       try {
-        const url = getApiUrl(`/api/blog/posts/?page=${encodeURIComponent(String(page))}`);
-        const res = await fetch(url, {
-          // you can enable credentials if your backend expects cookies:
-          // credentials: "include"
-        });
-        if (!res.ok) {
-          // Try to surface helpful info in dev
-          const text = await res.text().catch(() => "");
-          throw new Error(`Ошибка загрузки постов: ${res.status} ${res.statusText} ${text ? (" — " + text.slice(0, 200)) : ""}`);
-        }
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/blog/posts/?page=${page}`
+        );
+        if (!res.ok) throw new Error("Ошибка загрузки постов");
         const data = await res.json();
-        // DRF paginated responses expose `results`, otherwise may be array
-        const items = Array.isArray(data) ? data : data.results ?? [];
-        if (!cancelled) {
-          setPosts(items || []);
-        }
-      } catch (err: any) {
-        console.error("Ошибка при загрузке постов:", err);
-        if (!cancelled) {
-          setPosts([]);
-          setErrorMsg(err?.message || "Неизвестная ошибка при загрузке постов");
-        }
+        setPosts(data.results || data);
+      } catch (err) {
+        console.error(err);
+        setPosts([]);
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     }
-
     loadPosts();
-    return () => {
-      cancelled = true;
-    };
-  }, [page, API_BASE]);
+  }, [page]);
 
   const HEADER_PADDING = "calc(var(--header-height, 64px) + 16px)";
 
@@ -105,56 +69,109 @@ export default function BlogPage() {
           <p style={{ textAlign: "center", color: "hsl(var(--muted-foreground))", fontSize: 18 }}>
             Загрузка...
           </p>
-        ) : errorMsg ? (
-          <div style={{ textAlign: "center", color: "hsl(var(--muted-foreground))", fontSize: 18 }}>
-            <p>Не удалось загрузить посты.</p>
-            <pre style={{ whiteSpace: "pre-wrap", maxWidth: 800, margin: "0.5rem auto", color: "rgba(200,50,50,0.9)" }}>{errorMsg}</pre>
-            <p>Проверьте переменную окружения <code>NEXT_PUBLIC_API_URL</code> или доступность бекенда.</p>
-          </div>
         ) : posts.length === 0 ? (
           <p style={{ textAlign: "center", color: "hsl(var(--muted-foreground))", fontSize: 18 }}>
             Постов пока нет.
           </p>
         ) : (
-          <div className="posts-grid" style={{ display: "grid", gridTemplateColumns: "repeat(1, 1fr)", gap: 20 }}>
-            {posts.map((p) => (
-              <Card key={p.id}>
-                <CardHeader>
-                  <CardTitle>
-                    <Link href={`/blog/${encodeURIComponent(p.slug)}`} prefetch={false}>
-                      {p.title}
-                    </Link>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p style={{ color: "hsl(var(--muted-foreground))" }}>{p.excerpt}</p>
-                  <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <small>{new Date(p.published_at).toLocaleDateString("ru-RU")}</small>
-                    <Link href={`/blog/${encodeURIComponent(p.slug)}`} prefetch={false}>
-                      <Button>Читать</Button>
+          <div className="posts-grid" style={{ marginTop: 12 }}>
+            {posts.map((post) => (
+              <motion.div
+                key={post.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35 }}
+              >
+                <Card className="post-card" style={{ overflow: "hidden" }}>
+                  {post.featured_image ? (
+                    <div className="card-media" style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center", background: "#f6f8fb" }}>
+                      <img src={post.featured_image} alt={post.title} style={{ width: "100%", height: "auto", display: "block" }} />
+                    </div>
+                  ) : (
+                    <div className="card-media" style={{ minHeight: 120, display: "flex", alignItems: "center", justifyContent: "center", background: "#f6f8fb", color: "rgba(15,23,36,0.6)" }}>
+                      Нет изображения
+                    </div>
+                  )}
+
+                  <CardHeader>
+                    <CardTitle style={{ fontSize: "1.125rem", marginBottom: 6 }}>{post.title}</CardTitle>
+                  </CardHeader>
+
+                  <CardContent>
+                    <div
+                      className="prose"
+                      dangerouslySetInnerHTML={{ __html: post.excerpt || "" }}
+                      style={{ color: "hsl(var(--muted-foreground))" }}
+                    />
+                  </CardContent>
+
+                  <div className="card-footer" style={{ padding: "16px" }}>
+                    <Link href={`/blog/${post.slug}`} className="btn btn-primary" style={{ textDecoration: "none" }}>
+                      Читать →
                     </Link>
                   </div>
-                </CardContent>
-              </Card>
+                </Card>
+              </motion.div>
             ))}
           </div>
         )}
 
-        {/* Pagination controls (simple) */}
-        <div style={{ marginTop: 24, display: "flex", gap: 12, justifyContent: "center" }}>
-          <button
-            onClick={() => setPage((s) => Math.max(1, s - 1))}
+        {/* Пагинация — отдельный блок с отступом сверху */}
+        <div className="posts-pagination" style={{ marginTop: 28, display: "flex", gap: 12, justifyContent: "center", alignItems: "center" }}>
+          <Button
+            variant="secondary"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="btn btn-ghost"
           >
             ← Назад
-          </button>
-          <div style={{ alignSelf: "center" }}>Страница {page}</div>
-          <button onClick={() => setPage((s) => s + 1)} className="btn btn-ghost">
+          </Button>
+          <span style={{ fontWeight: 600 }}>{page}</span>
+          <Button variant="default" onClick={() => setPage((p) => p + 1)}>
             Вперёд →
-          </button>
+          </Button>
         </div>
       </section>
+
+      <style jsx>{`
+        /* Ensure headings and anchors are visible when header is fixed */
+        :global(h1, h2, h3) {
+          scroll-margin-top: calc(var(--header-height, 64px) + 8px);
+        }
+
+        /* small responsive tweaks */
+        @media (max-width: 640px) {
+          .container { padding-left: 12px; padding-right: 12px; }
+          :global(.text-4xl) { font-size: 1.6rem; }
+        }
+
+        /* Improve posts grid spacing when images present */
+        .posts-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 1.25rem;
+        }
+        @media (max-width: 960px) {
+          .posts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 640px) {
+          .posts-grid { grid-template-columns: 1fr; }
+        }
+
+        .post-card {
+          border-radius: 12px;
+          box-shadow: 0 6px 18px rgba(2,6,23,0.06);
+          background: hsl(var(--card));
+        }
+
+        .card-footer .btn {
+          display: inline-block;
+          padding: 8px 12px;
+          border-radius: 8px;
+          background: hsl(var(--primary));
+          color: hsl(var(--primary-foreground));
+          font-weight: 700;
+        }
+      `}</style>
     </main>
   );
 }

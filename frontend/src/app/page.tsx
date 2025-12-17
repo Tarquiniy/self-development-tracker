@@ -94,7 +94,7 @@ export default function HomePage() {
           </ul>
 
           <p style={{ maxWidth: "72ch", margin: "1.25rem auto 0 auto", fontSize: "1.02rem" }}>
-            Хотите попробовать? <Link href="/tables" style={{ color: "hsl(203 100% 56%)", textDecoration: "underline" }}>Запустите PWA-трекер</Link> и начните фиксировать первые шаги уже сегодня.
+            Хотите попробовать? <Link href="/register" style={{ color: "hsl(203 100% 56%)", textDecoration: "underline" }}>Зарегистрируйтесь</Link> и начните фиксировать первые шаги уже сегодня.
           </p>
         </div>
       </section>
