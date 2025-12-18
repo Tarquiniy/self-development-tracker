@@ -8,6 +8,7 @@ import SocialLoginButtons from "@/components/SocialLoginButtons";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+const BACKEND_ORIGIN = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://positive-theta.onrender.com";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -20,24 +21,35 @@ export default function LoginPage(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    /**
+     * Обработчик сообщения от popup (backend).
+     * Ожидаем { type: 'social_auth', provider: 'yandex', action_link: 'https://...' }
+     * Безопасность: принимаем только от BACKEND_ORIGIN.
+     *
+     * Действие: перейти в основном окне на action_link заменой истории.
+     * После этого Supabase установит сессию и вернёт пользователя на ваш фронтенд.
+     */
     function onMessage(e: MessageEvent) {
       try {
-        const payload = e.data;
-        if (!payload) return;
-
-        // ожидаем объект { type: 'social_auth', provider: 'yandex', action_link: '...' }
-        if (payload?.type === "social_auth" && typeof payload?.action_link === "string") {
-          // Дополнительная минимальная проверка безопасности:
-          // убедимся, что action_link выглядит как URL (начинается с http)
-          if (/^https?:\/\//i.test(payload.action_link)) {
-            // перенаправляем пользователя на magic-link / action_link
-            window.location.href = payload.action_link;
-          } else {
-            console.warn("social_auth action_link не похож на URL:", payload.action_link);
-          }
+        if (!e || !e.origin) return;
+        if (e.origin !== BACKEND_ORIGIN) {
+          // игнорируем посторонние сообщения
+          return;
         }
+        const payload = e.data;
+        if (!payload || payload.type !== "social_auth") return;
+        const actionLink = payload.action_link;
+        if (!actionLink || typeof actionLink !== "string") return;
+        if (!/^https?:\/\//i.test(actionLink)) {
+          console.warn("Received invalid action_link:", actionLink);
+          return;
+        }
+
+        // Перейти в том же окне на magic-link, заменяя текущую запись истории.
+        // Это откроет Supabase action flow в основном окне, установит сессию и затем вернёт на SITE.
+        window.location.replace(actionLink);
       } catch (err) {
-        console.warn("Ошибка обработки postMessage:", err);
+        console.warn("Error handling social_auth message:", err);
       }
     }
 
@@ -61,7 +73,6 @@ export default function LoginPage(): React.ReactElement {
         return;
       }
 
-      // successful sign in - redirect to homepage
       router.push("/");
     } catch (err: any) {
       console.error("signin error", err);
@@ -144,8 +155,6 @@ export default function LoginPage(): React.ReactElement {
         .primary:disabled { opacity:0.6; cursor:default; }
         .ghost { background:#fff; border:1px solid rgba(15,23,36,0.06); padding:10px 12px; border-radius:10px; cursor:pointer; }
         .foot { margin-top:8px; }
-        .divider { text-align:center; margin:16px 0; color:#94a3b8; }
-        .socialRow { display:flex; gap:12px; justify-content:center; }
         .error { color:#b91c1c; background: rgba(185,28,28,0.06); padding:8px; border-radius:8px; }
         @media (max-width:520px) { .card { padding:18px; } }
       `}</style>
