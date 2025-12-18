@@ -1,77 +1,94 @@
-// frontend/src/components/SocialLoginButtons.tsx
 "use client";
 
 import React from "react";
 
 /**
- * SocialLoginButtons
- * - Открывает popup для OAuth авторизации Yandex (Authorization Code Flow).
- * - Redirect URI должен быть настроен на вашем бэкенде:
- *     https://positive-theta.onrender.com/api/auth/yandex/callback
+ * Social login buttons
+ * Yandex OAuth (Web, Authorization Code)
  *
- * Требует в .env:
- * NEXT_PUBLIC_SITE_ORIGIN           - https://positive-theta.vercel.app
- * NEXT_PUBLIC_YANDEX_CLIENT_ID      - клиент id Яндекса (видимый)
+ * Backend callback:
+ *   https://positive-theta.onrender.com/api/auth/yandex/callback
  *
- * ВАЖНО: client_secret и обмен code->token происходит на сервере.
+ * Required scope (Yandex, 2025):
+ *   login:email
  */
 
-function randomState(length = 24) {
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let s = "";
-  const arr = crypto.getRandomValues(new Uint32Array(length));
-  for (let i = 0; i < length; i++) s += chars[arr[i] % chars.length];
-  return s;
-}
+const YANDEX_CLIENT_ID =
+  process.env.NEXT_PUBLIC_YANDEX_CLIENT_ID ?? "";
+
+const REDIRECT_URI =
+  "https://positive-theta.onrender.com/api/auth/yandex/callback";
 
 export default function SocialLoginButtons(): React.ReactElement {
-  const SITE_ORIGIN = process.env.NEXT_PUBLIC_SITE_ORIGIN || (typeof window !== "undefined" ? window.location.origin : "");
-  const YANDEX_CLIENT_ID = process.env.NEXT_PUBLIC_YANDEX_CLIENT_ID || "";
-
-  function openPopup(url: string, name: string) {
-    const w = 600;
-    const h = 700;
-    const left = Math.round((window.screen.width - w) / 2);
-    const top = Math.round((window.screen.height - h) / 2);
-    window.open(url, name, `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
-  }
-
-  function startYandex() {
+  function loginWithYandex() {
     if (!YANDEX_CLIENT_ID) {
-      console.error("Yandex client id missing: set NEXT_PUBLIC_YANDEX_CLIENT_ID");
-      alert("Yandex login не настроен (отсутствует client id)");
+      alert("YANDEX_CLIENT_ID не задан");
       return;
     }
-    const state = randomState();
-    // redirect_uri -> backend endpoint which will exchange code for token and then generate action/magic link
-    const redirect_uri = encodeURIComponent(`https://positive-theta.onrender.com/api/auth/yandex/callback`);
-    const scope = encodeURIComponent("openid login:email");
-    const url = `https://oauth.yandex.com/authorize?response_type=code&client_id=${encodeURIComponent(YANDEX_CLIENT_ID)}&redirect_uri=${redirect_uri}&scope=${scope}&state=${state}`;
-    openPopup(url, "yandex_auth");
+
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: YANDEX_CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      scope: "login:email",
+    });
+
+    const url = `https://oauth.yandex.com/authorize?${params.toString()}`;
+
+    /**
+     * Popup-flow:
+     *  - backend вернёт HTML
+     *  - postMessage -> window.opener
+     *  - затем popup закроется
+     */
+    window.open(
+      url,
+      "yandex_oauth",
+      "width=520,height=640,noopener,noreferrer"
+    );
   }
 
   return (
-    <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 12 }}>
+    <div className="socialRow">
       <button
-        onClick={startYandex}
+        type="button"
+        onClick={loginWithYandex}
+        className="yandex-btn"
         aria-label="Войти через Яндекс"
-        style={{
-          background: "#fff",
-          color: "#000",
-          borderRadius: 10,
-          padding: "10px 14px",
-          fontWeight: 700,
-          border: "1px solid #e6e6e6",
-          cursor: "pointer",
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-        }}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <path d="M2 2h20v20H2z" fill="none" />
-        </svg>
-        Войти через Яндекс
+        <span className="icon">Я</span>
+        <span>Войти через Яндекс</span>
+
+        <style jsx>{`
+          .yandex-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            background: #ffcc00;
+            color: #000;
+            font-weight: 700;
+            font-size: 14px;
+          }
+          .yandex-btn:hover {
+            background: #ffdb4d;
+          }
+          .icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #000;
+            color: #ffcc00;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 14px;
+          }
+        `}</style>
       </button>
     </div>
   );

@@ -112,12 +112,15 @@ def generate_magic_link_admin(email: str, redirect_to: str, timeout: float = 10.
         "email": email,
         "options": {"redirectTo": redirect_to},
     }
+    # IMPORTANT: include both Authorization AND apikey headers for Supabase admin endpoints.
     headers = {
         "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
         "Content-Type": "application/json",
     }
     try:
         r = requests.post(admin_endpoint, json=payload, headers=headers, timeout=timeout)
+        logger.debug("generate_magic_link_admin: status=%s body=%s", r.status_code, r.text)
         if r.status_code in (200, 201):
             jr = r.json()
             # try to extract
