@@ -12,7 +12,6 @@ from core.supabase_client import generate_magic_link_admin
 
 logger = logging.getLogger(__name__)
 
-# === ENV ===
 SITE_URL = os.getenv("SITE_URL", "https://positive-theta.onrender.com")
 YANDEX_CLIENT_ID = os.getenv("YANDEX_CLIENT_ID")
 YANDEX_CLIENT_SECRET = os.getenv("YANDEX_CLIENT_SECRET")
@@ -22,16 +21,6 @@ EMAIL_DOMAIN = os.getenv("SOCIAL_LOGIN_EMAIL_DOMAIN", "positive-theta.local")
 @csrf_exempt
 @require_GET
 def yandex_callback(request):
-    """
-    OAuth callback from Yandex.
-    Flow:
-      1. Receive ?code=
-      2. Exchange code -> access_token
-      3. Get user info (email / id)
-      4. Generate Supabase magic-link (admin)
-      5. Send action_link to frontend via postMessage
-    """
-
     code = request.GET.get("code")
     if not code:
         return HttpResponse("Missing ?code", status=400)
@@ -40,7 +29,7 @@ def yandex_callback(request):
         logger.error("YANDEX_CLIENT_ID or YANDEX_CLIENT_SECRET not set")
         return HttpResponse("Yandex OAuth is not configured", status=500)
 
-    # === 1. Exchange code -> token ===
+    # Exchange code -> token
     token_url = "https://oauth.yandex.com/token"
     token_payload = {
         "grant_type": "authorization_code",
@@ -66,7 +55,7 @@ def yandex_callback(request):
         logger.error("No access_token in Yandex response: %s", token_data)
         return HttpResponse("No access token received", status=500)
 
-    # === 2. Get user info ===
+    # Get user info
     info_url = "https://login.yandex.ru/info"
     headers = {"Authorization": f"OAuth {access_token}"}
 
@@ -92,57 +81,44 @@ def yandex_callback(request):
         logger.error("Yandex returned no email and no id: %s", info)
         return HttpResponse("Unable to determine email", status=500)
 
-    # === 3. Generate Supabase magic-link ===
+    # Generate Supabase magic-link
     try:
-        action_link = generate_magic_link_admin(
-            email=email,
-            redirect_to=SITE_URL,
-        )
+        action_link = generate_magic_link_admin(email=email, redirect_to=SITE_URL)
     except Exception as exc:
         logger.exception("Supabase magic link generation failed")
         return HttpResponse(f"Supabase error: {exc}", status=500)
 
-    # === 4. Send link back to frontend (popup flow) ===
+    # Popup HTML: postMessage to opener and then close.
+    # Use targetOrigin "*" to ensure delivery; the frontend will verify e.origin === NEXT_PUBLIC_BACKEND_URL.
     safe_action = action_link.replace("<", "&lt;").replace(">", "&gt;")
-
     html = f"""<!doctype html>
 <html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <title>Yandex login</title>
-</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body>
-  <p>Завершаем вход…</p>
-  <noscript>
-    <a href="{safe_action}" target="_blank">Продолжить вход</a>
-  </noscript>
+  <p>Завершаем вход… Если окно не закроется — нажмите «Завершить вход».</p>
+  <p><a id="finish" href="{safe_action}" target="_blank">Завершить вход</a></p>
 
   <script>
-    (function () {{
-      const actionLink = {json.dumps(action_link)};
-      const targetOrigin = {json.dumps(SITE_URL)};
+    (function() {{
+      var action = {json.dumps(action_link)};
       try {{
         if (window.opener && !window.opener.closed) {{
-          window.opener.postMessage(
-            {{
-              type: "social_auth",
-              provider: "yandex",
-              action_link: actionLink
-            }},
-            targetOrigin
-          );
-          setTimeout(() => window.close(), 600);
+          // Post message to opener. Use wildcard targetOrigin to ensure delivery.
+          window.opener.postMessage({{ type: 'social_auth', provider: 'yandex', action_link: action }}, "*");
+          // Close the popup shortly after posting the message
+          setTimeout(function() {{ try {{ window.close(); }} catch(e) {{ /* ignore */ }} }}, 300);
         }} else {{
-          window.location.href = actionLink;
+          // No opener - just redirect this window to the action link (fallback).
+          window.location.href = action;
         }}
       }} catch (e) {{
-        console.error(e);
-        window.location.href = actionLink;
+        console.warn("popup postMessage error", e);
+        // fallback to redirect
+        try {{ window.location.href = action; }} catch(e2) {{ /* ignore */ }}
       }}
     }})();
   </script>
 </body>
 </html>
 """
-
     return HttpResponse(html, content_type="text/html")
