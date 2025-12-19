@@ -77,48 +77,133 @@ export default function RegisterPage(): React.ReactElement {
     };
   }, [router]);
 
-  // handle incoming postMessage from backend popup (action_link)
+  // --- helper: try to close popup if reference exists (best-effort) ---
+  function tryClosePopup(): void {
+    try {
+      const popup = (window as any).__ya_oauth_popup;
+      if (popup && typeof popup === "object") {
+        try {
+          if (!popup.closed) {
+            popup.close();
+          }
+        } catch (e) {
+          console.debug("Popup close attempt failed:", e);
+        }
+        try {
+          delete (window as any).__ya_oauth_popup;
+        } catch (e) {
+          // ignore
+        }
+      }
+    } catch (e) {
+      console.debug("tryClosePopup outer error:", e);
+    }
+  }
+
+  // robust hostname check (to tolerate env with path)
+  function isTrustedBackendOrigin(origin: string | null | undefined) {
+    if (!origin) return false;
+    try {
+      const incoming = new URL(String(origin)).hostname;
+      return incoming === BACKEND_HOST || String(origin).endsWith(BACKEND_HOST);
+    } catch {
+      try {
+        const expectedHost = BACKEND_ORIGIN.replace(/^https?:\/\//, "").split("/")[0];
+        const incomingHost = String(origin).replace(/^https?:\/\//, "").split("/")[0];
+        return expectedHost === incomingHost;
+      } catch {
+        return false;
+      }
+    }
+  }
+
+  // handle incoming postMessage from backend popup (supports tokens and action_link)
   useEffect(() => {
-    function onMessage(e: MessageEvent) {
+    async function onMessage(e: MessageEvent) {
       try {
         if (!e || !e.origin) return;
-        // robust hostname check (to tolerate env with path)
-        let msgHost = "";
-        try {
-          msgHost = new URL(String(e.origin)).hostname;
-        } catch {
-          msgHost = extractHost(String(e.origin));
-        }
-        if (!msgHost) return;
-        if (msgHost !== BACKEND_HOST && !String(e.origin).endsWith(BACKEND_HOST)) {
+        if (!isTrustedBackendOrigin(e.origin)) {
           console.debug("Ignored message from origin (host mismatch):", e.origin);
           return;
         }
 
         const payload = e.data;
         console.debug("Received postMessage payload:", payload);
-        if (!payload || payload.type !== "social_auth") return;
 
-        const actionLink = payload.action_link;
-        if (!actionLink || typeof actionLink !== "string") return;
-        if (!/^https?:\/\//i.test(actionLink)) {
-          console.warn("Invalid action_link:", actionLink);
+        if (!payload || typeof payload !== "object") return;
+
+        // NEW: Preferred flow — backend sends tokens directly
+        if (payload.type === "social_auth_session" && payload.access_token && payload.refresh_token) {
+          console.debug("social_auth_session received — setting session and closing popup");
+
+          // best-effort: close popup UI first
+          tryClosePopup();
+
+          try {
+            const { error: setErr } = await supabase.auth.setSession({
+              access_token: payload.access_token,
+              refresh_token: payload.refresh_token,
+            } as any);
+
+            if (setErr) {
+              console.error("Failed to set session from social_auth_session:", setErr);
+              // fallback: if action_link provided, navigate there
+              if (payload.action_link && typeof payload.action_link === "string") {
+                try {
+                  window.location.replace(payload.action_link);
+                  return;
+                } catch (navErr) {
+                  console.warn("fallback navigation to action_link failed:", navErr);
+                }
+              }
+              alert("Вход выполнен, но не удалось установить сессию автоматически. Пожалуйста, обновите страницу или войдите снова.");
+              return;
+            }
+
+            // success
+            router.replace("/");
+          } catch (err) {
+            console.error("Error handling social_auth_session:", err);
+          }
           return;
         }
 
-        // best-effort close popup if we have reference
-        try {
-          const popup = (window as any).__ya_oauth_popup;
-          if (popup && !popup.closed) {
-            try { popup.close(); } catch {}
+        // Back-compat: action_link flow (magic-link). backend sends { type: 'social_auth', action_link }
+        if (payload.type === "social_auth" && typeof payload.action_link === "string") {
+          const actionLink = payload.action_link;
+          if (!/^https?:\/\//i.test(actionLink)) {
+            console.warn("Invalid action_link:", actionLink);
+            return;
           }
-        } catch {}
 
-        // navigate main window to action_link (same tab). Supabase will set session then redirect back to your SITE_ORIGIN.
-        setWaitingForAuth(false);
-        stopSessionPolling();
-        console.debug("Navigating to action_link (replace):", actionLink);
-        window.location.replace(actionLink);
+          // best-effort: close popup
+          tryClosePopup();
+
+          // stop any polling we may have
+          stopSessionPolling();
+          setWaitingForAuth(false);
+
+          // Navigate main window to action_link (same-tab) — supabase will set session here then redirect back to SITE_ORIGIN
+          try {
+            window.location.replace(actionLink);
+          } catch (err) {
+            console.warn("Error navigating to action_link:", err);
+          }
+          return;
+        }
+
+        // backend indicated error (e.g., code expired)
+        if (payload.type === "social_auth_error") {
+          console.debug("social_auth_error received:", payload);
+          tryClosePopup();
+          const errCode = payload.error;
+          if (errCode === "code_expired") {
+            alert("Срок кода авторизации истёк. Пожалуйста, попробуйте войти ещё раз.");
+          } else {
+            alert("Ошибка внешней авторизации. Проверьте консоль сервера и повторите попытку.");
+          }
+          return;
+        }
       } catch (err) {
         console.warn("Error handling postMessage:", err);
       }
@@ -126,13 +211,12 @@ export default function RegisterPage(): React.ReactElement {
 
     window.addEventListener("message", onMessage, false);
     return () => window.removeEventListener("message", onMessage, false);
-  }, [BACKEND_HOST]);
+  }, [router]);
 
   // Listen for custom event dispatched by SocialLoginButtons when popup closes
   useEffect(() => {
     function onPopupClosed() {
-      console.debug("Detected ya_oauth_popup_closed event — start session checks");
-      // try immediate session check
+      console.debug("Detected ya_oauth_popup_closed event — start session checks (legacy)");
       checkSessionNow();
     }
 

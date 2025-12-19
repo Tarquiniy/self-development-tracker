@@ -1,4 +1,14 @@
 # backend/users/views_social.py
+"""
+Unified OAuth callback handler (example: Yandex).
+Flow:
+ - exchange provider code -> provider access token -> email
+ - admin.generate_link(type='magiclink') -> extract hashed token
+ - call Supabase /auth/v1/verify (type=magiclink, token=hashed_token) using ANON key
+   -> receive access_token + refresh_token
+ - return HTML which postMessage's { type: 'social_auth_session', access_token, refresh_token }
+   to window.opener (origin restricted) and then closes the popup.
+"""
 import json
 import logging
 import os
@@ -10,32 +20,32 @@ from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
 
 logger = logging.getLogger(__name__)
 
-# Required settings / env vars (recommended to put into Django settings)
-# - settings.YANDEX_CLIENT_ID
-# - settings.YANDEX_CLIENT_SECRET
-# - settings.SUPABASE_URL                (e.g. "https://<project_ref>.supabase.co")
-# - settings.SUPABASE_SERVICE_ROLE_KEY   (service_role key; MUST be kept secret server-side)
-# - settings.FRONTEND_URL                (e.g. "https://positive-theta.vercel.app")  -- used as redirect_to for magic link
-# Optionally:
-# - settings.BACKEND_ORIGIN              (e.g. "https://positive-theta.onrender.com") - used for stricter postMessage origin
+# Config via settings or env
+SUPABASE_URL = getattr(settings, "SUPABASE_URL", os.getenv("SUPABASE_URL"))
+SUPABASE_SERVICE_ROLE_KEY = getattr(settings, "SUPABASE_SERVICE_ROLE_KEY", os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
+SUPABASE_ANON_KEY = getattr(settings, "SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY"))
+FRONTEND_URL = getattr(settings, "FRONTEND_URL", os.getenv("FRONTEND_URL", None))
+BACKEND_ORIGIN = getattr(settings, "BACKEND_ORIGIN", os.getenv("BACKEND_ORIGIN", None))
 
+# Yandex endpoints (example provider). You can add provider-based branching later.
 YANDEX_TOKEN_URL = "https://oauth.yandex.com/token"
 YANDEX_USERINFO_URL = "https://login.yandex.ru/info?format=json"
 
 
-def _get_setting(name: str, default: Optional[str] = None) -> Optional[str]:
-    return getattr(settings, name, os.getenv(name, default))
+def _get_redirect_uri(request: HttpRequest) -> str:
+    # Prefer explicit setting; otherwise infer from request
+    red = getattr(settings, "YANDEX_REDIRECT_URI", os.getenv("YANDEX_REDIRECT_URI"))
+    if red:
+        return red
+    scheme = "https" if request.is_secure() else "http"
+    return f"{scheme}://{request.get_host()}{request.path}"
 
 
-def _exchange_code_for_yandex_token(code: str, redirect_uri: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Exchange authorization code for access_token at Yandex OAuth.
-    Returns (access_token, error_message).
-    """
-    client_id = _get_setting("YANDEX_CLIENT_ID")
-    client_secret = _get_setting("YANDEX_CLIENT_SECRET")
+def _exchange_code_for_yandex_token(code: str, redirect_uri: str) -> Tuple[Optional[str], Optional[str], dict]:
+    client_id = getattr(settings, "YANDEX_CLIENT_ID", os.getenv("YANDEX_CLIENT_ID"))
+    client_secret = getattr(settings, "YANDEX_CLIENT_SECRET", os.getenv("YANDEX_CLIENT_SECRET"))
     if not client_id or not client_secret:
-        return None, "YANDEX_CLIENT_ID or YANDEX_CLIENT_SECRET not configured on server."
+        return None, "YANDEX_CLIENT_ID or YANDEX_CLIENT_SECRET not configured", {}
 
     payload = {
         "grant_type": "authorization_code",
@@ -44,251 +54,255 @@ def _exchange_code_for_yandex_token(code: str, redirect_uri: str) -> Tuple[Optio
         "client_secret": client_secret,
         "redirect_uri": redirect_uri,
     }
-
     try:
         r = requests.post(YANDEX_TOKEN_URL, data=payload, timeout=8)
     except Exception as exc:
-        logger.exception("Failed to contact Yandex token endpoint")
-        return None, f"Failed to contact Yandex token endpoint: {exc}"
+        logger.exception("Yandex token request failed")
+        return None, f"Failed to contact Yandex token endpoint: {exc}", {}
+
+    raw = {}
+    try:
+        raw = r.json()
+    except Exception:
+        raw = {"status_text": r.text}
 
     if r.status_code != 200:
-        logger.warning("Yandex token endpoint returned non-200: %s, body: %s", r.status_code, r.text)
-        try:
-            body = r.json()
-            message = body.get("error_description") or body.get("error") or r.text
-        except Exception:
-            message = r.text
-        return None, f"Yandex token exchange failed: {message}"
+        msg = raw.get("error_description") or raw.get("error") or r.text
+        return None, f"Yandex token exchange failed: {msg}", raw
 
-    try:
-        body = r.json()
-        access_token = body.get("access_token")
-        if not access_token:
-            return None, "Yandex token response did not include access_token."
-        return access_token, None
-    except Exception as exc:
-        logger.exception("Malformed JSON from Yandex token endpoint")
-        return None, f"Malformed response from Yandex token endpoint: {exc}"
+    token = raw.get("access_token")
+    if not token:
+        return None, "Yandex response did not include access_token", raw
+    return token, None, raw
 
 
-def _fetch_yandex_user_email(access_token: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Request user info from Yandex and extract an email.
-    Returns (email, error_message)
-    """
-    if not access_token:
-        return None, "No access token provided."
-
-    headers = {
-        # Yandex uses 'Authorization: OAuth <token>' for some endpoints:
-        "Authorization": f"OAuth {access_token}",
-        "Accept": "application/json",
-    }
+def _fetch_yandex_email(access_token: str) -> Tuple[Optional[str], Optional[str], dict]:
+    headers = {"Authorization": f"OAuth {access_token}", "Accept": "application/json"}
     try:
         r = requests.get(YANDEX_USERINFO_URL, headers=headers, timeout=8)
     except Exception as exc:
-        logger.exception("Failed to call Yandex userinfo")
-        return None, f"Failed to call Yandex userinfo: {exc}"
+        logger.exception("Yandex userinfo request failed")
+        return None, f"Failed to contact Yandex userinfo: {exc}", {}
+
+    raw = {}
+    try:
+        raw = r.json()
+    except Exception:
+        raw = {"status_text": r.text}
 
     if r.status_code != 200:
-        logger.warning("Yandex userinfo returned non-200: %s, body: %s", r.status_code, r.text)
-        try:
-            body = r.json()
-            message = body.get("error_description") or body.get("error") or r.text
-        except Exception:
-            message = r.text
-        return None, f"Yandex userinfo failed: {message}"
+        msg = raw.get("error_description") or raw.get("error") or r.text
+        return None, f"Yandex userinfo failed: {msg}", raw
 
-    try:
-        data = r.json()
-    except Exception as exc:
-        logger.exception("Malformed JSON from Yandex userinfo")
-        return None, f"Malformed response from Yandex userinfo: {exc}"
-
-    # Yandex historically provides email either in 'email', 'default_email' or 'emails' fields.
-    email = data.get("email") or data.get("default_email")
+    email = raw.get("email") or raw.get("default_email")
     if not email:
-        emails = data.get("emails") or data.get("emails_list") or None
+        emails = raw.get("emails")
         if isinstance(emails, (list, tuple)) and emails:
             email = emails[0]
     if not email:
-        logger.warning("Yandex userinfo did not include email: %s", data)
-        return None, "Yandex did not return an email address (app must request login:email scope)."
-
-    return email, None
+        return None, "Yandex did not return email (scope login:email is required)", raw
+    return email, None, raw
 
 
-def _generate_supabase_magic_link_for_email(email: str, redirect_to: str) -> Tuple[Optional[str], Optional[str]]:
+def _admin_generate_magiclink_for_email(email: str, redirect_to: str) -> Tuple[Optional[str], Optional[str], dict]:
     """
-    Calls Supabase Admin generate_link endpoint to create a magic-link for the given email.
-    Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in settings.
-    Returns (action_link, error_message)
+    Calls Supabase admin/generate_link to produce a magiclink and returns a token we can verify.
+    Returns (token, error, raw_response).
+    The response format varies slightly across versions; we attempt to extract hashed_token robustly.
     """
-    supabase_url = _get_setting("SUPABASE_URL")
-    service_key = _get_setting("SUPABASE_SERVICE_ROLE_KEY")
-    if not supabase_url or not service_key:
-        return None, "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not configured on server."
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None, "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not configured", {}
 
-    # Ensure no trailing slash
-    base = supabase_url.rstrip("/")
-
-    endpoint = f"{base}/auth/v1/admin/generate_link"
+    endpoint = SUPABASE_URL.rstrip("/") + "/auth/v1/admin/generate_link"
     headers = {
         "Content-Type": "application/json",
-        # both Authorization Bearer and apikey header are recommended
-        "Authorization": f"Bearer {service_key}",
-        "apikey": service_key,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
     }
-
-    payload = {
-        "type": "magiclink",
-        "email": email,
-        "redirect_to": redirect_to,
-    }
-
+    payload = {"type": "magiclink", "email": email, "options": {"redirectTo": redirect_to}}
     try:
         r = requests.post(endpoint, headers=headers, json=payload, timeout=8)
     except Exception as exc:
-        logger.exception("Failed to call Supabase admin generate_link")
-        return None, f"Failed to contact Supabase admin generate_link: {exc}"
+        logger.exception("Supabase admin.generate_link failed")
+        return None, f"Failed to contact Supabase admin.generate_link: {exc}", {}
+
+    raw = {}
+    try:
+        raw = r.json()
+    except Exception:
+        raw = {"status_text": r.text}
 
     if r.status_code not in (200, 201):
-        logger.warning("Supabase admin generate_link returned %s: %s", r.status_code, r.text)
-        try:
-            body = r.json()
-            message = body.get("msg") or body.get("error") or body
-        except Exception:
-            message = r.text
-        return None, f"Supabase generate_link failed: {message}"
+        return None, f"Supabase generate_link returned error: {raw}", raw
 
+    # Try several places where token/hash might be present
+    # 1) raw['data']['properties']['hashed_token']
+    token = None
     try:
-        body = r.json()
+        token = raw.get("data", {}).get("properties", {}).get("hashed_token")
+    except Exception:
+        token = None
+    if not token:
+        token = raw.get("properties", {}).get("hashed_token")
+    # 2) raw.get('hashed_token')
+    if not token:
+        token = raw.get("hashed_token")
+    # 3) action_link query param 'token' or 'hashed_token'
+    if not token:
+        action_link = raw.get("action_link") or raw.get("data", {}).get("action_link") or raw.get("link")
+        if isinstance(action_link, str) and "token=" in action_link:
+            try:
+                from urllib.parse import urlparse, parse_qs
+                q = urlparse(action_link).query
+                token = parse_qs(q).get("token", [None])[0] or parse_qs(q).get("hashed_token", [None])[0]
+            except Exception:
+                token = None
+
+    if not token:
+        # as a last resort attempt: some versions include 'data' directly with token
+        token = raw.get("data", {}).get("token")
+    if not token:
+        return None, f"Could not find hashed_token in generate_link response: {raw}", raw
+
+    return token, None, raw
+
+
+def _verify_magic_token_and_get_session(token: str) -> Tuple[Optional[dict], Optional[str], dict]:
+    """
+    Call Supabase /auth/v1/verify (POST) with type=magiclink and token=... to receive JSON with access_token + refresh_token.
+    Use ANON key in apikey header (as a separate client).
+    """
+    if not SUPABASE_URL:
+        return None, "SUPABASE_URL not configured", {}
+    endpoint = SUPABASE_URL.rstrip("/") + "/auth/v1/verify"
+    headers = {"Content-Type": "application/json"}
+    if SUPABASE_ANON_KEY:
+        headers["apikey"] = SUPABASE_ANON_KEY
+
+    payload = {"type": "magiclink", "token": token}
+    try:
+        r = requests.post(endpoint, headers=headers, json=payload, timeout=8)
     except Exception as exc:
-        logger.exception("Malformed JSON from Supabase generate_link")
-        return None, f"Malformed response from Supabase generate_link: {exc}"
+        logger.exception("Supabase /auth/v1/verify request failed")
+        return None, f"Failed to contact Supabase /auth/v1/verify: {exc}", {}
 
-    # The response usually contains 'action_link' (may be absolute or relative path)
-    action_link = body.get("action_link") or body.get("data", {}).get("action_link") or body.get("link")
-    if not action_link:
-        # older/newer variants: some responses include path under other keys
-        # try to extract token-based verify path if present
-        # fallback: return entire body as error
-        return None, f"Supabase response did not include action_link: {body}"
+    raw = {}
+    try:
+        raw = r.json()
+    except Exception:
+        raw = {"status_text": r.text}
 
-    # If action_link looks like a path (starts with '/'), prefix with supabase origin
-    if action_link.startswith("/"):
-        action_link = base + action_link
+    if r.status_code not in (200, 201):
+        return None, f"Supabase verify returned error: {raw}", raw
 
-    return action_link, None
+    # Expect access_token and refresh_token in response
+    access = raw.get("access_token")
+    refresh = raw.get("refresh_token")
+    if not access or not refresh:
+        # Some versions may return under 'data' or other keys
+        access = access or raw.get("data", {}).get("access_token")
+        refresh = refresh or raw.get("data", {}).get("refresh_token")
+
+    if not access or not refresh:
+        return None, f"No access_token/refresh_token in verify response: {raw}", raw
+
+    return {"access_token": access, "refresh_token": refresh, "raw": raw}, None, raw
 
 
 def yandex_callback(request: HttpRequest) -> HttpResponse:
     """
-    Django view to handle Yandex OAuth callback.
-    Expects GET ?code=...
-    Produces HTML that posts { type: 'social_auth', action_link } to window.opener (backend origin),
-    then tries to close the popup. If no opener — redirects to action_link.
+    Django view to handle Yandex callback.
+    Expects ?code=... . Returns a small HTML page that posts session tokens to opener and closes the popup.
     """
     code = request.GET.get("code")
     if not code:
         return HttpResponseBadRequest("Missing code parameter.")
 
-    # Build redirect_uri used for code exchange — must match the one registered in Yandex app.
-    # Try to construct from settings or infer from current request.
-    redirect_uri = _get_setting("YANDEX_REDIRECT_URI") or _get_setting("YANDEX_REDIRECT_URL")
-    if not redirect_uri:
-        # fallback: use current request full path
-        scheme = "https" if request.is_secure() else "http"
-        redirect_uri = f"{scheme}://{request.get_host()}{request.path}"
-
-    # 1) exchange code -> access_token
-    access_token, err = _exchange_code_for_yandex_token(code, redirect_uri=redirect_uri)
+    redirect_uri = _get_redirect_uri(request)
+    # 1) exchange code -> provider access token
+    provider_token, err, raw = _exchange_code_for_yandex_token(code, redirect_uri=redirect_uri)
     if err:
-        logger.warning("Yandex token exchange error: %s", err)
+        logger.warning("Yandex token exchange error: %s; raw=%s", err, raw)
         return HttpResponse(f"Yandex token exchange failed: {err}", status=400)
 
-    # 2) fetch yandex user info -> email
-    email, err = _fetch_yandex_user_email(access_token)
+    # 2) fetch user email from provider
+    email, err, raw = _fetch_yandex_email(provider_token)
     if err:
-        logger.warning("Yandex userinfo error: %s", err)
+        logger.warning("Yandex userinfo error: %s; raw=%s", err, raw)
         return HttpResponse(f"Could not get user email from Yandex: {err}", status=400)
 
-    # 3) generate Supabase magic link for this email
-    frontend_url = _get_setting("FRONTEND_URL") or _get_setting("SITE_ORIGIN") or getattr(settings, "SITE_ORIGIN", None)
-    if not frontend_url:
-        # as fallback, derive from request host (but better set FRONTEND_URL in settings)
-        scheme = "https" if request.is_secure() else "http"
-        frontend_url = f"{scheme}://{request.get_host()}"
-
-    action_link, err = _generate_supabase_magic_link_for_email(email=email, redirect_to=frontend_url)
+    # 3) admin.generate_link -> token
+    frontend_target = FRONTEND_URL or getattr(settings, "SITE_ORIGIN", None) or ("https://" + request.get_host() if request.is_secure() else "http://" + request.get_host())
+    token, err, raw_gen = _admin_generate_magiclink_for_email(email=email, redirect_to=frontend_target)
     if err:
-        logger.warning("Supabase generate_link error for email %s: %s", email, err)
-        return HttpResponse(f"Failed to generate Supabase magic link: {err}", status=500)
+        logger.error("generate_link error: %s; raw=%s", err, raw_gen)
+        # fallback: return an HTML that instructs user
+        return HttpResponse(f"Failed to generate login token for {email}: {err}", status=500)
 
-    # Determine backend_origin for secure postMessage - prefer explicit setting
-    backend_origin = _get_setting("BACKEND_ORIGIN") or ("https://" + request.get_host() if request.is_secure() else "http://" + request.get_host())
-
-    # Safe JSON encode action_link for embedding into HTML
-    action_link_json = json.dumps(str(action_link))
-    backend_origin_escaped = json.dumps(str(backend_origin))
-
-    # Output HTML that posts message to opener and closes popup.
-    # The script:
-    #  - tries window.opener.postMessage({type:'social_auth', action_link}, backend_origin)
-    #  - fallback: try postMessage with "*" if origin strict fails
-    #  - fallback: try window.opener.location.href = actionLink
-    #  - then setTimeout window.close()
-    #  - if no opener -> window.location.replace(actionLink) (popup becomes main tab)
-    html = f"""<!doctype html>
+    # 4) call /auth/v1/verify to get access+refresh tokens
+    session, err, raw_verify = _verify_magic_token_and_get_session(token)
+    if err:
+        logger.error("verify token error: %s; raw=%s", err, raw_verify)
+        # Fallback behavior: fallback to action_link redirect (old behavior)
+        action_link = raw_gen.get("action_link") or raw_gen.get("data", {}).get("action_link") or None
+        if action_link:
+            # Return old-style postMessage with action_link (main window can navigate)
+            backend_origin = BACKEND_ORIGIN or ("https://" + request.get_host() if request.is_secure() else "http://" + request.get_host())
+            html = f"""<!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8"/>
-    <title>Завершение входа</title>
-  </head>
+  <head><meta charset="utf-8"/><title>Завершение входа</title></head>
   <body>
-    <p>Завершение входа... Если окно не закроется автоматически — закройте его вручную.</p>
     <script>
-    (function() {{
-      var actionLink = {action_link_json};
-      var backendOrigin = {backend_origin_escaped};
-
-      function tryNotifyOpener() {{
+      (function() {{
+        var backendOrigin = {json.dumps(backend_origin)};
+        var payload = {{ type: "social_auth", action_link: {json.dumps(action_link)} }};
         try {{
           if (window.opener && !window.opener.closed) {{
-            try {{
-              window.opener.postMessage({{ type: 'social_auth', action_link: actionLink }}, backendOrigin);
-            }} catch (e) {{
-              try {{ window.opener.postMessage({{ type: 'social_auth', action_link: actionLink }}, "*"); }} catch(e2){{}}
-            }}
-            try {{ window.opener.location.href = actionLink; }} catch(e){{ /* may be blocked */ }}
-            try {{ window.opener.focus(); }} catch(e){{}}
-            setTimeout(function() {{
-              try {{ window.close(); }} catch(e){{}}
-            }}, 300);
-            return true;
+            try {{ window.opener.postMessage(payload, backendOrigin); }} catch(e){{ try{{ window.opener.postMessage(payload, "*"); }}catch(e){{}} }}
+            setTimeout(function(){{ try{{ window.close(); }}catch(e){{}} }}, 250);
+            return;
           }}
-        }} catch (err) {{
-          // ignore
-        }}
-        return false;
-      }}
-
-      if (!tryNotifyOpener()) {{
-        // No opener (popup opened in same tab or opener inaccessible) -> navigate popup itself to action_link.
-        try {{
-          window.location.replace(actionLink);
-        }} catch (e) {{
-          // if even this fails, show link for manual click
-          var a = document.createElement('a');
-          a.href = actionLink;
-          a.textContent = 'Перейти вручную';
-          document.body.appendChild(document.createElement('br'));
-          document.body.appendChild(a);
-        }}
-      }}
-    }})();
+        }} catch(e){{ }}
+        try {{ window.location.replace({json.dumps(action_link)}); }} catch(e){{}}
+      }})();
     </script>
+    <p>Завершаем вход...</p>
   </body>
-</html>
-"""
+</html>"""
+            return HttpResponse(html, content_type="text/html")
+        return HttpResponse(f"Could not obtain session tokens: {err}", status=500)
+
+    # 5) success: send tokens to opener and close popup
+    access = session["access_token"]
+    refresh = session["refresh_token"]
+    backend_origin = BACKEND_ORIGIN or ("https://" + request.get_host() if request.is_secure() else "http://" + request.get_host())
+
+    # Minimal HTML/JS: postMessage tokens to opener then close popup
+    html = f"""<!doctype html>
+<html>
+  <head><meta charset="utf-8"/><title>Завершение входа</title></head>
+  <body>
+    <script>
+      (function() {{
+        var backendOrigin = {json.dumps(backend_origin)};
+        var payload = {{
+          type: 'social_auth_session',
+          provider: 'yandex',
+          access_token: {json.dumps(access)},
+          refresh_token: {json.dumps(refresh)}
+        }};
+        try {{
+          if (window.opener && !window.opener.closed) {{
+            try {{ window.opener.postMessage(payload, backendOrigin); }} catch(e) {{ try {{ window.opener.postMessage(payload, "*"); }} catch(e2){{}} }}
+          }}
+        }} catch (e) {{ /* ignore */ }}
+        // Give opener a moment to process then close
+        setTimeout(function() {{
+          try {{ window.close(); }} catch(e) {{ }}
+        }}, 220);
+      }})();
+    </script>
+    <p>Завершаем вход… Если окно не закрылось автоматически — закройте его вручную.</p>
+  </body>
+</html>"""
     return HttpResponse(html, content_type="text/html")
