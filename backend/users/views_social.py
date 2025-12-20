@@ -1,132 +1,153 @@
 # backend/users/views_social.py
-import json
-import logging
 import os
+import logging
 from typing import Optional, Tuple
 
 import requests
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
+from django.shortcuts import redirect
 
 logger = logging.getLogger(__name__)
 
+# ========= ENV / SETTINGS =========
+
 SUPABASE_URL = getattr(settings, "SUPABASE_URL", os.getenv("SUPABASE_URL"))
 SUPABASE_SERVICE_ROLE_KEY = getattr(
-    settings, "SUPABASE_SERVICE_ROLE_KEY", os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    settings,
+    "SUPABASE_SERVICE_ROLE_KEY",
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY"),
+)
+
+FRONTEND_URL = getattr(settings, "FRONTEND_URL", os.getenv("FRONTEND_URL"))
+
+YANDEX_CLIENT_ID = getattr(settings, "YANDEX_CLIENT_ID", os.getenv("YANDEX_CLIENT_ID"))
+YANDEX_CLIENT_SECRET = getattr(
+    settings,
+    "YANDEX_CLIENT_SECRET",
+    os.getenv("YANDEX_CLIENT_SECRET"),
 )
 
 YANDEX_TOKEN_URL = "https://oauth.yandex.com/token"
 YANDEX_USERINFO_URL = "https://login.yandex.ru/info?format=json"
 
 
-def _get_redirect_uri(request: HttpRequest) -> str:
-    red = getattr(settings, "YANDEX_REDIRECT_URI", os.getenv("YANDEX_REDIRECT_URI"))
-    if red:
-        return red
-    scheme = "https" if request.is_secure() else "http"
-    return f"{scheme}://{request.get_host()}{request.path}"
+# ========= HELPERS =========
 
-
-def _exchange_code_for_yandex_token(code: str, redirect_uri: str) -> str:
-    client_id = getattr(settings, "YANDEX_CLIENT_ID", os.getenv("YANDEX_CLIENT_ID"))
-    client_secret = getattr(
-        settings, "YANDEX_CLIENT_SECRET", os.getenv("YANDEX_CLIENT_SECRET")
+def _redirect_uri(request: HttpRequest) -> str:
+    """Must EXACTLY match Yandex app settings"""
+    return getattr(
+        settings,
+        "YANDEX_REDIRECT_URI",
+        os.getenv("YANDEX_REDIRECT_URI"),
     )
 
-    payload = {
+
+def _exchange_code_for_token(code: str, redirect_uri: str) -> Tuple[Optional[str], Optional[str]]:
+    data = {
         "grant_type": "authorization_code",
         "code": code,
-        "client_id": client_id,
-        "client_secret": client_secret,
+        "client_id": YANDEX_CLIENT_ID,
+        "client_secret": YANDEX_CLIENT_SECRET,
         "redirect_uri": redirect_uri,
     }
 
-    r = requests.post(YANDEX_TOKEN_URL, data=payload, timeout=8)
-    data = r.json()
+    try:
+        r = requests.post(YANDEX_TOKEN_URL, data=data, timeout=8)
+        payload = r.json()
+    except Exception as e:
+        logger.exception("Yandex token exchange failed")
+        return None, str(e)
 
     if r.status_code != 200:
-        raise RuntimeError(f"Yandex token exchange failed: {data}")
+        return None, payload.get("error_description") or str(payload)
 
-    return data["access_token"]
+    return payload.get("access_token"), None
 
 
-def _fetch_yandex_email(access_token: str) -> str:
-    r = requests.get(
-        YANDEX_USERINFO_URL,
-        headers={"Authorization": f"OAuth {access_token}"},
-        timeout=8,
-    )
-    data = r.json()
+def _fetch_yandex_email(token: str) -> Tuple[Optional[str], Optional[str]]:
+    headers = {"Authorization": f"OAuth {token}"}
 
-    email = data.get("email") or data.get("default_email")
+    try:
+        r = requests.get(YANDEX_USERINFO_URL, headers=headers, timeout=8)
+        payload = r.json()
+    except Exception as e:
+        logger.exception("Yandex userinfo failed")
+        return None, str(e)
+
+    if r.status_code != 200:
+        return None, payload.get("error_description") or str(payload)
+
+    email = payload.get("default_email") or payload.get("email")
     if not email:
-        raise RuntimeError("Yandex did not return email")
+        emails = payload.get("emails")
+        if emails:
+            email = emails[0]
 
-    return email
+    return email, None if email else "Email not provided by Yandex"
 
 
-def _supabase_sign_in_with_oauth_token(
-    provider_access_token: str,
-) -> dict:
-    """
-    Official Supabase OAuth token exchange
-    """
-    endpoint = f"{SUPABASE_URL.rstrip('/')}/auth/v1/token?grant_type=oauth_token"
+def _generate_magiclink(email: str) -> Tuple[Optional[str], Optional[str]]:
+    url = SUPABASE_URL.rstrip("/") + "/auth/v1/admin/generate_link"
 
     headers = {
-        "Content-Type": "application/json",
         "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
         "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Content-Type": "application/json",
     }
 
     payload = {
-        "provider": "yandex",
-        "access_token": provider_access_token,
+        "type": "magiclink",
+        "email": email,
+        "options": {
+            "redirectTo": FRONTEND_URL,
+        },
     }
 
-    r = requests.post(endpoint, headers=headers, json=payload, timeout=8)
-    data = r.json()
+    try:
+        r = requests.post(url, headers=headers, json=payload, timeout=8)
+        data = r.json()
+    except Exception as e:
+        logger.exception("Supabase generate_link failed")
+        return None, str(e)
 
-    if r.status_code != 200:
-        raise RuntimeError(f"Supabase OAuth failed: {data}")
+    if r.status_code not in (200, 201):
+        return None, str(data)
 
-    return data
+    action_link = (
+        data.get("action_link")
+        or data.get("data", {}).get("action_link")
+    )
 
+    if not action_link:
+        return None, "No action_link returned by Supabase"
+
+    return action_link, None
+
+
+# ========= VIEW =========
 
 def yandex_callback(request: HttpRequest) -> HttpResponse:
     code = request.GET.get("code")
     if not code:
-        return HttpResponseBadRequest("Missing code")
+        return HttpResponseBadRequest("Missing ?code")
 
-    try:
-        redirect_uri = _get_redirect_uri(request)
-        yandex_token = _exchange_code_for_yandex_token(code, redirect_uri)
-        _fetch_yandex_email(yandex_token)  # validates email exists
-        session = _supabase_sign_in_with_oauth_token(yandex_token)
-    except Exception as e:
-        logger.exception("OAuth failed")
-        return HttpResponse(f"OAuth error: {e}", status=400)
+    redirect_uri = _redirect_uri(request)
 
-    html = f"""<!doctype html>
-<html>
-  <head><meta charset="utf-8"/></head>
-  <body>
-    <h2>Вход успешен</h2>
-    <p>Вы можете закрыть это окно.</p>
-    <script>
-      try {{
-        if (window.opener && !window.opener.closed) {{
-          window.opener.postMessage(
-            {{
-              type: "social_auth_session",
-              session: {json.dumps(session)}
-            }},
-            "*"
-          );
-        }}
-      }} catch (e) {{}}
-    </script>
-  </body>
-</html>
-"""
-    return HttpResponse(html, content_type="text/html")
+    # 1. code → yandex token
+    token, err = _exchange_code_for_token(code, redirect_uri)
+    if err:
+        return HttpResponse(f"OAuth error: {err}", status=400)
+
+    # 2. token → email
+    email, err = _fetch_yandex_email(token)
+    if err:
+        return HttpResponse(f"Yandex error: {err}", status=400)
+
+    # 3. email → magiclink
+    action_link, err = _generate_magiclink(email)
+    if err:
+        return HttpResponse(f"Supabase magiclink error: {err}", status=500)
+
+    # 4. redirect popup to Supabase
+    return redirect(action_link)
