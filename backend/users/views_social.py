@@ -71,7 +71,7 @@ def _supabase_sign_in_with_oauth_token(
     """
     Official Supabase OAuth token exchange
     """
-    endpoint = f"{SUPABASE_URL.rstrip('/')}/auth/v1/token?grant_type=id_token"
+    endpoint = f"{SUPABASE_URL.rstrip('/')}/auth/v1/token?grant_type=oauth_token"
 
     headers = {
         "Content-Type": "application/json",
