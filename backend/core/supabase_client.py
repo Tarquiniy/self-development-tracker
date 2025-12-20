@@ -82,7 +82,7 @@ def generate_magic_link_admin(email: str, redirect_to: str, timeout: float = 10.
                 resp = client.auth.admin.generate_link({
                     "type": "magiclink",
                     "email": email,
-                    "options": {"redirectTo": redirect_to}
+                    #"options": {"redirectTo": redirect_to}
                 })
                 # Разные формы ответа: пытаемся извлечь action_link
                 if isinstance(resp, dict):
@@ -110,7 +110,7 @@ def generate_magic_link_admin(email: str, redirect_to: str, timeout: float = 10.
     payload = {
         "type": "magiclink",
         "email": email,
-        "options": {"redirectTo": redirect_to},
+        #"options": {"redirectTo": redirect_to},
     }
     # IMPORTANT: include both Authorization AND apikey headers for Supabase admin endpoints.
     headers = {
