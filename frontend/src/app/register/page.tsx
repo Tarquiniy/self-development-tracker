@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
@@ -8,35 +8,16 @@ import SocialLoginButtons from "@/components/SocialLoginButtons";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-// Backend origin (may include path in env) - we normalize and also extract hostname
+// Backend origin (may include path in env) - we normalize and also extract hostname in other places
 const BACKEND_ORIGIN_RAW = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://positive-theta.onrender.com";
-// Frontend origin (used for final redirect checks)
-const SITE_ORIGIN =
-  process.env.NEXT_PUBLIC_SITE_ORIGIN ??
-  (typeof window !== "undefined" ? window.location.origin : "https://positive-theta.vercel.app");
+// Frontend origin (used as expected origin for postMessage)
+const SITE_ORIGIN = process.env.NEXT_PUBLIC_SITE_ORIGIN ?? (typeof window !== "undefined" ? window.location.origin : "https://positive-theta.vercel.app");
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
-function normalizeOrigin(raw: string) {
-  try {
-    return new URL(raw).origin;
-  } catch {
-    if (!/^https?:\/\//.test(raw)) return "https://" + raw;
-    return raw;
-  }
-}
-function extractHost(raw: string) {
-  try {
-    return new URL(raw).hostname;
-  } catch {
-    return raw.replace(/^https?:\/\//, "").split("/")[0] || raw;
-  }
-}
-
 export default function RegisterPage(): React.ReactElement {
   const router = useRouter();
-  const BACKEND_ORIGIN = normalizeOrigin(BACKEND_ORIGIN_RAW);
-  const BACKEND_HOST = extractHost(BACKEND_ORIGIN_RAW);
+  const BACKEND_ORIGIN = BACKEND_ORIGIN_RAW;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -53,14 +34,7 @@ export default function RegisterPage(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // OAuth UI state
-  const [waitingForAuth, setWaitingForAuth] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(false);
-
-  const sessionIntervalRef = useRef<number | null>(null);
-  const sessionAttemptsRef = useRef(0);
-
-  // === Initial session check — redirect immediately to front page if session present ===
+  // If already logged in — redirect to /
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -71,7 +45,7 @@ export default function RegisterPage(): React.ReactElement {
           router.replace("/");
         }
       } catch (e) {
-        console.debug("initial session check failed", e);
+        console.debug("supabase.getSession check failed", e);
       }
     })();
     return () => {
@@ -79,132 +53,104 @@ export default function RegisterPage(): React.ReactElement {
     };
   }, [router]);
 
-  // --- helper: try to close popup if reference exists (best-effort) ---
-  function tryClosePopup(): void {
-    try {
-      const popup = (window as any).__ya_oauth_popup;
-      if (popup && typeof popup === "object") {
-        try {
-          if (!popup.closed) {
-            popup.close();
-          }
-        } catch (e) {
-          console.debug("Popup close attempt failed:", e);
-        }
-        try {
-          delete (window as any).__ya_oauth_popup;
-        } catch (e) {
-          // ignore
-        }
-      }
-    } catch (e) {
-      console.debug("tryClosePopup outer error:", e);
-    }
-  }
-
-  // robust hostname check (to tolerate env with path)
-  function isTrustedBackendOrigin(origin: string | null | undefined) {
-    if (!origin) return false;
-    try {
-      const incoming = new URL(String(origin)).hostname;
-      return incoming === BACKEND_HOST || String(origin).endsWith(BACKEND_HOST);
-    } catch {
-      try {
-        const expectedHost = BACKEND_ORIGIN.replace(/^https?:\/\//, "").split("/")[0];
-        const incomingHost = String(origin).replace(/^https?:\/\//, "").split("/")[0];
-        return expectedHost === incomingHost;
-      } catch {
-        return false;
-      }
-    }
-  }
-
-  // === handle incoming postMessage from backend popup (supports tokens and action_link) ===
+  // Message listener: receive social_auth_session or social_auth from popup (backend callback)
   useEffect(() => {
-    async function onMessage(e: MessageEvent) {
+    function onMessage(e: MessageEvent) {
       try {
-        if (!e || !e.origin) return;
-        if (!isTrustedBackendOrigin(e.origin)) {
-          console.debug("Ignored message from origin (host mismatch):", e.origin);
+        if (!e || !e.data) return;
+        // Accept messages from SITE_ORIGIN and BACKEND_ORIGIN (some deployments may use backend-origin postMessage)
+        const allowedOrigins = new Set([
+          SITE_ORIGIN,
+          BACKEND_ORIGIN,
+          window.location.origin,
+        ].filter(Boolean) as string[]);
+
+        // If event.origin not in allowedOrigins, ignore (but for robustness allow if origin missing)
+        if (typeof e.origin === "string" && e.origin.length > 0 && !allowedOrigins.has(e.origin)) {
+          console.debug("Ignored postMessage from disallowed origin:", e.origin);
           return;
         }
 
         const payload = e.data;
-        console.debug("Received postMessage payload:", payload);
-
         if (!payload || typeof payload !== "object") return;
 
-        // NEW: Preferred flow — backend sends tokens directly
-        if (payload.type === "social_auth_session" && payload.access_token && payload.refresh_token) {
-          console.debug("social_auth_session received — setting session and closing popup");
-
-          // best-effort: close popup UI first
-          tryClosePopup();
-
-          try {
-            const { error: setErr } = await supabase.auth.setSession({
-              access_token: payload.access_token,
-              refresh_token: payload.refresh_token,
-            } as any);
-
-            if (setErr) {
-              console.error("Failed to set session from social_auth_session:", setErr);
-              // fallback: if action_link provided, navigate there
-              if (payload.action_link && typeof payload.action_link === "string") {
-                try {
-                  window.location.replace(payload.action_link);
-                  return;
-                } catch (navErr) {
-                  console.warn("fallback navigation to action_link failed:", navErr);
-                }
-              }
-              alert("Вход выполнен, но не удалось установить сессию автоматически. Пожалуйста, обновите страницу или войдите снова.");
-              return;
-            }
-
-            // success
-            router.replace("/");
-          } catch (err) {
-            console.error("Error handling social_auth_session:", err);
-          }
-          return;
-        }
-
-        // Back-compat: action_link flow (magic-link). backend sends { type: 'social_auth', action_link }
+        // If backend sends action_link fallback
         if (payload.type === "social_auth" && typeof payload.action_link === "string") {
-          const actionLink = payload.action_link;
-          if (!/^https?:\/\//i.test(actionLink)) {
-            console.warn("Invalid action_link:", actionLink);
-            return;
-          }
-
-          // best-effort: close popup
-          tryClosePopup();
-
-          // stop any polling we may have
-          stopSessionPolling();
-          setWaitingForAuth(false);
-
-          // Navigate main window to action_link (same-tab) — supabase will set session here then redirect back to SITE_ORIGIN
+          // Close popup if possible (best-effort)
           try {
-            window.location.replace(actionLink);
-          } catch (err) {
-            console.warn("Error navigating to action_link:", err);
+            const g = (window as any).__ya_oauth_popup;
+            if (g && !g.closed) {
+              try { g.close(); } catch {}
+            }
+          } catch {}
+
+          try {
+            const p = window.open("", "yandex_oauth");
+            if (p && !p.closed) {
+              try { p.close(); } catch {}
+            }
+          } catch (e) {}
+
+          // Navigate main window to magic/action link
+          try {
+            window.location.replace(payload.action_link);
+            return;
+          } catch (e) {
+            console.warn("Failed to navigate to action_link:", e);
           }
-          return;
         }
 
-        // backend indicated error (e.g., code expired)
-        if (payload.type === "social_auth_error") {
-          console.debug("social_auth_error received:", payload);
-          tryClosePopup();
-          const errCode = payload.error;
-          if (errCode === "code_expired") {
-            alert("Срок кода авторизации истёк. Пожалуйста, попробуйте войти ещё раз.");
+        // If backend sent session tokens for immediate setSession
+        if (payload.type === "social_auth_session") {
+          const access_token = payload.access_token ?? payload.accessToken ?? null;
+          const refresh_token = payload.refresh_token ?? payload.refreshToken ?? null;
+
+          // Try to close popup (best-effort)
+          try {
+            const g = (window as any).__ya_oauth_popup;
+            if (g && !g.closed) {
+              try { g.close(); } catch {}
+            }
+          } catch {}
+
+          try {
+            const p = window.open("", "yandex_oauth");
+            if (p && !p.closed) {
+              try { p.close(); } catch {}
+            }
+          } catch (e) {}
+
+          if (access_token && refresh_token) {
+            // Set session in Supabase client and redirect
+            (async () => {
+              try {
+                const { error: setErr } = await supabase.auth.setSession({
+                  access_token: String(access_token),
+                  refresh_token: String(refresh_token),
+                } as any);
+                if (setErr) {
+                  console.error("supabase.auth.setSession error", setErr);
+                  setError("Не удалось выполнить автоматический вход: " + (setErr.message || String(setErr)));
+                  // still try to redirect to homepage so user can manually continue
+                  router.replace("/");
+                  return;
+                }
+                // Success — go to main page (replace)
+                router.replace("/");
+              } catch (err: any) {
+                console.error("Error while setting session from social_auth_session:", err);
+                setError("Ошибка при установке сессии.");
+                try { router.replace("/"); } catch {}
+              }
+            })();
+            return;
           } else {
-            alert("Ошибка внешней авторизации. Проверьте консоль сервера и повторите попытку.");
+            console.warn("social_auth_session received without tokens:", payload);
+            // fallback: if payload contains action_link, use it
+            if (payload.action_link) {
+              try { window.location.replace(payload.action_link); return; } catch {}
+            }
           }
-          return;
         }
       } catch (err) {
         console.warn("Error handling postMessage:", err);
@@ -213,209 +159,7 @@ export default function RegisterPage(): React.ReactElement {
 
     window.addEventListener("message", onMessage, false);
     return () => window.removeEventListener("message", onMessage, false);
-  }, [router]);
-
-  // === NEW: monitor popup and close it if it navigated to SITE_ORIGIN (e.g. positive-theta.vercel.app/#) ===
-  useEffect(() => {
-    let monitorId: number | null = null;
-
-    const startMonitor = () => {
-      if (monitorId) return;
-      monitorId = window.setInterval(async () => {
-        try {
-          const popup = (window as any).__ya_oauth_popup;
-          if (!popup) return;
-
-          // if closed by user or otherwise
-          try {
-            if (popup.closed) {
-              // cleanup
-              if (monitorId) {
-                window.clearInterval(monitorId);
-                monitorId = null;
-              }
-              // dispatch legacy event to trigger session checks if needed
-              try {
-                window.dispatchEvent(new Event("ya_oauth_popup_closed"));
-              } catch (e) {}
-              return;
-            }
-          } catch (e) {
-            // popup.closed read can throw in some browsers - ignore
-          }
-
-          // Try reading location.href — this will succeed only when popup is same-origin.
-          try {
-            const href = popup.location && popup.location.href;
-            if (typeof href === "string") {
-              // If popup navigated to the frontend origin (SITE_ORIGIN), we can close it safely.
-              try {
-                const hrefOrigin = new URL(href).origin;
-                if (hrefOrigin === SITE_ORIGIN) {
-                  // Close popup
-                  try {
-                    if (!popup.closed) popup.close();
-                  } catch (e) {
-                    console.debug("Failed to close popup after it reached SITE_ORIGIN:", e);
-                  }
-                  try {
-                    delete (window as any).__ya_oauth_popup;
-                  } catch (e) {}
-                  // stop monitor
-                  if (monitorId) {
-                    window.clearInterval(monitorId);
-                    monitorId = null;
-                  }
-                  // Now try to obtain session in main window (session set in popup shares same origin storage)
-                  try {
-                    const { data } = await supabase.auth.getSession();
-                    if ((data as any)?.session) {
-                      router.replace("/");
-                    } else {
-                      // fallback: reload the page so client picks up session/cookies/localStorage set by popup
-                      window.location.reload();
-                    }
-                  } catch (e) {
-                    console.debug("Error after closing popup — checking session:", e);
-                    window.location.reload();
-                  }
-                }
-              } catch (e) {
-                // malformed URL or other issue — ignore
-              }
-            }
-          } catch (err) {
-            // cross-origin until the popup reaches SITE_ORIGIN — ignore and wait
-          }
-        } catch (outer) {
-          console.debug("popup monitor outer error:", outer);
-        }
-      }, 300);
-    };
-
-    // start monitor immediately (in case popup was already opened)
-    startMonitor();
-
-    // expose starter so SocialLoginButtons can call immediately after window.open
-    try {
-      (window as any).__startYaPopupMonitor = startMonitor;
-    } catch {}
-
-    return () => {
-      try {
-        if (monitorId) window.clearInterval(monitorId);
-      } catch {}
-      try {
-        delete (window as any).__startYaPopupMonitor;
-      } catch {}
-    };
-  }, [router]);
-
-  // Listen for custom event dispatched by SocialLoginButtons when popup closes
-  useEffect(() => {
-    function onPopupClosed() {
-      console.debug("Detected ya_oauth_popup_closed event — start session checks (legacy)");
-      checkSessionNow();
-    }
-
-    window.addEventListener("ya_oauth_popup_closed", onPopupClosed);
-    return () => window.removeEventListener("ya_oauth_popup_closed", onPopupClosed);
-  }, []);
-
-  // Also start session checks when window regains focus (fallback)
-  useEffect(() => {
-    function onFocus() {
-      if (waitingForAuth) {
-        console.debug("Window focused while waitingForAuth — starting session checks");
-        startSessionPolling();
-      }
-    }
-    function onVisibility() {
-      if (document.visibilityState === "visible" && waitingForAuth) {
-        console.debug("Visibility changed to visible while waitingForAuth — starting session checks");
-        startSessionPolling();
-      }
-    }
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [waitingForAuth]);
-
-  function startSessionPolling() {
-    stopSessionPolling();
-    sessionAttemptsRef.current = 0;
-    setCheckingSession(true);
-
-    sessionIntervalRef.current = window.setInterval(async () => {
-      sessionAttemptsRef.current += 1;
-      console.debug("session poll attempt", sessionAttemptsRef.current);
-      try {
-        const { data } = await supabase.auth.getSession();
-        if ((data as any)?.session) {
-          stopSessionPolling();
-          setWaitingForAuth(false);
-          setCheckingSession(false);
-          // Redirect on frontend root
-          router.replace("/");
-          return;
-        }
-      } catch (e) {
-        console.debug("session polling getSession error", e);
-      }
-      if (sessionAttemptsRef.current >= 12) {
-        // ~7 seconds give up
-        stopSessionPolling();
-        setCheckingSession(false);
-        console.debug("session polling exhausted");
-      }
-    }, 600);
-  }
-
-  function stopSessionPolling() {
-    if (sessionIntervalRef.current) {
-      window.clearInterval(sessionIntervalRef.current);
-      sessionIntervalRef.current = null;
-    }
-    sessionAttemptsRef.current = 0;
-    setCheckingSession(false);
-  }
-
-  // manual session check (button)
-  async function checkSessionNow() {
-    setCheckingSession(true);
-    try {
-      const { data } = await supabase.auth.getSession();
-      if ((data as any)?.session) {
-        router.replace("/");
-      } else {
-        setWaitingForAuth(true);
-        startSessionPolling();
-      }
-    } catch (e) {
-      console.debug("manual session check failed", e);
-      setCheckingSession(false);
-    }
-  }
-
-  // expose helper so SocialLoginButtons can notify us immediately
-  useEffect(() => {
-    (window as any).__markExternalAuthStarted = () => {
-      setWaitingForAuth(true);
-      (window as any).__ya_oauth_started = true;
-      // start popup monitor aggressively if popup was just created
-      try {
-        if (typeof (window as any).__startYaPopupMonitor === "function") (window as any).__startYaPopupMonitor();
-      } catch {}
-    };
-    return () => {
-      try {
-        delete (window as any).__markExternalAuthStarted;
-      } catch {}
-    };
-  }, []);
+  }, [BACKEND_ORIGIN]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -478,13 +222,15 @@ export default function RegisterPage(): React.ReactElement {
           email,
           full_name: fullName || null,
           about: about || null,
-          birthday: null,
+          birthday: null, // мы заменили возраст на чекбокс — оставляем null
           consent_given: !!consent,
           consent_at: new Date().toISOString(),
           is_adult_confirmed: !!isAdult,
         };
 
-        if (supabaseUserId) payload.supabase_uid = supabaseUserId;
+        if (supabaseUserId) {
+          payload.supabase_uid = supabaseUserId;
+        }
 
         const res = await fetch("/api/profiles", {
           method: "POST",
@@ -602,18 +348,6 @@ export default function RegisterPage(): React.ReactElement {
           <div className="mt-6">
             <p className="text-center text-sm text-gray-600 mb-2">Или войдите через соцсеть:</p>
             <SocialLoginButtons />
-
-            <div style={{ marginTop: 12, textAlign: "center" }}>
-              {waitingForAuth && !checkingSession && (
-                <div>
-                  <div style={{ marginBottom: 8 }}>Ждём завершения авторизации в окне…</div>
-                  <button className="ghost" onClick={checkSessionNow}>
-                    Проверить вход
-                  </button>
-                </div>
-              )}
-              {checkingSession && <div style={{ marginTop: 8 }}>Проверяем сессию…</div>}
-            </div>
           </div>
         </div>
       </main>
