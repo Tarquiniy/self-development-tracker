@@ -27,6 +27,13 @@ SUPABASE_ANON_KEY = getattr(settings, "SUPABASE_ANON_KEY", os.getenv("SUPABASE_A
 FRONTEND_URL = getattr(settings, "FRONTEND_URL", os.getenv("FRONTEND_URL", None))
 BACKEND_ORIGIN = getattr(settings, "BACKEND_ORIGIN", os.getenv("BACKEND_ORIGIN", None))
 
+# Also allow explicit SITE_ORIGIN for targetOrigin in postMessage
+SITE_ORIGIN = (
+    getattr(settings, "SITE_ORIGIN", None)
+    or os.getenv("NEXT_PUBLIC_SITE_ORIGIN")
+    or FRONTEND_URL
+)
+
 # Yandex endpoints (example provider). You can add provider-based branching later.
 YANDEX_TOKEN_URL = "https://oauth.yandex.com/token"
 YANDEX_USERINFO_URL = "https://login.yandex.ru/info?format=json"
@@ -136,7 +143,6 @@ def _admin_generate_magiclink_for_email(email: str, redirect_to: str) -> Tuple[O
         return None, f"Supabase generate_link returned error: {raw}", raw
 
     # Try several places where token/hash might be present
-    # 1) raw['data']['properties']['hashed_token']
     token = None
     try:
         token = raw.get("data", {}).get("properties", {}).get("hashed_token")
@@ -144,10 +150,8 @@ def _admin_generate_magiclink_for_email(email: str, redirect_to: str) -> Tuple[O
         token = None
     if not token:
         token = raw.get("properties", {}).get("hashed_token")
-    # 2) raw.get('hashed_token')
     if not token:
         token = raw.get("hashed_token")
-    # 3) action_link query param 'token' or 'hashed_token'
     if not token:
         action_link = raw.get("action_link") or raw.get("data", {}).get("action_link") or raw.get("link")
         if isinstance(action_link, str) and "token=" in action_link:
@@ -157,9 +161,7 @@ def _admin_generate_magiclink_for_email(email: str, redirect_to: str) -> Tuple[O
                 token = parse_qs(q).get("token", [None])[0] or parse_qs(q).get("hashed_token", [None])[0]
             except Exception:
                 token = None
-
     if not token:
-        # as a last resort attempt: some versions include 'data' directly with token
         token = raw.get("data", {}).get("token")
     if not token:
         return None, f"Could not find hashed_token in generate_link response: {raw}", raw
@@ -199,7 +201,6 @@ def _verify_magic_token_and_get_session(token: str) -> Tuple[Optional[dict], Opt
     access = raw.get("access_token")
     refresh = raw.get("refresh_token")
     if not access or not refresh:
-        # Some versions may return under 'data' or other keys
         access = access or raw.get("data", {}).get("access_token")
         refresh = refresh or raw.get("data", {}).get("refresh_token")
 
@@ -232,11 +233,12 @@ def yandex_callback(request: HttpRequest) -> HttpResponse:
         return HttpResponse(f"Could not get user email from Yandex: {err}", status=400)
 
     # 3) admin.generate_link -> token
-    frontend_target = FRONTEND_URL or getattr(settings, "SITE_ORIGIN", None) or ("https://" + request.get_host() if request.is_secure() else "http://" + request.get_host())
+    frontend_target = FRONTEND_URL or getattr(settings, "SITE_ORIGIN", None) or (
+        ("https://" + request.get_host()) if request.is_secure() else ("http://" + request.get_host())
+    )
     token, err, raw_gen = _admin_generate_magiclink_for_email(email=email, redirect_to=frontend_target)
     if err:
         logger.error("generate_link error: %s; raw=%s", err, raw_gen)
-        # fallback: return an HTML that instructs user
         return HttpResponse(f"Failed to generate login token for {email}: {err}", status=500)
 
     # 4) call /auth/v1/verify to get access+refresh tokens
@@ -247,18 +249,19 @@ def yandex_callback(request: HttpRequest) -> HttpResponse:
         action_link = raw_gen.get("action_link") or raw_gen.get("data", {}).get("action_link") or None
         if action_link:
             # Return old-style postMessage with action_link (main window can navigate)
-            backend_origin = BACKEND_ORIGIN or ("https://" + request.get_host() if request.is_secure() else "http://" + request.get_host())
+            backend_origin = BACKEND_ORIGIN or (("https://" + request.get_host()) if request.is_secure() else ("http://" + request.get_host()))
+            site_origin = SITE_ORIGIN or frontend_target
             html = f"""<!doctype html>
 <html>
   <head><meta charset="utf-8"/><title>Завершение входа</title></head>
   <body>
     <script>
       (function() {{
-        var backendOrigin = {json.dumps(backend_origin)};
+        var siteOrigin = {json.dumps(site_origin)};
         var payload = {{ type: "social_auth", action_link: {json.dumps(action_link)} }};
         try {{
           if (window.opener && !window.opener.closed) {{
-            try {{ window.opener.postMessage(payload, backendOrigin); }} catch(e){{ try{{ window.opener.postMessage(payload, "*"); }}catch(e){{}} }}
+            try {{ window.opener.postMessage(payload, siteOrigin); }} catch(e){{ try{{ window.opener.postMessage(payload, "*"); }}catch(e){{}} }}
             setTimeout(function(){{ try{{ window.close(); }}catch(e){{}} }}, 250);
             return;
           }}
@@ -275,16 +278,18 @@ def yandex_callback(request: HttpRequest) -> HttpResponse:
     # 5) success: send tokens to opener and close popup
     access = session["access_token"]
     refresh = session["refresh_token"]
-    backend_origin = BACKEND_ORIGIN or ("https://" + request.get_host() if request.is_secure() else "http://" + request.get_host())
+    backend_origin = BACKEND_ORIGIN or (("https://" + request.get_host()) if request.is_secure() else ("http://" + request.get_host()))
+    site_origin = SITE_ORIGIN or frontend_target
 
     # Minimal HTML/JS: postMessage tokens to opener then close popup
+    # NOTE: We use `site_origin` (frontend) as the targetOrigin so the main window (frontend) receives the message.
     html = f"""<!doctype html>
 <html>
   <head><meta charset="utf-8"/><title>Завершение входа</title></head>
   <body>
     <script>
       (function() {{
-        var backendOrigin = {json.dumps(backend_origin)};
+        var siteOrigin = {json.dumps(site_origin)};
         var payload = {{
           type: 'social_auth_session',
           provider: 'yandex',
@@ -293,7 +298,7 @@ def yandex_callback(request: HttpRequest) -> HttpResponse:
         }};
         try {{
           if (window.opener && !window.opener.closed) {{
-            try {{ window.opener.postMessage(payload, backendOrigin); }} catch(e) {{ try {{ window.opener.postMessage(payload, "*"); }} catch(e2){{}} }}
+            try {{ window.opener.postMessage(payload, siteOrigin); }} catch(e) {{ try {{ window.opener.postMessage(payload, "*"); }} catch(e2){{}} }}
           }}
         }} catch (e) {{ /* ignore */ }}
         // Give opener a moment to process then close

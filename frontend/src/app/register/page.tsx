@@ -11,7 +11,9 @@ const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 // Backend origin (may include path in env) - we normalize and also extract hostname
 const BACKEND_ORIGIN_RAW = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://positive-theta.onrender.com";
 // Frontend origin (used for final redirect checks)
-const SITE_ORIGIN = process.env.NEXT_PUBLIC_SITE_ORIGIN ?? (typeof window !== "undefined" ? window.location.origin : "https://positive-theta.vercel.app");
+const SITE_ORIGIN =
+  process.env.NEXT_PUBLIC_SITE_ORIGIN ??
+  (typeof window !== "undefined" ? window.location.origin : "https://positive-theta.vercel.app");
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -58,7 +60,7 @@ export default function RegisterPage(): React.ReactElement {
   const sessionIntervalRef = useRef<number | null>(null);
   const sessionAttemptsRef = useRef(0);
 
-  // Initial session check — redirect immediately to front page if session present
+  // === Initial session check — redirect immediately to front page if session present ===
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -117,7 +119,7 @@ export default function RegisterPage(): React.ReactElement {
     }
   }
 
-  // handle incoming postMessage from backend popup (supports tokens and action_link)
+  // === handle incoming postMessage from backend popup (supports tokens and action_link) ===
   useEffect(() => {
     async function onMessage(e: MessageEvent) {
       try {
@@ -211,6 +213,102 @@ export default function RegisterPage(): React.ReactElement {
 
     window.addEventListener("message", onMessage, false);
     return () => window.removeEventListener("message", onMessage, false);
+  }, [router]);
+
+  // === NEW: monitor popup and close it if it navigated to SITE_ORIGIN (e.g. positive-theta.vercel.app/#) ===
+  useEffect(() => {
+    let monitorId: number | null = null;
+
+    const startMonitor = () => {
+      if (monitorId) return;
+      monitorId = window.setInterval(async () => {
+        try {
+          const popup = (window as any).__ya_oauth_popup;
+          if (!popup) return;
+
+          // if closed by user or otherwise
+          try {
+            if (popup.closed) {
+              // cleanup
+              if (monitorId) {
+                window.clearInterval(monitorId);
+                monitorId = null;
+              }
+              // dispatch legacy event to trigger session checks if needed
+              try {
+                window.dispatchEvent(new Event("ya_oauth_popup_closed"));
+              } catch (e) {}
+              return;
+            }
+          } catch (e) {
+            // popup.closed read can throw in some browsers - ignore
+          }
+
+          // Try reading location.href — this will succeed only when popup is same-origin.
+          try {
+            const href = popup.location && popup.location.href;
+            if (typeof href === "string") {
+              // If popup navigated to the frontend origin (SITE_ORIGIN), we can close it safely.
+              try {
+                const hrefOrigin = new URL(href).origin;
+                if (hrefOrigin === SITE_ORIGIN) {
+                  // Close popup
+                  try {
+                    if (!popup.closed) popup.close();
+                  } catch (e) {
+                    console.debug("Failed to close popup after it reached SITE_ORIGIN:", e);
+                  }
+                  try {
+                    delete (window as any).__ya_oauth_popup;
+                  } catch (e) {}
+                  // stop monitor
+                  if (monitorId) {
+                    window.clearInterval(monitorId);
+                    monitorId = null;
+                  }
+                  // Now try to obtain session in main window (session set in popup shares same origin storage)
+                  try {
+                    const { data } = await supabase.auth.getSession();
+                    if ((data as any)?.session) {
+                      router.replace("/");
+                    } else {
+                      // fallback: reload the page so client picks up session/cookies/localStorage set by popup
+                      window.location.reload();
+                    }
+                  } catch (e) {
+                    console.debug("Error after closing popup — checking session:", e);
+                    window.location.reload();
+                  }
+                }
+              } catch (e) {
+                // malformed URL or other issue — ignore
+              }
+            }
+          } catch (err) {
+            // cross-origin until the popup reaches SITE_ORIGIN — ignore and wait
+          }
+        } catch (outer) {
+          console.debug("popup monitor outer error:", outer);
+        }
+      }, 300);
+    };
+
+    // start monitor immediately (in case popup was already opened)
+    startMonitor();
+
+    // expose starter so SocialLoginButtons can call immediately after window.open
+    try {
+      (window as any).__startYaPopupMonitor = startMonitor;
+    } catch {}
+
+    return () => {
+      try {
+        if (monitorId) window.clearInterval(monitorId);
+      } catch {}
+      try {
+        delete (window as any).__startYaPopupMonitor;
+      } catch {}
+    };
   }, [router]);
 
   // Listen for custom event dispatched by SocialLoginButtons when popup closes
@@ -307,9 +405,15 @@ export default function RegisterPage(): React.ReactElement {
     (window as any).__markExternalAuthStarted = () => {
       setWaitingForAuth(true);
       (window as any).__ya_oauth_started = true;
+      // start popup monitor aggressively if popup was just created
+      try {
+        if (typeof (window as any).__startYaPopupMonitor === "function") (window as any).__startYaPopupMonitor();
+      } catch {}
     };
     return () => {
-      try { delete (window as any).__markExternalAuthStarted; } catch {}
+      try {
+        delete (window as any).__markExternalAuthStarted;
+      } catch {}
     };
   }, []);
 
