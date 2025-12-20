@@ -1,22 +1,24 @@
 # backend/users/views_social.py
 """
-Unified OAuth callback handler (example: Yandex).
-Flow:
- - exchange provider code -> provider access token -> email
- - admin.generate_link(type='magiclink') -> extract hashed token
- - call Supabase /auth/v1/verify (type=magiclink, token=hashed_token) using ANON key
-   -> receive access_token + refresh_token
- - return HTML which postMessage's { type: 'social_auth_session', access_token, refresh_token }
-   to window.opener (origin restricted) and then closes the popup.
+Unified OAuth callback handler (Yandex example).
+Behavior updated (Dec 2025):
+ - server-side: exchange code -> provider token -> email
+ - admin.generate_link -> hashed token
+ - verify -> obtain access_token + refresh_token
+ - SUCCESS: redirect popup to FRONTEND (SITE_ORIGIN) with tokens in fragment:
+       https://your-frontend.example/_oauth_complete#access=<urlencoded>&refresh=<urlencoded>&provider=yandex
+   (this avoids relying on window.opener/postMessage; main tab can read popup.location.hash once popup is same-origin)
+ - FALLBACK: if verify failed but admin generate_link returned an action_link, redirect popup to that action_link
 """
 import json
 import logging
 import os
 from typing import Optional, Tuple
+from urllib.parse import quote_plus
 
 import requests
 from django.conf import settings
-from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
+from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, HttpResponseRedirect
 
 logger = logging.getLogger(__name__)
 
@@ -27,20 +29,19 @@ SUPABASE_ANON_KEY = getattr(settings, "SUPABASE_ANON_KEY", os.getenv("SUPABASE_A
 FRONTEND_URL = getattr(settings, "FRONTEND_URL", os.getenv("FRONTEND_URL", None))
 BACKEND_ORIGIN = getattr(settings, "BACKEND_ORIGIN", os.getenv("BACKEND_ORIGIN", None))
 
-# Also allow explicit SITE_ORIGIN for targetOrigin in postMessage
+# Prefer explicit SITE_ORIGIN (frontend origin), used as redirect target
 SITE_ORIGIN = (
     getattr(settings, "SITE_ORIGIN", None)
     or os.getenv("NEXT_PUBLIC_SITE_ORIGIN")
     or FRONTEND_URL
 )
 
-# Yandex endpoints (example provider). You can add provider-based branching later.
+# Yandex endpoints (example provider)
 YANDEX_TOKEN_URL = "https://oauth.yandex.com/token"
 YANDEX_USERINFO_URL = "https://login.yandex.ru/info?format=json"
 
 
 def _get_redirect_uri(request: HttpRequest) -> str:
-    # Prefer explicit setting; otherwise infer from request
     red = getattr(settings, "YANDEX_REDIRECT_URI", os.getenv("YANDEX_REDIRECT_URI"))
     if red:
         return red
@@ -112,11 +113,6 @@ def _fetch_yandex_email(access_token: str) -> Tuple[Optional[str], Optional[str]
 
 
 def _admin_generate_magiclink_for_email(email: str, redirect_to: str) -> Tuple[Optional[str], Optional[str], dict]:
-    """
-    Calls Supabase admin/generate_link to produce a magiclink and returns a token we can verify.
-    Returns (token, error, raw_response).
-    The response format varies slightly across versions; we attempt to extract hashed_token robustly.
-    """
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         return None, "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not configured", {}
 
@@ -142,7 +138,6 @@ def _admin_generate_magiclink_for_email(email: str, redirect_to: str) -> Tuple[O
     if r.status_code not in (200, 201):
         return None, f"Supabase generate_link returned error: {raw}", raw
 
-    # Try several places where token/hash might be present
     token = None
     try:
         token = raw.get("data", {}).get("properties", {}).get("hashed_token")
@@ -170,10 +165,6 @@ def _admin_generate_magiclink_for_email(email: str, redirect_to: str) -> Tuple[O
 
 
 def _verify_magic_token_and_get_session(token: str) -> Tuple[Optional[dict], Optional[str], dict]:
-    """
-    Call Supabase /auth/v1/verify (POST) with type=magiclink and token=... to receive JSON with access_token + refresh_token.
-    Use ANON key in apikey header (as a separate client).
-    """
     if not SUPABASE_URL:
         return None, "SUPABASE_URL not configured", {}
     endpoint = SUPABASE_URL.rstrip("/") + "/auth/v1/verify"
@@ -197,7 +188,6 @@ def _verify_magic_token_and_get_session(token: str) -> Tuple[Optional[dict], Opt
     if r.status_code not in (200, 201):
         return None, f"Supabase verify returned error: {raw}", raw
 
-    # Expect access_token and refresh_token in response
     access = raw.get("access_token")
     refresh = raw.get("refresh_token")
     if not access or not refresh:
@@ -212,14 +202,15 @@ def _verify_magic_token_and_get_session(token: str) -> Tuple[Optional[dict], Opt
 
 def yandex_callback(request: HttpRequest) -> HttpResponse:
     """
-    Django view to handle Yandex callback.
-    Expects ?code=... . Returns a small HTML page that posts session tokens to opener and closes the popup.
+    Django view to handle Yandex callback (expects ?code=...).
+    On success redirect popup to SITE_ORIGIN/_oauth_complete#access=...&refresh=...
     """
     code = request.GET.get("code")
     if not code:
         return HttpResponseBadRequest("Missing code parameter.")
 
     redirect_uri = _get_redirect_uri(request)
+
     # 1) exchange code -> provider access token
     provider_token, err, raw = _exchange_code_for_yandex_token(code, redirect_uri=redirect_uri)
     if err:
@@ -245,69 +236,26 @@ def yandex_callback(request: HttpRequest) -> HttpResponse:
     session, err, raw_verify = _verify_magic_token_and_get_session(token)
     if err:
         logger.error("verify token error: %s; raw=%s", err, raw_verify)
-        # Fallback behavior: fallback to action_link redirect (old behavior)
+        # Fallback: if action_link present, redirect there
         action_link = raw_gen.get("action_link") or raw_gen.get("data", {}).get("action_link") or None
         if action_link:
-            # Return old-style postMessage with action_link (main window can navigate)
-            backend_origin = BACKEND_ORIGIN or (("https://" + request.get_host()) if request.is_secure() else ("http://" + request.get_host()))
-            site_origin = SITE_ORIGIN or frontend_target
-            html = f"""<!doctype html>
-<html>
-  <head><meta charset="utf-8"/><title>Завершение входа</title></head>
-  <body>
-    <script>
-      (function() {{
-        var siteOrigin = {json.dumps(site_origin)};
-        var payload = {{ type: "social_auth", action_link: {json.dumps(action_link)} }};
-        try {{
-          if (window.opener && !window.opener.closed) {{
-            try {{ window.opener.postMessage(payload, siteOrigin); }} catch(e){{ try{{ window.opener.postMessage(payload, "*"); }}catch(e){{}} }}
-            setTimeout(function(){{ try{{ window.close(); }}catch(e){{}} }}, 250);
-            return;
-          }}
-        }} catch(e){{ }}
-        try {{ window.location.replace({json.dumps(action_link)}); }} catch(e){{}}
-      }})();
-    </script>
-    <p>Завершаем вход...</p>
-  </body>
-</html>"""
-            return HttpResponse(html, content_type="text/html")
+            return HttpResponseRedirect(action_link)
         return HttpResponse(f"Could not obtain session tokens: {err}", status=500)
 
-    # 5) success: send tokens to opener and close popup
+    # 5) success: redirect popup to frontend with tokens in fragment
     access = session["access_token"]
     refresh = session["refresh_token"]
-    backend_origin = BACKEND_ORIGIN or (("https://" + request.get_host()) if request.is_secure() else ("http://" + request.get_host()))
-    site_origin = SITE_ORIGIN or frontend_target
 
-    # Minimal HTML/JS: postMessage tokens to opener then close popup
-    # NOTE: We use `site_origin` (frontend) as the targetOrigin so the main window (frontend) receives the message.
-    html = f"""<!doctype html>
-<html>
-  <head><meta charset="utf-8"/><title>Завершение входа</title></head>
-  <body>
-    <script>
-      (function() {{
-        var siteOrigin = {json.dumps(site_origin)};
-        var payload = {{
-          type: 'social_auth_session',
-          provider: 'yandex',
-          access_token: {json.dumps(access)},
-          refresh_token: {json.dumps(refresh)}
-        }};
-        try {{
-          if (window.opener && !window.opener.closed) {{
-            try {{ window.opener.postMessage(payload, siteOrigin); }} catch(e) {{ try {{ window.opener.postMessage(payload, "*"); }} catch(e2){{}} }}
-          }}
-        }} catch (e) {{ /* ignore */ }}
-        // Give opener a moment to process then close
-        setTimeout(function() {{
-          try {{ window.close(); }} catch(e) {{ }}
-        }}, 220);
-      }})();
-    </script>
-    <p>Завершаем вход… Если окно не закрылось автоматически — закройте его вручную.</p>
-  </body>
-</html>"""
-    return HttpResponse(html, content_type="text/html")
+    # decide site_origin (frontend)
+    site_origin = SITE_ORIGIN or frontend_target
+    if not site_origin:
+        # fallback to host-based
+        site_origin = ("https://" + request.get_host()) if request.is_secure() else ("http://" + request.get_host())
+
+    # build fragment with urlencoded tokens (NOT logged)
+    frag = f"access={quote_plus(access)}&refresh={quote_plus(refresh)}&provider=yandex"
+
+    redirect_url = site_origin.rstrip("/") + "/_oauth_complete#" + frag
+    logger.info("Redirecting OAuth popup to frontend for finalization: %s (not logging tokens)", redirect_url[:240])
+
+    return HttpResponseRedirect(redirect_url)
