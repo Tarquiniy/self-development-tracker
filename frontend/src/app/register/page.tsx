@@ -1,6 +1,7 @@
+// frontend/src/app/register/page.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
@@ -8,16 +9,35 @@ import SocialLoginButtons from "@/components/SocialLoginButtons";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-// Backend origin (may include path in env) - we normalize and also extract hostname in other places
+// Backend origin (may include path in env) - we normalize and also extract hostname
 const BACKEND_ORIGIN_RAW = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://positive-theta.onrender.com";
-// Frontend origin (used as expected origin for postMessage)
+// Frontend origin (used for final redirect checks). If not provided, use current origin.
 const SITE_ORIGIN = process.env.NEXT_PUBLIC_SITE_ORIGIN ?? (typeof window !== "undefined" ? window.location.origin : "https://positive-theta.vercel.app");
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
+function normalizeOrigin(raw: string) {
+  try {
+    return new URL(raw).origin;
+  } catch {
+    if (!/^https?:\/\//.test(raw)) return "https://" + raw;
+    return raw;
+  }
+}
+function extractHost(raw: string) {
+  try {
+    return new URL(raw).hostname;
+  } catch {
+    return raw.replace(/^https?:\/\//, "").split("/")[0] || raw;
+  }
+}
+
+const BACKEND_ORIGIN = normalizeOrigin(BACKEND_ORIGIN_RAW);
+const BACKEND_HOST = extractHost(BACKEND_ORIGIN_RAW);
+const LOCAL_KEY = "social_auth_success_tokens"; // backup storage key
+
 export default function RegisterPage(): React.ReactElement {
   const router = useRouter();
-  const BACKEND_ORIGIN = BACKEND_ORIGIN_RAW;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,219 +54,269 @@ export default function RegisterPage(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // If already logged in — redirect to /
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
+  // OAuth UI state
+  const [waitingForAuth, setWaitingForAuth] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(false);
+
+  // Prevent double-handling
+  const handledRef = useRef(false);
+
+  // --- Core: apply tokens reliably ---
+  async function applySocialTokens(access_token: string, refresh_token: string) {
+    if (handledRef.current) return;
+    handledRef.current = true;
+    console.debug("applySocialTokens start");
+
+    try {
+      const setRes = await supabase.auth.setSession({ access_token, refresh_token });
+      console.debug("supabase.setSession result:", setRes);
+      if ((setRes as any)?.error) {
+        console.warn("setSession returned error, falling back to localStorage+reload", (setRes as any).error);
+        try {
+          localStorage.setItem(LOCAL_KEY, JSON.stringify({ type: "social_auth_session", access_token, refresh_token }));
+        } catch (e) {
+          console.warn("Could not write tokens to localStorage", e);
+        }
+        try {
+          const bc = new BroadcastChannel("auth_channel");
+          bc.postMessage({ type: "social_auth_session", access_token, refresh_token });
+          bc.close();
+        } catch (e) {}
+        // Hard reload so other Supabase client instances pick up the stored token
+        window.location.replace("/");
+        return;
+      }
+
+      // verify session
       try {
         const { data } = await supabase.auth.getSession();
-        if (!mounted) return;
         if ((data as any)?.session) {
+          try { localStorage.removeItem(LOCAL_KEY); } catch {}
           router.replace("/");
+          return;
+        } else {
+          // fallback
+          console.warn("setSession did not produce session object - reload fallback");
+          try { localStorage.setItem(LOCAL_KEY, JSON.stringify({ type: "social_auth_session", access_token, refresh_token })); } catch {}
+          window.location.replace("/");
+          return;
         }
       } catch (e) {
-        console.debug("supabase.getSession check failed", e);
+        console.warn("getSession failed after setSession - reload fallback", e);
+        try { localStorage.setItem(LOCAL_KEY, JSON.stringify({ type: "social_auth_session", access_token, refresh_token })); } catch {}
+        window.location.replace("/");
       }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [router]);
+    } catch (err) {
+      console.error("applySocialTokens unexpected error", err);
+      try { localStorage.setItem(LOCAL_KEY, JSON.stringify({ type: "social_auth_session", access_token, refresh_token })); } catch {}
+      window.location.replace("/");
+    }
+  }
 
-  // Message listener: receive social_auth_session or social_auth from popup (backend callback)
+  // --- Try to apply backup tokens or check session. Retries limited to 2 attempts (300ms, 1000ms) ---
+  async function attemptApplyBackupAndSession(attempt = 0) {
+    if (handledRef.current) return;
+    console.debug("attemptApplyBackupAndSession attempt", attempt);
+    // 1) try backup tokens from localStorage
+    try {
+      const raw = localStorage.getItem(LOCAL_KEY);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed?.type === "social_auth_session" && parsed.access_token && parsed.refresh_token) {
+            console.debug("Found backup tokens, applying");
+            await applySocialTokens(String(parsed.access_token), String(parsed.refresh_token));
+            return;
+          }
+        } catch (e) {
+          console.debug("failed parsing backup tokens", e);
+        }
+      }
+    } catch (e) {
+      console.debug("error reading localStorage", e);
+    }
+
+    // 2) try getSession directly
+    try {
+      const { data } = await supabase.auth.getSession();
+      if ((data as any)?.session) {
+        handledRef.current = true;
+        router.replace("/");
+        return;
+      }
+    } catch (e) {
+      console.debug("getSession attempt failed", e);
+    }
+
+    // 3) limited retries (not continuous polling)
+    if (attempt < 2 && !handledRef.current) {
+      const delay = attempt === 0 ? 300 : 1000;
+      setTimeout(() => attemptApplyBackupAndSession(attempt + 1), delay);
+    }
+  }
+
+  // --- On mount: attempt to apply backup tokens immediately (in case popup wrote them) ---
+  useEffect(() => {
+    attemptApplyBackupAndSession(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- Message listener: primary channel from popup callback ---
   useEffect(() => {
     function onMessage(e: MessageEvent) {
       try {
-        if (!e || !e.data) return;
-        // Accept messages from SITE_ORIGIN and BACKEND_ORIGIN (some deployments may use backend-origin postMessage)
-        const allowedOrigins = new Set([
-          SITE_ORIGIN,
-          BACKEND_ORIGIN,
-          window.location.origin,
-        ].filter(Boolean) as string[]);
+        if (!e || !e.origin) return;
 
-        // If event.origin not in allowedOrigins, ignore (but for robustness allow if origin missing)
-        if (typeof e.origin === "string" && e.origin.length > 0 && !allowedOrigins.has(e.origin)) {
-          console.debug("Ignored postMessage from disallowed origin:", e.origin);
+        // Accept messages from site or backend origin
+        const allowedOrigins = [SITE_ORIGIN, window.location.origin, BACKEND_ORIGIN];
+        let originAllowed = allowedOrigins.includes(e.origin);
+        if (!originAllowed) {
+          // tolerate host suffix match to support envs with path differences
+          try {
+            const msgHost = new URL(String(e.origin)).hostname;
+            if (msgHost && msgHost.endsWith(BACKEND_HOST)) originAllowed = true;
+          } catch {}
+        }
+        if (!originAllowed) {
+          console.debug("Ignored message from origin:", e.origin);
           return;
         }
 
         const payload = e.data;
         if (!payload || typeof payload !== "object") return;
 
-        // If backend sends action_link fallback
-        if (payload.type === "social_auth" && typeof payload.action_link === "string") {
-          // Close popup if possible (best-effort)
-          try {
-            const g = (window as any).__ya_oauth_popup;
-            if (g && !g.closed) {
-              try { g.close(); } catch {}
-            }
-          } catch {}
-
-          try {
-            const p = window.open("", "yandex_oauth");
-            if (p && !p.closed) {
-              try { p.close(); } catch {}
-            }
-          } catch (e) {}
-
-          // Navigate main window to magic/action link
-          try {
-            window.location.replace(payload.action_link);
-            return;
-          } catch (e) {
-            console.warn("Failed to navigate to action_link:", e);
-          }
+        if (payload.type === "social_auth_session" && payload.access_token && payload.refresh_token) {
+          console.debug("Received social_auth_session via postMessage -> applying tokens");
+          setWaitingForAuth(false);
+          applySocialTokens(String(payload.access_token), String(payload.refresh_token));
+          return;
         }
 
-        // If backend sent session tokens for immediate setSession
-        if (payload.type === "social_auth_session") {
-          const access_token = payload.access_token ?? payload.accessToken ?? null;
-          const refresh_token = payload.refresh_token ?? payload.refreshToken ?? null;
+        if (payload.type === "social_auth_done") {
+          console.debug("Received social_auth_done -> trying backup/session automatically");
+          setWaitingForAuth(false);
+          attemptApplyBackupAndSession(0);
+          return;
+        }
 
-          // Try to close popup (best-effort)
-          try {
-            const g = (window as any).__ya_oauth_popup;
-            if (g && !g.closed) {
-              try { g.close(); } catch {}
-            }
-          } catch {}
-
-          try {
-            const p = window.open("", "yandex_oauth");
-            if (p && !p.closed) {
-              try { p.close(); } catch {}
-            }
-          } catch (e) {}
-
-          if (access_token && refresh_token) {
-            // Set session in Supabase client and redirect
-            (async () => {
-              try {
-                const { error: setErr } = await supabase.auth.setSession({
-                  access_token: String(access_token),
-                  refresh_token: String(refresh_token),
-                } as any);
-                if (setErr) {
-                  console.error("supabase.auth.setSession error", setErr);
-                  setError("Не удалось выполнить автоматический вход: " + (setErr.message || String(setErr)));
-                  // still try to redirect to homepage so user can manually continue
-                  router.replace("/");
-                  return;
-                }
-                // Success — go to main page (replace)
-                router.replace("/");
-              } catch (err: any) {
-                console.error("Error while setting session from social_auth_session:", err);
-                setError("Ошибка при установке сессии.");
-                try { router.replace("/"); } catch {}
-              }
-            })();
-            return;
-          } else {
-            console.warn("social_auth_session received without tokens:", payload);
-            // fallback: if payload contains action_link, use it
-            if (payload.action_link) {
-              try { window.location.replace(payload.action_link); return; } catch {}
-            }
-          }
+        if (payload.type === "social_auth_action" && payload.action_link) {
+          // old-style action_link flow: navigate same-tab
+          setWaitingForAuth(false);
+          try { window.location.replace(String(payload.action_link)); } catch {}
+          return;
         }
       } catch (err) {
-        console.warn("Error handling postMessage:", err);
+        console.warn("Error handling postMessage", err);
       }
     }
-
     window.addEventListener("message", onMessage, false);
     return () => window.removeEventListener("message", onMessage, false);
-  }, [BACKEND_ORIGIN]);
+  }, [router]);
 
+  // BroadcastChannel - redundant robust channel
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel("auth_channel");
+      bc.onmessage = (ev) => {
+        try {
+          const payload = ev.data;
+          if (payload?.type === "social_auth_session" && payload.access_token && payload.refresh_token) {
+            console.debug("BroadcastChannel received tokens -> applying");
+            applySocialTokens(String(payload.access_token), String(payload.refresh_token));
+          }
+        } catch (e) { console.debug(e); }
+      };
+    } catch (e) { bc = null; }
+    return () => { try { if (bc) bc.close(); } catch {} };
+  }, []);
+
+  // storage event fallback
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      try {
+        if (!e) return;
+        if (e.key !== LOCAL_KEY) return;
+        if (!e.newValue) return;
+        const payload = JSON.parse(e.newValue);
+        if (payload?.type === "social_auth_session" && payload.access_token && payload.refresh_token) {
+          console.debug("storage event: got social tokens -> applying");
+          applySocialTokens(String(payload.access_token), String(payload.refresh_token));
+        }
+      } catch (err) { console.debug("storage handler error", err); }
+    }
+    window.addEventListener("storage", onStorage, false);
+    return () => window.removeEventListener("storage", onStorage, false);
+  }, []);
+
+  // When window regains focus or becomes visible -> attempt automatic apply (this makes the flow automatic)
+  useEffect(() => {
+    function onFocus() {
+      if (handledRef.current) return;
+      console.debug("window focus -> attemptApplyBackupAndSession");
+      attemptApplyBackupAndSession(0);
+    }
+    function onVisibility() {
+      if (document.visibilityState === "visible" && !handledRef.current) {
+        console.debug("visibility visible -> attemptApplyBackupAndSession");
+        attemptApplyBackupAndSession(0);
+      }
+    }
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
+
+  // helper: expose marker called by SocialLoginButtons when popup opened
+  useEffect(() => {
+    (window as any).__markExternalAuthStarted = () => {
+      console.debug("__markExternalAuthStarted called");
+      setWaitingForAuth(true);
+    };
+    return () => {
+      try { delete (window as any).__markExternalAuthStarted; } catch {}
+    };
+  }, []);
+
+  // --- Registration submit (unchanged business logic) ---
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setInfo(null);
 
-    // basic validations
-    if (!email) {
-      setError("Введите email.");
-      return;
-    }
-    if (!password) {
-      setError("Введите пароль.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Пароли не совпадают.");
-      return;
-    }
-    if (!isAdult) {
-      setError("Подтвердите, что вам 18 лет или больше.");
-      return;
-    }
-    if (!consent) {
-      setError("Необходимо согласие на обработку персональных данных.");
-      return;
-    }
+    if (!email) { setError("Введите email."); return; }
+    if (!password) { setError("Введите пароль."); return; }
+    if (password !== confirmPassword) { setError("Пароли не совпадают."); return; }
+    if (!isAdult) { setError("Подтвердите, что вам 18 лет или больше."); return; }
+    if (!consent) { setError("Необходимо согласие на обработку персональных данных."); return; }
 
     setLoading(true);
-
     try {
-      const { data: signData, error: signErr } = await supabase.auth.signUp({
-        email,
-        password,
-      } as any);
+      const { data: signData, error: signErr } = await supabase.auth.signUp({ email, password } as any);
+      if (signErr) { setError(signErr.message || "Ошибка регистрации"); setLoading(false); return; }
 
-      if (signErr) {
-        setError(signErr.message || "Ошибка регистрации");
-        setLoading(false);
-        return;
-      }
-
-      // Try to obtain the Supabase user id.
       let supabaseUserId: string | null = (signData as any)?.user?.id ?? null;
-
       if (!supabaseUserId) {
         try {
-          const { data: getUserData, error: getUserErr } = await supabase.auth.getUser();
-          if (!getUserErr && (getUserData as any)?.user?.id) {
-            supabaseUserId = (getUserData as any).user.id;
-          }
-        } catch (err) {
-          console.warn("Could not fetch supabase user after signUp:", err);
-        }
+          const { data: getUserData } = await supabase.auth.getUser();
+          if ((getUserData as any)?.user?.id) supabaseUserId = (getUserData as any).user.id;
+        } catch {}
       }
 
-      // Server-side upsert of profile
       try {
         const payload: any = {
-          email,
-          full_name: fullName || null,
-          about: about || null,
-          birthday: null, // мы заменили возраст на чекбокс — оставляем null
-          consent_given: !!consent,
-          consent_at: new Date().toISOString(),
-          is_adult_confirmed: !!isAdult,
+          email, full_name: fullName || null, about: about || null, birthday: null,
+          consent_given: !!consent, consent_at: new Date().toISOString(), is_adult_confirmed: !!isAdult
         };
-
-        if (supabaseUserId) {
-          payload.supabase_uid = supabaseUserId;
-        }
-
-        const res = await fetch("/api/profiles", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
+        if (supabaseUserId) payload.supabase_uid = supabaseUserId;
+        const res = await fetch("/api/profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         const j = await res.json().catch(() => null);
         if (!res.ok) {
-          console.warn("Server profile upsert failed", j);
           const needsConfirm = !!((signData as any)?.user?.confirmation_sent_at || (signData as any)?.user?.email_confirmed_at === null);
-          setInfo(
-            needsConfirm
-              ? "Регистрация завершена. На e-mail отправлено письмо подтверждения. Профиль не был создан автоматически (сервер вернул ошибку)."
-              : "Регистрация прошла. Профиль не создан автоматически (сервер вернул ошибку)."
-          );
+          setInfo(needsConfirm ? "Регистрация завершена. На e-mail отправлено письмо подтверждения." : "Регистрация прошла. Профиль не создан автоматически (сервер вернул ошибку).");
         } else {
           setInfo("Регистрация успешно завершена. Профиль создан.");
         }
@@ -255,7 +325,6 @@ export default function RegisterPage(): React.ReactElement {
         setInfo("Регистрация прошла. Попытка сохранить профиль на сервере не удалась.");
       }
 
-      // Redirect after signUp (may be adjusted if email confirm)
       router.replace("/");
     } catch (err: any) {
       console.error("register error", err);
@@ -265,6 +334,38 @@ export default function RegisterPage(): React.ReactElement {
     }
   }
 
+  // Manual "Проверить вход" handler (kept as fallback)
+  async function handleManualCheck() {
+    setCheckingSession(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      if ((data as any)?.session) {
+        router.replace("/");
+        return;
+      }
+      // try backup tokens
+      try {
+        const raw = localStorage.getItem(LOCAL_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.type === "social_auth_session" && parsed.access_token && parsed.refresh_token) {
+            await applySocialTokens(String(parsed.access_token), String(parsed.refresh_token));
+            return;
+          }
+        }
+      } catch (err) {
+        console.debug("manual read backup tokens failed", err);
+      }
+      setInfo("Сессия не найдена — попробуйте открыть окно входа ещё раз.");
+    } catch (err) {
+      console.debug("manual session check error", err);
+      setInfo("Ошибка при проверке сессии.");
+    } finally {
+      setCheckingSession(false);
+    }
+  }
+
+  // --- UI ---
   return (
     <>
       <main className="page">
@@ -278,16 +379,12 @@ export default function RegisterPage(): React.ReactElement {
             </label>
 
             <label className="field">
-              <span className="label">
-                Email <span className="required" aria-hidden>*</span>
-              </span>
+              <span className="label">Email <span className="required" aria-hidden>*</span></span>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required aria-required="true" aria-label="Email" />
             </label>
 
             <label className="field">
-              <span className="label">
-                Пароль <span className="required" aria-hidden>*</span>
-              </span>
+              <span className="label">Пароль <span className="required" aria-hidden>*</span></span>
               <div className="pw-row">
                 <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required aria-required="true" aria-label="Пароль" />
                 <button type="button" className="eye-btn" aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"} onClick={() => setShowPassword((s) => !s)}>
@@ -297,9 +394,7 @@ export default function RegisterPage(): React.ReactElement {
             </label>
 
             <label className="field">
-              <span className="label">
-                Повторите пароль <span className="required" aria-hidden>*</span>
-              </span>
+              <span className="label">Повторите пароль <span className="required" aria-hidden>*</span></span>
               <div className="pw-row">
                 <input type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Повторите пароль" required aria-required="true" aria-label="Повторите пароль" />
                 <button type="button" className="eye-btn" aria-label={showConfirm ? "Скрыть пароль" : "Показать пароль"} onClick={() => setShowConfirm((s) => !s)}>
@@ -348,6 +443,18 @@ export default function RegisterPage(): React.ReactElement {
           <div className="mt-6">
             <p className="text-center text-sm text-gray-600 mb-2">Или войдите через соцсеть:</p>
             <SocialLoginButtons />
+
+            <div style={{ marginTop: 12, textAlign: "center" }}>
+              {waitingForAuth && !checkingSession && (
+                <div>
+                  <div style={{ marginBottom: 8 }}>Ждём завершения авторизации в окне…</div>
+                  <button className="ghost" onClick={handleManualCheck}>
+                    Проверить вход
+                  </button>
+                </div>
+              )}
+              {checkingSession && <div style={{ marginTop: 8 }}>Проверяем сессию…</div>}
+            </div>
           </div>
         </div>
       </main>
@@ -388,7 +495,6 @@ export default function RegisterPage(): React.ReactElement {
           margin-bottom: 6px;
         }
 
-        /* required star */
         .required {
           color: #ef4444;
           margin-left: 6px;
@@ -416,7 +522,6 @@ export default function RegisterPage(): React.ReactElement {
           margin-top: 4px;
         }
 
-        /* password row with eye button */
         .pw-row {
           display: flex;
           gap: 8px;
@@ -432,7 +537,6 @@ export default function RegisterPage(): React.ReactElement {
           line-height: 1;
         }
 
-        /* checkbox rows */
         .consent,
         .consent-row {
           display: flex;

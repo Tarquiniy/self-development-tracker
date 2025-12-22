@@ -5,13 +5,6 @@ import React, { JSX, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
-/**
- * Navbar — обновлён:
- * - На узких экранах (<=960px) в шторке (бургер-меню) доступны ВСЕ кнопки/ссылки.
- * - На узких экранах скрываются все десктопные элементы (desktopNav, right-actions).
- * - На широких экранах показываются все элементы как раньше.
- * - Сохранены меры против "моргания" и логика подсветки навбара.
- */
 
 export default function Navbar(): JSX.Element {
   const [open, setOpen] = useState(false);
@@ -258,11 +251,11 @@ export default function Navbar(): JSX.Element {
                 <>
                   {/* Desktop-only actions (hidden on small screens via CSS) */}
                   <Link href="/dashboard" className="navItem actionPrimary">Dashboard</Link>
-                  <Link href="/profile" className="navItem actionBtn">Профиль</Link>
+                  <Link href="/profile" className="navItem actionPrimary">Профиль</Link>
                 </>
               ) : (
                 <>
-                  <Link href="/login" className="navItem actionBtn">Войти</Link>
+                  <Link href="/login" className="navItem actionPrimary">Войти</Link>
                   <Link href="/register" className="navItem actionPrimary">Регистрация</Link>
                 </>
               )}
@@ -285,11 +278,11 @@ export default function Navbar(): JSX.Element {
                 {user ? (
                   <>
                     <a href="/dashboard" className="actionPrimary" onClick={() => setOpen(false)}>Dashboard</a>
-                    <a href="/profile" className="actionBtn" onClick={() => setOpen(false)}>Профиль</a>
+                    <a href="/profile" className="actionPrimary" onClick={() => setOpen(false)}>Профиль</a>
                   </>
                 ) : (
                   <>
-                    <a href="/login" className="actionBtn" onClick={() => setOpen(false)}>Войти</a>
+                    <a href="/login" className="actionPrimary" onClick={() => setOpen(false)}>Войти</a>
                     <a href="/register" className="actionPrimary" onClick={() => setOpen(false)}>Регистрация</a>
                   </>
                 )}

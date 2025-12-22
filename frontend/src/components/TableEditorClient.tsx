@@ -32,31 +32,39 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // hooks (all declared before any conditional returns)
+  // resolution
   const [resolvedTableId, setResolvedTableId] = useState<string | null>(null);
   const [resolving, setResolving] = useState(true);
 
+  // main UI state
   const [loading, setLoading] = useState(false);
   const [serverTable, setServerTable] = useState<any | null>(serverData ?? null);
   const [error, setError] = useState<string | null>(null);
 
+  // title editing flow
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState<string>(serverData?.title ?? "");
+  const lastSavedTitleRef = useRef<string>(serverData?.title ?? "");
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const [savingTitle, setSavingTitle] = useState<boolean>(false);
+
+  // categories / journal
   const [categories, setCategories] = useState<Category[]>([]);
   const [addingMap, setAddingMap] = useState<Record<string, boolean>>({});
   const [journalEntries, setJournalEntries] = useState<JournalRecord[]>([]);
   const [journalLoading, setJournalLoading] = useState(false);
 
+  // date / range
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [selectedRange, setSelectedRange] = useState<{ start: string; end: string } | null>(null);
 
   const unlockTimeoutsRef = useRef<Record<string, number | null>>({});
 
-  // chart size responsive
+  // responsive chart size
   const [chartSize, setChartSize] = useState<number>(340);
   useEffect(() => {
     function update() {
-      // prefer a slightly padded container width on mobile
       const ww = typeof window !== "undefined" ? window.innerWidth : 360;
-      // content padding total ~ 48 (24 left+right) on small screens
       const avail = Math.max(220, ww - 48);
       const size = Math.min(520, Math.max(260, avail, 260, Math.min(360, avail)));
       setChartSize(Math.round(Math.min(360, size)));
@@ -64,6 +72,27 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
+  }, []);
+
+  // keep editedTitle in sync when serverTable loads/changes (but don't overwrite while editing)
+  useEffect(() => {
+    if (!isEditingTitle) {
+      setEditedTitle(serverTable?.title ?? "");
+      lastSavedTitleRef.current = serverTable?.title ?? "";
+    } else {
+      // keep lastSavedTitleRef updated too
+      lastSavedTitleRef.current = serverTable?.title ?? lastSavedTitleRef.current;
+    }
+  }, [serverTable?.title, isEditingTitle]);
+
+  useEffect(() => {
+    // cleanup on unmount
+    return () => {
+      Object.values(unlockTimeoutsRef.current).forEach((t) => {
+        if (t) window.clearTimeout(t as number);
+      });
+      unlockTimeoutsRef.current = {};
+    };
   }, []);
 
   // resolve table id robustly
@@ -143,7 +172,14 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
       const d = safeNum(e.delta, 0);
       sums[cid] = (sums[cid] || 0) + d;
     });
-    const normalized = (Array.isArray(cats) ? cats : []).map((c: any, i: number) => ({ id: String(c.id), title: c.title ?? `Цель ${i + 1}`, description: c.description ?? null, max: typeof c.max === "number" ? c.max : null, color: c.color ?? undefined, value: sums[String(c.id)] ?? 0 }));
+    const normalized = (Array.isArray(cats) ? cats : []).map((c: any, i: number) => ({
+      id: String(c.id),
+      title: c.title ?? `Цель ${i + 1}`,
+      description: c.description ?? null,
+      max: typeof c.max === "number" ? c.max : null,
+      color: c.color ?? undefined,
+      value: sums[String(c.id)] ?? 0,
+    }));
     setCategories(normalized);
   }
 
@@ -198,6 +234,64 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
     }
   }
 
+  // save title explicitly (on Save click or Enter)
+  async function saveTitle() {
+    if (!resolvedTableId) return;
+    const trimmed = (editedTitle ?? "").trim();
+    if (!trimmed) {
+      // don't allow empty title — rollback to last saved
+      setEditedTitle(lastSavedTitleRef.current ?? "");
+      setIsEditingTitle(false);
+      return;
+    }
+    if (trimmed === (lastSavedTitleRef.current ?? "").trim()) {
+      setIsEditingTitle(false);
+      return;
+    }
+
+    setSavingTitle(true);
+    setError(null);
+    try {
+      const { error: updErr } = await supabase.from("user_tables").update({ title: trimmed }).eq("id", resolvedTableId);
+      if (updErr) {
+        console.error("Failed to save title:", updErr);
+        setError("Не удалось сохранить название таблицы.");
+        // rollback
+        setEditedTitle(lastSavedTitleRef.current ?? "");
+      } else {
+        setServerTable((prev: any) => ({ ...(prev ?? {}), title: trimmed }));
+        lastSavedTitleRef.current = trimmed;
+        setIsEditingTitle(false);
+      }
+    } catch (e: any) {
+      console.error("saveTitle error:", e);
+      setError(String(e?.message ?? e));
+      setEditedTitle(lastSavedTitleRef.current ?? "");
+    } finally {
+      setSavingTitle(false);
+    }
+  }
+
+  function startEditingTitle() {
+    setEditedTitle(serverTable?.title ?? lastSavedTitleRef.current ?? "");
+    setIsEditingTitle(true);
+    // focus next tick
+    setTimeout(() => {
+      titleInputRef.current?.focus();
+      // place cursor at end
+      const el = titleInputRef.current;
+      if (el) {
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }
+    }, 50);
+  }
+
+  function cancelEditingTitle() {
+    setEditedTitle(lastSavedTitleRef.current ?? "");
+    setIsEditingTitle(false);
+  }
+
   // increment/decrement handler (optimistic)
   async function handleAddDelta(categoryId: string, delta: number) {
     const rId = resolvedTableId;
@@ -210,6 +304,7 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
 
     setAddingMap((m) => ({ ...m, [categoryId]: true }));
     if (unlockTimeoutsRef.current[categoryId]) clearTimeout(unlockTimeoutsRef.current[categoryId] as any);
+    // remove pause completely:
     unlockTimeoutsRef.current[categoryId] = window.setTimeout(() => {
       setAddingMap((m) => {
         const nm = { ...m };
@@ -217,7 +312,7 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
         return nm;
       });
       unlockTimeoutsRef.current[categoryId] = null;
-    }, 900);
+    }, 0);
 
     setError(null);
 
@@ -271,7 +366,7 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
     }
   }
 
-  // delete category (confirm)
+  // delete category
   async function handleDeleteCategory(categoryId: string) {
     const r = window.confirm("Удалить категорию? Это действие необратимо (записи останутся). Продолжить?");
     if (!r) return;
@@ -287,7 +382,7 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
     }
   }
 
-  // edit -> emit event (TableEditor modal/manager listens)
+  // edit -> emit event
   function handleEditCategory(categoryId: string) {
     try {
       window.dispatchEvent(new CustomEvent("tableEditor:editCategory", { detail: { categoryId } }));
@@ -296,23 +391,23 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
     }
   }
 
-  // open create modal helper (used by the new button)
   function openCreateCategoryModal() {
     try {
-      // preferred: helper exposed by CategoriesManager (if present)
       const w = window as any;
       if (typeof w.openCategoryManager === "function") {
         w.openCategoryManager();
         return;
       }
-      // fallback: dispatch legacy event (tableEditor:editCategory with null means "create")
       window.dispatchEvent(new CustomEvent("tableEditor:editCategory", { detail: { categoryId: null } }));
     } catch (e) {
       console.warn("openCreateCategoryModal failed", e);
     }
   }
 
-  const radarCats = useMemo(() => categories.map((c) => ({ id: c.id, title: c.title, value: safeNum(c.value, 0), max: c.max ?? null, color: c.color ?? undefined })), [categories]);
+  const radarCats = useMemo(
+    () => categories.map((c) => ({ id: c.id, title: c.title, value: safeNum(c.value, 0), max: c.max ?? null, color: c.color ?? undefined })),
+    [categories]
+  );
 
   if (resolving) return <div style={{ color: "#64748b" }}>Идёт поиск таблицы…</div>;
   if (!resolvedTableId)
@@ -329,14 +424,61 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
       <div style={{ display: "grid", gap: 18 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 20 }}>{serverTable?.title ?? "Таблица"}</h1>
-            <div style={{ color: "#667085", fontSize: 13 }}>{categories.length} целей</div>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => fetchAllDataForDate(selectedDate, resolvedTableId)} style={{ padding: "10px 14px", borderRadius: 10, minWidth: 48, fontSize: 14, touchAction: "manipulation" }} aria-label="Обновить данные">
-              Обновить
-            </button>
+            {/* Title area: plain text by default, input when editing */}
+            {!isEditingTitle ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <h1 style={{ margin: 0, fontSize: 20 }}>{serverTable?.title ?? "Таблица"}</h1>
+                <button
+                  aria-label="Редактировать название таблицы"
+                  onClick={startEditingTitle}
+                  style={{ background: "transparent", border: "none", cursor: "pointer", padding: 6 }}
+                >
+                  {/* pencil icon */}
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden focusable="false">
+                    <path d="M3 21l3-1 11-11 1-3-3 1L4 20v1z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  ref={titleInputRef}
+                  aria-label="Название таблицы"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      saveTitle().catch((err) => console.warn("saveTitle err:", err));
+                    } else if (e.key === "Escape") {
+                      cancelEditingTitle();
+                    }
+                  }}
+                  placeholder="Название таблицы"
+                  disabled={savingTitle}
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 700,
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                    border: "1px solid rgba(12,20,30,0.08)",
+                    width: "100%",
+                    maxWidth: 520,
+                  }}
+                />
+                <button onClick={() => saveTitle().catch((err) => console.warn("saveTitle err:", err))} disabled={savingTitle} className="small-btn" style={{ padding: "8px 10px", borderRadius: 8 }}>
+                  {savingTitle ? "Сохранение…" : "Сохранить"}
+                </button>
+                <button onClick={cancelEditingTitle} disabled={savingTitle} className="small-btn" style={{ padding: "8px 10px", borderRadius: 8 }}>
+                  Отмена
+                </button>
+              </div>
+            )}
 
+            <div style={{ color: "#667085", fontSize: 13, marginTop: 6 }}>{categories.length} целей</div>
+          </div>
+
+          <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => openCreateCategoryModal()} style={{ padding: "10px 14px", borderRadius: 10, minWidth: 48, fontSize: 14, touchAction: "manipulation", background: "#0b1720", color: "#fff", fontWeight: 700 }} aria-label="Добавить цель">
               Добавить цель
             </button>
@@ -355,7 +497,13 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
 
             <div style={{ width: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
               <div style={{ width: "100%", maxWidth: 720, padding: "0 6px", boxSizing: "border-box", margin: "0 auto" }}>
-                <PetalChart categories={radarCats} size={chartSize} onAddDelta={handleAddDelta} onEditCategory={(id) => handleEditCategory(String(id))} onSelectCategory={(id) => window.dispatchEvent(new CustomEvent("tableEditor:selectCategory", { detail: { categoryId: id } }))} />
+                <PetalChart
+                  categories={radarCats}
+                  size={chartSize}
+                  onAddDelta={handleAddDelta}
+                  onEditCategory={(id) => handleEditCategory(String(id))}
+                  onSelectCategory={(id) => window.dispatchEvent(new CustomEvent("tableEditor:selectCategory", { detail: { categoryId: id } }))}
+                />
               </div>
             </div>
 
@@ -468,6 +616,8 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
         .icon-btn { width:40px; height:36px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; border:1px solid rgba(12,20,30,0.06); background:#fff; color:#0b1720; }
         .text-btn { display:inline-flex; gap:8px; align-items:center; padding:6px 10px; border-radius:8px; border:1px solid rgba(12,20,30,0.06); background:#fff; color:#0b1720; font-size:13px; }
         .text-btn.danger { border-color: rgba(220,20,60,0.12); color:#b91c1c; }
+
+        .small-btn { border: 1px solid rgba(12,20,30,0.06); background: #fff; color: #0b1720; cursor: pointer; }
 
         @media (max-width: 720px) {
           .cat-card { flex-direction: column; align-items:stretch; gap:10px; }

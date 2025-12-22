@@ -258,7 +258,6 @@ export default function TableEditorClient({ tableId: initialTableId, serverData 
             <div style={{ color: "#667085", fontSize: 13 }}>{categories.length} целей</div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => fetchAllDataForDate(selectedDate, resolvedTableId)} style={{ padding: "6px 10px", borderRadius: 8 }}>Обновить</button>
             <button onClick={() => (window.location.href = `/tables/${encodeURIComponent(resolvedTableId)}/journal`)} style={{ padding: "6px 10px", borderRadius: 8 }}>Открыть журнал</button>
           </div>
         </div>

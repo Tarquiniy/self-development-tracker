@@ -1,6 +1,7 @@
 // frontend/src/app/page.tsx
 "use client";
 
+import TryTrackerButton from "@/components/TryTrackerButton";
 import { motion } from "framer-motion";
 import Link from "next/link";
 
@@ -48,12 +49,28 @@ export default function HomePage() {
           </motion.p>
 
           <div style={{ marginTop: "1.25rem", display: "flex", gap: "0.75rem", justifyContent: "center" }}>
-            <Link href="/blog" className="btn btn-primary" style={{ textDecoration: "none" }}>
+            <Link
+              href="/blog"
+              className="btn btn-primary"
+              style={{
+                textDecoration: "none",
+                background: "#000",
+                color: "#fff",
+                padding: "10px 14px",
+                borderRadius: 10,
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+              aria-label="Читай статьи"
+            >
               Читай статьи
             </Link>
-            <Link href="/tables" className="btn btn-secondary" style={{ textDecoration: "none" }}>
-              Попробовать трекер
-            </Link>
+
+            {/* TryTrackerButton: компонент уже использует тёмный фон и белый текст.
+                Если нужно — могу заменить фон внутри компонента на #000, скажите. */}
+            <TryTrackerButton />
           </div>
         </div>
       </section>

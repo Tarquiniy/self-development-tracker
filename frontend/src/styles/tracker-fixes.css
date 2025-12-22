@@ -1,0 +1,62 @@
+/* frontend/src/styles/tracker-fixes.css
+   Быстрые стиль-правки для:
+    - mobile zoom fix (iOS)
+    - petal / max handling helpers
+    - скрытие лишней кнопки refresh (если она присутствует)
+*/
+
+/* 1) Prevent mobile auto-zoom on input focus (iOS WebKit).
+   If inputs are below 16px font-size, Safari zooms the page on focus.
+   We explicitly make form inputs 16px on small screens inside tracker UI. */
+@media (max-width: 768px) {
+  .table-wrapper input,
+  .table-editor-root input,
+  .cat-card input,
+  .table-create-row input,
+  .table-editor-root textarea,
+  .cats-area input {
+    font-size: 16px !important;
+    -webkit-text-size-adjust: 100% !important;
+  }
+}
+
+/* 2) Hide "Обновить" buttons which were redundant in header/editor */
+.btn-refresh,
+.icon-refresh,
+button[aria-label="Обновить"] {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* 3) Petal / radar helpers:
+   - ensure petal scales gracefully when max is large or missing.
+   - if no max defined, allow visual "elastic" behaviour and cap internal calculations at 50 points.
+*/
+.petal-wrapper svg,
+.petal {
+  max-width: 100% !important;
+  height: auto !important;
+  touch-action: manipulation;
+}
+
+/* make sure petal container doesn't overflow on extreme values */
+.petal-wrap { overflow: hidden; }
+
+/* 4) clickable controls fix (extra safety) */
+.table-wrapper button,
+.table-editor-root button,
+.cats-area button,
+.cat-card button {
+  -webkit-tap-highlight-color: rgba(0,0,0,0.06);
+  touch-action: manipulation;
+}
+
+/* 5) If a place in code relies on .btn-add-points, keep it visible */
+.btn-add-points { display: inline-flex !important; }
+
+/* 6) helper class to show small hints to users about increased max */
+.max-info {
+  font-size: 12px;
+  color: #64748b;
+}

@@ -59,7 +59,7 @@
 }
 
 
-/* dark overrides */
+ /* dark overrides */
 .dark {
   --overlay-alpha: 0.86;
 
@@ -208,6 +208,7 @@ html, body, #__next, #root, main, .app-root, [data-app-root] {
   max-width: 56ch;
 }
 
+/* keep general hero elements black — but we will override CTA specifically below */
 .hero a,
 .hero .btn,
 .hero p,
@@ -218,10 +219,49 @@ html, body, #__next, #root, main, .app-root, [data-app-root] {
   background: transparent !important;
 }
 
+/* --- IMPORTANT: do NOT apply transparent/bg-reset to interactive CTAs inside hero
+   We exclude .btn, button, a, .action-btn and [data-hero-cta] from the global "hero *" reset.
+   This prevents CTA buttons inside hero from becoming transparent.
+*/
 .hero,
-.hero * {
+.hero *:not(.btn):not(button):not(a):not(.action-btn):not([data-hero-cta]) {
   background: transparent !important;
   color: #000 !important;
+}
+
+/* ===== Explicit override for hero CTAs (placed AFTER the aggressive rules above)
+   to ensure canonical black bg / white text for buttons/links inside .hero.
+   Targets common class patterns and also elements flagged with data-hero-cta.
+*/
+.hero .btn,
+.hero a.btn,
+.hero button,
+.hero .action-btn,
+.hero [data-hero-cta],
+.hero .btn-primary {
+  background: hsl(var(--cta-bg)) !important;   /* black */
+  color: hsl(var(--cta-fg)) !important;        /* white */
+  border-radius: var(--cta-radius) !important;
+  padding: var(--cta-padding-y) var(--cta-padding-x) !important;
+  min-height: var(--cta-min-height) !important;
+  box-shadow: var(--cta-shadow) !important;
+  text-decoration: none !important;
+  border: none !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  font-weight: 700 !important;
+}
+
+/* hover/active for hero CTAs */
+.hero .btn:hover,
+.hero a.btn:hover,
+.hero button:hover,
+.hero .action-btn:hover,
+.hero [data-hero-cta]:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--cta-shadow-hover) !important;
 }
 
 @media (max-width: 420px) {
@@ -530,7 +570,7 @@ p {
 }
 
 
-/* ===========================
+ /* ===========================
    TABLES — structure & UX polish
    =========================== */
 .table-wrapper {
@@ -646,7 +686,7 @@ p {
 }
 
 
-/* ===========================
+ /* ===========================
    TABLE-PAGE: LIGHT BUTTONS & CALENDAR THEME
    - Overrides global black CTA only inside table/editor pages
    =========================== */
@@ -958,7 +998,7 @@ pre {
 }
 
 
-/* ===========================
+ /* ===========================
    Utilities
    =========================== */
 .no-scroll {
@@ -977,7 +1017,7 @@ pre {
 }
 
 
-/* ===========================
+ /* ===========================
    Desktop adjustments
    =========================== */
 @media (min-width: 768px) {
@@ -1011,7 +1051,7 @@ pre {
 }
 
 
-/* ===========================
+ /* ===========================
    FIX FOR EDIT BUTTONS & CREATE UI (specific, append to global.css)
    - enables pointer-events and visible cursor for controls inside table/editor/cats
    - ensures input & button z-index/contrast

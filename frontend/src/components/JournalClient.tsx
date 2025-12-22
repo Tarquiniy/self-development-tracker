@@ -284,15 +284,6 @@ export default function JournalClient({ tableId: initialTableId }: { tableId?: s
           </div>
 
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => {
-                fetchCategoriesWithDailyValues(selectedDate, resolvedTableId).catch(() => {});
-                fetchJournalForDate(selectedDate.toISOString().slice(0, 10), resolvedTableId).catch(() => {});
-              }}
-              className="btn"
-            >
-              Обновить
-            </button>
 
             <Link href={`/tables/${encodeURIComponent(resolvedTableId)}`}>
               <a className="btn">Открыть таблицу</a>
