@@ -25,7 +25,6 @@ from rest_framework.decorators import action, api_view, permission_classes, pars
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.exceptions import PermissionDenied
 
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import models as dj_models
@@ -66,51 +65,26 @@ def preview_by_token(request, token):
 
 
 # ---------------------------
-# Permissions
-# ---------------------------
-class IsAuthorOrStaff(permissions.BasePermission):
-    """
-    Object-level permission to allow modification only to the author of a Post or staff.
-    Read allowed for safe methods.
-    """
-
-    def has_permission(self, request, view):
-        # allow safe methods for everyone
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        # create requires authentication
-        if view.action == 'create':
-            return bool(request.user and request.user.is_authenticated)
-        # for other methods, we'll check object-level
-        return True
-
-    def has_object_permission(self, request, view, obj):
-        # safe methods allowed
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        user = getattr(request, "user", None)
-        if not user:
-            return False
-        if getattr(user, "is_staff", False):
-            return True
-        # author allowed
-        return hasattr(obj, "author") and obj.author == user
-
-
-# ---------------------------
 # Post / Category / Tag / Comment API (ViewSets)
 # ---------------------------
 class PostViewSet(viewsets.ModelViewSet):
+    """
+    Rest viewset for blog posts.
+
+    Fixes and improvements:
+    - defensive get_queryset (published-only for anonymous users)
+    - defensive retrieve: explicit handling of invalid slugs like 'undefined'
+    - fallback lookup by PK if slug lookup fails (helps in cases where client sent id)
+    - transactional perform_create / perform_update with revision save on update
+    """
     queryset = Post.objects.all()
-    # combine generic safe-permission with object-level author/staff check
-    permission_classes = [IsAuthenticatedOrReadOnly, IsAuthorOrStaff]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'categories__slug', 'tags__slug']
     search_fields = ['title', 'excerpt', 'content', 'meta_description']
     ordering_fields = ['published_at', 'created_at']
     ordering = ['-published_at']
     lookup_field = 'slug'
-    parser_classes = [FormParser, MultiPartParser]
 
     def get_serializer_class(self):
         if self.action in ('list',):
@@ -123,7 +97,7 @@ class PostViewSet(viewsets.ModelViewSet):
         """
         Base queryset with defensive filters:
         - select_related + prefetch for performance
-        - for anonymous/non-staff users, only published posts with non-null published_at and published_at <= now()
+        - for anonymous users, only published posts with non-null published_at and published_at <= now()
         """
         qs = Post.objects.select_related('author').prefetch_related('categories', 'tags')
         user = getattr(self.request, 'user', None)
@@ -141,83 +115,123 @@ class PostViewSet(viewsets.ModelViewSet):
                     return Post.objects.none()
         return qs
 
+    def _is_invalid_slug_value(self, slug_value: str) -> bool:
+        # treat common placeholder strings as invalid
+        if not slug_value:
+            return True
+        sval = str(slug_value).strip().lower()
+        return sval in ("undefined", "null", "none", "nan", "")
+
     def get_object(self):
         """
-        Robust retrieval by slug:
-        - Try to get the Post without applying the 'published' filters so that author/staff can see drafts.
-        - Then enforce visibility rules:
-          * published posts visible to all (except future published_at for anon)
-          * non-published posts visible only to author or staff
+        Defensive override to:
+         - return 404 for obviously-bad slugs (like 'undefined')
+         - try lookup by slug, then fallback to PK if slug lookup fails
         """
-        slug = self.kwargs.get(self.lookup_field)
-        if not slug:
-            return super().get_object()
+        lookup_val = self.kwargs.get(self.lookup_field)
+        logger.debug("PostViewSet.get_object lookup_field=%s value=%s", self.lookup_field, lookup_val)
 
+        if self._is_invalid_slug_value(lookup_val):
+            logger.warning("Attempt to retrieve post with invalid slug value: %s", lookup_val)
+            # Return 404 (DRF style)
+            from rest_framework.exceptions import NotFound
+            raise NotFound(detail="Invalid post identifier")
+
+        # First try the normal lookup (slug)
         try:
-            obj = Post.objects.select_related('author').prefetch_related('categories', 'tags').get(slug=slug)
-        except Post.DoesNotExist:
-            raise Http404("Post not found")
-
-        # If published -> OK for everyone, except if published_at is in future — then only author/staff
-        if getattr(obj, "status", None) == "published":
-            pa = getattr(obj, "published_at", None)
-            if pa and pa > timezone.now():
-                # future post: only staff or author
-                user = getattr(self.request, "user", None)
-                if user and (getattr(user, "is_staff", False) or (hasattr(obj, "author") and obj.author == user)):
+            return super().get_object()
+        except Exception as e_slug:
+            logger.debug("Slug lookup failed for %s: %s — trying fallback by id", lookup_val, e_slug)
+            # Fallback: if lookup_val looks like integer, try pk
+            try:
+                if lookup_val and str(lookup_val).isdigit():
+                    obj = Post.objects.select_related('author').prefetch_related('categories', 'tags').get(pk=int(lookup_val))
+                    # ensure visibility according to get_queryset
+                    qs = self.filter_queryset(self.get_queryset())
+                    if obj not in qs:
+                        # object exists but not visible to requester
+                        from rest_framework.exceptions import NotFound
+                        raise NotFound(detail="Post not found")
                     return obj
-                raise Http404("Post not found")
-            return obj
-
-        # If not published -> only author or staff may view
-        user = getattr(self.request, "user", None)
-        if user and (getattr(user, "is_staff", False) or (hasattr(obj, "author") and obj.author == user)):
-            return obj
-
-        # Otherwise act like not found to avoid leaking existence
-        raise Http404("Post not found")
+            except Post.DoesNotExist:
+                pass
+            # re-raise original to produce proper 404
+            from rest_framework.exceptions import NotFound
+            raise NotFound(detail="Post not found")
 
     def perform_create(self, serializer):
-        user = getattr(self.request, "user", None)
-        if not user or not user.is_authenticated:
-            # require auth to create posts via API
-            raise PermissionDenied("Authentication required to create posts")
-        serializer.save(author=user)
+        """
+        Save author if authenticated. Wrap in transaction for safety.
+        """
+        user = self.request.user if getattr(self.request, "user", None) and self.request.user.is_authenticated else None
+        try:
+            with transaction.atomic():
+                post = serializer.save(author=user)
+                # Ensure published_at is set when status == published and published_at missing
+                if getattr(post, "status", None) == "published" and not getattr(post, "published_at", None):
+                    post.published_at = timezone.now()
+                    post.save(update_fields=["published_at"])
+                logger.info("Post created id=%s slug=%s by user=%s", getattr(post, "id", None), getattr(post, "slug", None), getattr(user, "pk", None) if user else "anon")
+        except Exception:
+            logger.exception("perform_create failed")
+            raise
 
     def perform_update(self, serializer):
         """
-        Ensure that when a post transitions to 'published' it receives a published_at timestamp
-        if it was not set.
+        Wrap updates in transaction and create a PostRevision snapshot of previous content.
         """
-        instance = serializer.instance
-        old_status = getattr(instance, "status", None)
-        # Save via serializer
-        saved = serializer.save()
         try:
-            new_status = serializer.validated_data.get("status", old_status)
+            with transaction.atomic():
+                instance = self.get_object()
+                # create revision snapshot BEFORE applying update
+                try:
+                    PostRevision.objects.create(
+                        post=instance,
+                        author=self.request.user if getattr(self.request, "user", None) and self.request.user.is_authenticated else None,
+                        content=instance.content or "",
+                        title=instance.title or "",
+                        excerpt=instance.excerpt or "",
+                        autosave=False,
+                        meta={'reason': 'manual update via API'}
+                    )
+                except Exception:
+                    logger.exception("Could not create PostRevision snapshot before update for post id=%s", getattr(instance, "id", None))
+                updated = serializer.save()
+                # if status changed to published and published_at missing -> set it
+                if getattr(updated, "status", None) == "published" and not getattr(updated, "published_at", None):
+                    updated.published_at = timezone.now()
+                    updated.save(update_fields=["published_at"])
+                logger.info("Post updated id=%s slug=%s by user=%s", getattr(updated, "id", None), getattr(updated, "slug", None), getattr(self.request.user, "pk", None, ) if getattr(self.request, "user", None) and self.request.user.is_authenticated else "anon")
         except Exception:
-            new_status = getattr(saved, "status", old_status)
-        if new_status == "published" and not getattr(saved, "published_at", None):
-            saved.published_at = timezone.now()
-            saved.save(update_fields=["published_at"])
+            logger.exception("perform_update failed")
+            raise
 
     def perform_destroy(self, instance):
-        user = getattr(self.request, "user", None)
-        if not (user and (getattr(user, "is_staff", False) or (hasattr(instance, "author") and instance.author == user))):
-            raise PermissionDenied("You don't have permission to delete this post")
-        with transaction.atomic():
-            # (optionally) extend: delete attachments etc.
-            instance.delete()
+        """
+        Perform destroy inside transaction and log. Keep simple hard-delete here;
+        if you want soft-delete, adapt accordingly.
+        """
+        try:
+            with transaction.atomic():
+                pid = getattr(instance, "id", None)
+                pslug = getattr(instance, "slug", None)
+                instance.delete()
+                logger.info("Post deleted id=%s slug=%s by user=%s", pid, pslug, getattr(self.request.user, "pk", None) if getattr(self.request, "user", None) and self.request.user.is_authenticated else "anon")
+        except Exception:
+            logger.exception("perform_destroy failed")
+            raise
 
     def list(self, request, *args, **kwargs):
         """
         Override list to catch unexpected serialization errors and log them clearly.
+        This prevents a raw 500 traceback leaking to the client and helps debugging.
         """
         try:
             return super().list(request, *args, **kwargs)
-        except Exception:
+        except Exception as e:
             tb = traceback.format_exc()
             logger.exception("PostViewSet.list failed: %s", tb)
+            # Return a safe error response with minimal detail (do not leak sensitive internals)
             return Response({'detail': 'Internal server error while listing posts'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'], permission_classes=[AllowAny])
@@ -265,7 +279,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         if self.action in ['create', 'list', 'retrieve']:
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
-
+    
     @method_decorator(csrf_exempt)
     def create(self, request, *args, **kwargs):
         """
@@ -307,8 +321,8 @@ def reaction_toggle(request):
             else:
                 reaction.users.add(user)
         else:
-            # anonymous toggles: simple heuristic (increment on first anon hit)
-            reaction.anon_count = reaction.anon_count + 1 if reaction.anon_count == 0 else max(0, reaction.anon_count - 1)
+            # If anonymous, we toggle via anon_count but be conservative: increment only
+            reaction.anon_count = reaction.anon_count + 1 if reaction.anon_count >= 0 else 1
         reaction.save()
     return Response({'post_slug': post.slug, 'likes_count': reaction.likes_count()})
 
@@ -336,20 +350,18 @@ def quick_action_view(request):
             post.save(update_fields=['status', 'published_at'])
             return JsonResponse({'success': True, 'message': 'Пост опубликован'})
         elif action == 'draft':
-            post.status = 'draft'
-            post.save(update_fields=['status'])
+            post.status = 'draft'; post.save(update_fields=['status'])
             return JsonResponse({'success': True, 'message': 'Пост перемещен в черновики'})
         elif action == 'archive':
-            post.status = 'archived'
-            post.save(update_fields=['status'])
+            post.status = 'archived'; post.save(update_fields=['status'])
             return JsonResponse({'success': True, 'message': 'Пост перемещен в архив'})
         else:
             return JsonResponse({'success': False, 'message': 'Неизвестное действие'}, status=400)
     except Post.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'Пост не найден'}, status=404)
-    except Exception:
+    except Exception as e:
         logger.exception("quick_action_view error")
-        return JsonResponse({'success': False, 'message': 'Internal error'}, status=500)
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
 
 @staff_member_required(login_url='/admin/login/')
@@ -373,13 +385,12 @@ def dashboard_stats(request):
 # ---------------------------
 class MediaLibraryView(TemplateView):
     template_name = 'admin/media_library.html'
-
     def dispatch(self, request, *args, **kwargs):
         try:
             return super().dispatch(request, *args, **kwargs)
-        except Exception:
+        except Exception as e:
             logger.exception("MediaLibraryView dispatch error")
-            return render(request, 'admin/media_library_error.html', {'error': 'Internal error'}, status=500)
+            return render(request, 'admin/media_library_error.html', {'error': str(e)}, status=500)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -426,7 +437,6 @@ def admin_preview_token_view(request):
     token = get_token(request)
     return JsonResponse({"csrf": token})
 
-
 @ensure_csrf_cookie
 @require_GET
 def get_csrf_token(request):
@@ -435,7 +445,6 @@ def get_csrf_token(request):
     Frontend should call this with credentials included to obtain CSRF cookie before POST.
     """
     return JsonResponse({"csrf": get_token(request)})
-
 
 @require_GET
 @staff_member_required(login_url='/admin/login/')
@@ -446,19 +455,48 @@ def admin_stats_api(request):
 @require_POST
 @staff_member_required(login_url='/admin/login/')
 def admin_post_update_view(request):
+    """
+    Legacy admin update endpoint (kept for compatibility with admin UI JS).
+    Accepts JSON or form-data. Validates fields and updates the Post.
+    """
     try:
-        data = json.loads(request.body.decode('utf-8') or '{}') if request.content_type and 'application/json' in request.content_type else request.POST
+        if request.content_type and 'application/json' in request.content_type:
+            data = json.loads(request.body.decode('utf-8') or '{}')
+        else:
+            data = request.POST or {}
         post_id = data.get('post_id')
         if not post_id:
             return JsonResponse({'success': False, 'message': 'post_id required'}, status=400)
-        post = Post.objects.get(pk=int(post_id))
-        allowed = {'title', 'excerpt', 'content', 'status', 'meta_description'}
+        try:
+            post = Post.objects.get(pk=int(post_id))
+        except Post.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'Post not found'}, status=404)
+
+        allowed = {'title', 'excerpt', 'content', 'status', 'meta_description', 'meta_title', 'featured_image'}
         updates = {}
-        for k, v in (data.items() if hasattr(data, 'items') else []):
+        # ensure data is dict-like
+        iterable = data.items() if hasattr(data, 'items') else []
+        for k, v in iterable:
             if k in allowed:
                 updates[k] = v
+
         if not updates:
             return JsonResponse({'success': False, 'message': 'No updatable fields provided'}, status=400)
+
+        # Save snapshot before update
+        try:
+            PostRevision.objects.create(
+                post=post,
+                author=request.user if request.user.is_authenticated else None,
+                content=post.content or "",
+                title=post.title or "",
+                excerpt=post.excerpt or "",
+                autosave=False,
+                meta={'reason': 'admin quick update'}
+            )
+        except Exception:
+            logger.exception("Could not create revision before admin quick update for post id=%s", getattr(post, "id", None))
+
         for k, v in updates.items():
             setattr(post, k, v)
         post.save()
@@ -474,7 +512,10 @@ def admin_post_update_view(request):
 @staff_member_required(login_url='/admin/login/')
 def admin_autosave_view(request):
     try:
-        data = json.loads(request.body.decode('utf-8') or '{}') if request.content_type and 'application/json' in request.content_type else request.POST
+        if request.content_type and 'application/json' in request.content_type:
+            data = json.loads(request.body.decode('utf-8') or '{}')
+        else:
+            data = request.POST or {}
         payload = {
             'title': data.get('title', ''),
             'content': data.get('content', ''),
@@ -647,7 +688,8 @@ def media_proxy(request, pk):
 
     try:
         file_obj = file_field.open('rb')
-    except Exception:
+    except Exception as e:
+        logger.exception("media_proxy: failed to open file %s: %s", pk, e)
         if direct_url:
             return redirect(direct_url)
         raise Http404("File not available")
@@ -713,7 +755,6 @@ def revisions_list(request, post_id):
         logger.exception("revisions_list error")
         return Response({'results': []}, status=500)
 
-
 # Restore revision (admin-only)
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
@@ -742,7 +783,6 @@ def revision_restore(request, revision_id):
     except Exception:
         logger.exception("revision_restore error")
         return Response({'success': False, 'message': 'internal'}, status=500)
-
 
 # Autosave endpoint (admin autosave & revision creation)
 @api_view(['POST'])
@@ -786,7 +826,6 @@ def autosave_revision(request):
         logger.exception("autosave_revision error")
         return Response({'success': False, 'message': 'internal'}, status=500)
 
-
 # Delete revisions (admin-only)
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
@@ -800,8 +839,7 @@ def revisions_delete(request):
     except Exception:
         logger.exception("revisions_delete error")
         return Response({'success': False, 'message': 'internal'}, status=500)
-
-
+    
 @csrf_exempt
 @staff_member_required
 def ckeditor_upload(request):
@@ -829,7 +867,7 @@ def ckeditor_upload(request):
     upload_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/{BUCKET}"
     headers = {
         "Authorization": f"Bearer {SERVICE_ROLE}",
-        # "apikey": SERVICE_ROLE  # не needed
+        # "apikey": SERVICE_ROLE  # не нужно, Authorization хватает
     }
     files = {
         'file': (filename, upload.read(), upload.content_type)
