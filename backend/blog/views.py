@@ -44,6 +44,7 @@ PREVIEW_SALT = getattr(settings, "PREVIEW_SALT", "post-preview-salt")
 PREVIEW_MAX_AGE = getattr(settings, "PREVIEW_MAX_AGE", 60 * 60)
 
 
+
 # ---------------------------
 # Preview / Post preview token
 # ---------------------------
@@ -74,8 +75,9 @@ class PostViewSet(viewsets.ModelViewSet):
     Fixes and improvements:
     - defensive get_queryset (published-only for anonymous users)
     - defensive retrieve: explicit handling of invalid slugs like 'undefined'
-    - fallback lookup by PK if slug lookup fails (helps in cases where client sent id)
-    - transactional perform_create / perform_update with revision save on update
+    - fallback lookup by PK if slug lookup fails
+    - robust create/update/destroy with try/except, logging traceback and returning JSON errors
+    - revision snapshot creation before updates
     """
     queryset = Post.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -201,7 +203,7 @@ class PostViewSet(viewsets.ModelViewSet):
                 if getattr(updated, "status", None) == "published" and not getattr(updated, "published_at", None):
                     updated.published_at = timezone.now()
                     updated.save(update_fields=["published_at"])
-                logger.info("Post updated id=%s slug=%s by user=%s", getattr(updated, "id", None), getattr(updated, "slug", None), getattr(self.request.user, "pk", None, ) if getattr(self.request, "user", None) and self.request.user.is_authenticated else "anon")
+                logger.info("Post updated id=%s slug=%s by user=%s", getattr(updated, "id", None), getattr(updated, "slug", None), getattr(self.request.user, "pk", None) if getattr(self.request, "user", None) and self.request.user.is_authenticated else "anon")
         except Exception:
             logger.exception("perform_update failed")
             raise
@@ -220,6 +222,62 @@ class PostViewSet(viewsets.ModelViewSet):
         except Exception:
             logger.exception("perform_destroy failed")
             raise
+
+    # ----- robust create/update/destroy overrides that return JSON errors instead of HTML 500 -----
+    def create(self, request, *args, **kwargs):
+        try:
+            serializer = self.get_serializer(data=request.data)
+            if not serializer.is_valid():
+                logger.debug("Post create validation failed: %s", serializer.errors)
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                self.perform_create(serializer)
+            except Exception as e:
+                tb = traceback.format_exc()
+                logger.exception("Error in perform_create: %s", tb)
+                return Response({'detail': 'Failed to create post', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except Exception as e:
+            tb = traceback.format_exc()
+            logger.exception("PostViewSet.create unexpected error: %s", tb)
+            return Response({'detail': 'Internal server error', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def update(self, request, *args, **kwargs):
+        try:
+            partial = kwargs.pop('partial', False)
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, data=request.data, partial=partial)
+            if not serializer.is_valid():
+                logger.debug("Post update validation failed: %s", serializer.errors)
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                self.perform_update(serializer)
+            except Exception as e:
+                tb = traceback.format_exc()
+                logger.exception("Error in perform_update: %s", tb)
+                return Response({'detail': 'Failed to update post', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(serializer.data)
+        except Exception as e:
+            tb = traceback.format_exc()
+            logger.exception("PostViewSet.update unexpected error: %s", tb)
+            return Response({'detail': 'Internal server error', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            try:
+                self.perform_destroy(instance)
+            except Exception as e:
+                tb = traceback.format_exc()
+                logger.exception("Error in perform_destroy: %s", tb)
+                return Response({'detail': 'Failed to delete post', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            tb = traceback.format_exc()
+            logger.exception("PostViewSet.destroy unexpected error: %s", tb)
+            return Response({'detail': 'Internal server error', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    # -----------------------------------------------------------------------------------------------
 
     def list(self, request, *args, **kwargs):
         """
@@ -248,7 +306,6 @@ class PostViewSet(viewsets.ModelViewSet):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
