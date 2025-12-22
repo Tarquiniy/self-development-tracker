@@ -154,7 +154,7 @@ class PostRevision(models.Model):
     post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='revisions')
     created_at = models.DateTimeField(auto_now_add=True)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
-    data = models.JSONField(blank=True, null=True)   # можно хранить snapshot в json
+    meta = models.JSONField(blank=True, null=True)   # можно хранить snapshot в json
     note = models.TextField(blank=True)
 
     class Meta:
