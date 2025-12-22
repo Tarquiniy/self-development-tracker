@@ -175,6 +175,7 @@ if os.environ.get('DATABASE_URL'):
 
 # ========== MIDDLEWARE ==========
 MIDDLEWARE = [
+    "core.middleware.AdminExceptionDebugMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
