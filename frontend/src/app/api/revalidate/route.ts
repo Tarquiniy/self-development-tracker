@@ -4,17 +4,26 @@ import { revalidatePath, revalidateTag } from "next/cache";
 
 export async function POST(request: NextRequest) {
   try {
-    // Получение данных из тела запроса
+    // Проверка секрета: поддерживаем header или query param (совместимость с backend).
+    const headerSecret = request.headers.get("x-revalidation-secret") || "";
+    const urlSecret = request.nextUrl.searchParams.get("secret") || "";
+    const secret = headerSecret || urlSecret;
+
+    if (!process.env.REVALIDATION_SECRET || secret !== process.env.REVALIDATION_SECRET) {
+      console.warn("Invalid revalidation secret attempt", { headerSecretProvided: !!headerSecret, urlSecretProvided: !!urlSecret });
+      return NextResponse.json({ message: "Invalid secret" }, { status: 401 });
+    }
+
+    // Получаем тело
     const body = await request.json().catch(() => ({}));
     const { paths, tags } = body ?? {};
 
     console.log("Revalidation request received:", { paths, tags });
 
-    // Ревалидация путей (await чтобы корректно ждать завершения)
+    // Ревалидация путей
     if (paths && Array.isArray(paths)) {
       for (const path of paths) {
         try {
-          // на всякий случай кастуем к any — чтобы избежать проблем с типами
           await (revalidatePath as unknown as (...args: any[]) => Promise<any>)(path);
           console.log(`Revalidated path: ${path}`);
         } catch (err) {
@@ -27,8 +36,6 @@ export async function POST(request: NextRequest) {
     if (tags && Array.isArray(tags)) {
       for (const tag of tags) {
         try {
-          // Обход проблем с определением типов в сборке:
-          // некоторые версии типов Next требуют другого количества аргументов — приводим к any.
           await (revalidateTag as unknown as (...args: any[]) => Promise<any>)(tag);
           console.log(`Revalidated tag: ${tag}`);
         } catch (err) {
@@ -57,9 +64,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET для тестирования
+// GET for simple healthcheck (optional)
 export async function GET(request: NextRequest) {
-  const secret = request.nextUrl.searchParams.get("secret");
+  const secret = request.nextUrl.searchParams.get("secret") || request.headers.get("x-revalidation-secret") || "";
   if (secret !== process.env.REVALIDATION_SECRET) {
     return NextResponse.json({ message: "Invalid secret" }, { status: 401 });
   }

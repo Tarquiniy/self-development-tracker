@@ -1,108 +1,21 @@
-// frontend/src/app/blog/[slug]/page.tsx
-import { notFound } from "next/navigation";
+// SSR-safe page that fetches post from API_URL and renders its content server-side
+import React from "react";
 import Image from "next/image";
-import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import type { Metadata } from "next";
-import "./page.css";
+import { notFound } from "next/navigation";
 
-type Post = {
-  id: number;
-  title: string;
-  slug: string;
-  content: string;
-  featured_image?: string | null;
-  categories: { id: number; title: string; slug: string }[];
-  tags: { id: number; title: string; slug: string }[];
-  published_at: string;
-  meta_title?: string | null;
-  meta_description?: string | null;
-  og_image?: string | null;
-  comments?: any[];
-};
+export const revalidate = 60;
 
-// build SITE_URL fallback set (kept for OGs)
-const SITE_URL = (() => {
-  const candidate =
-    (process.env.NEXT_PUBLIC_SITE_URL && String(process.env.NEXT_PUBLIC_SITE_URL)) ||
-    (process.env.NEXT_PUBLIC_FRONTEND_URL && String(process.env.NEXT_PUBLIC_FRONTEND_URL)) ||
-    (process.env.NEXT_PUBLIC_SITE_ORIGIN && String(process.env.NEXT_PUBLIC_SITE_ORIGIN)) ||
-    "";
-  if (candidate) return candidate.replace(/\/$/, "");
-  if (process.env.NEXT_PUBLIC_VERCEL_URL) return (`https://${String(process.env.NEXT_PUBLIC_VERCEL_URL)}`).replace(/\/$/, "");
-  if (process.env.VERCEL_URL) return (`https://${String(process.env.VERCEL_URL)}`).replace(/\/$/, "");
-  return "";
-})();
+const API_BASE = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
-async function fetchJson(url: string) {
-  const init = { cache: "no-store" } as RequestInit;
-  const res = await fetch(url, init);
-  if (!res.ok) return null;
-  return res.json();
-}
-
-async function getPost(slug: string): Promise<Post | null> {
-  const slugEnc = encodeURIComponent(slug);
-  // Try relative proxy first so SSR calls our API route which proxies to backend
-  const candidates: string[] = [
-    `/api/blog/posts/${slugEnc}/`, // <- our proxy (preferred)
-  ];
-
-  // Then try direct backends if they exist in env (kept as fallback)
-  const apiBase =
-    (process.env.NEXT_PUBLIC_API_URL && String(process.env.NEXT_PUBLIC_API_URL)) ||
-    (process.env.NEXT_PUBLIC_BACKEND_URL && String(process.env.NEXT_PUBLIC_BACKEND_URL)) ||
-    (process.env.NEXT_PUBLIC_API_BASE && String(process.env.NEXT_PUBLIC_API_BASE)) ||
-    "";
-  if (apiBase) candidates.push(`${apiBase.replace(/\/$/, "")}/api/blog/posts/${slugEnc}/`);
-
-  const siteCandidate = SITE_URL;
-  if (siteCandidate) candidates.push(`${siteCandidate.replace(/\/$/, "")}/api/blog/posts/${slugEnc}/`);
-
-  for (const url of candidates) {
-    try {
-      const json = await fetchJson(url);
-      if (json) return json as Post;
-    } catch (e) {
-      // try next candidate
-    }
-  }
-  return null;
-}
-
-export async function generateMetadata({ params }: any): Promise<Metadata> {
+async function fetchPost(slug: string) {
+  if (!API_BASE) return null;
   try {
-    const post: Post | null = await getPost(params?.slug);
-    if (!post) {
-      return { title: "Пост не найден | Positive Theta" };
-    }
-
-    const desc =
-      post.meta_description ||
-      post.meta_title ||
-      (post.content ? post.content.replace(/<[^>]+>/g, "").slice(0, 160) : "");
-
-    const image = post.og_image || post.featured_image || `${SITE_URL}/default-og.jpg`;
-
-    return {
-      title: `${post.meta_title || post.title} | Positive Theta`,
-      description: desc || undefined,
-      openGraph: {
-        title: post.meta_title || post.title,
-        description: desc || undefined,
-        url: `${SITE_URL || ""}/blog/${post.slug}`,
-        type: "article",
-        images: image ? [image] : [],
-      },
-      twitter: {
-        card: "summary_large_image",
-        title: post.meta_title || post.title,
-        description: desc || undefined,
-        images: image ? [image] : [],
-      },
-    };
-  } catch {
-    return { title: "Positive Theta" };
+    const res = await fetch(`${API_BASE}/api/blog/posts/${encodeURIComponent(slug)}/`, { cache: "no-store" });
+    if (!res.ok) return { status: res.status, text: await res.text() };
+    const data = await res.json();
+    return { status: 200, data };
+  } catch (err: any) {
+    return { status: 0, error: String(err) };
   }
 }
 
@@ -110,46 +23,35 @@ export default async function BlogPostPage({ params }: any) {
   const slug = params?.slug;
   if (!slug) return notFound();
 
-  const post: Post | null = await getPost(slug);
-  if (!post) return notFound();
+  const result = await fetchPost(slug);
 
-  return (
-    <main className="post-main">
-      {post.featured_image && (
-        <header className="post-header">
-          <Image
-            src={post.featured_image}
-            alt={post.title}
-            fill
-            priority
-            sizes="100vw"
-            style={{ objectFit: "cover", transform: "translateZ(0)" }}
-          />
-          <div className="post-header-overlay" />
-          <div className="post-header-text">
-            <h1>{post.title}</h1>
-            <p>Опубликовано {new Date(post.published_at).toLocaleDateString("ru-RU")}</p>
+  // Если получили успешный JSON — рендерим
+  if (result && result.status === 200 && result.data) {
+    const post = result.data;
+    return (
+      <main className="max-w-3xl mx-auto p-6">
+        <h1 className="text-3xl font-bold mb-2">{post.title}</h1>
+        <p className="text-sm text-muted-foreground mb-4">Опубликовано: {new Date(post.published_at).toLocaleDateString("ru-RU")}</p>
+        {post.featured_image && (
+          <div className="mb-6 relative h-64">
+            <Image src={post.featured_image} alt={post.title || ""} fill sizes="100vw" style={{ objectFit: "cover" }} />
           </div>
-        </header>
-      )}
+        )}
+        <article dangerouslySetInnerHTML={{ __html: post.content ?? "" }} />
+      </main>
+    );
+  }
 
-      <div className="post-body">
-        <div className="post-tags">
-          {post.categories?.map((cat) => (
-            <Badge key={cat.id} className="tag">{cat.title}</Badge>
-          ))}
-          {post.tags?.map((t) => (
-            <Badge key={t.id} className="tag">#{t.title}</Badge>
-          ))}
-        </div>
-
-        <article className="prose prose-lg dark:prose-invert" dangerouslySetInnerHTML={{ __html: post.content }} />
-
-        <div className="post-buttons">
-          <Link href="/blog" prefetch={false} className="btn btn-secondary">← Вернуться в блог</Link>
-          <Link href="/tables" prefetch={false} className="btn btn-primary">Открыть трекер</Link>
-        </div>
-      </div>
+  // Если backend ответил не OK — покажем диагностическую страницу (не выдаём 404 сразу)
+  return (
+    <main style={{ padding: 24 }}>
+      <h1>Не удалось загрузить пост «{slug}»</h1>
+      <pre style={{ whiteSpace: "pre-wrap", marginTop: 12 }}>
+        {JSON.stringify(result, null, 2)}
+      </pre>
+      <p style={{ marginTop: 12 }}>
+        Проверьте, что в runtime env заданы <code>API_URL</code> или <code>NEXT_PUBLIC_API_URL</code> и что backend доступен с Vercel.
+      </p>
     </main>
   );
 }
