@@ -40,14 +40,11 @@
     <div class="pt-admin-shell">
         <aside class="pt-admin-sidebar">
             <div class="pt-container">
-
                 {# === ВСТАВЛЕННАЯ ВИДНАЯ КНОПКА МЕДИА-БИБЛИОТЕКИ ===
-                   Большая синяя кнопка в начале боковой панели.
-                   Ссылка ведёт на changelist медиабиблиотеки:
-                   {% url 'admin:blog_medialibrary_changelist' %}
-                   При необходимости можно заменить на другой именованный маршрут. #}
+                   Ссылка ведёт на именованный маршрут 'admin-media-library' (см. blog.admin).
+                #}
                 <div class="sidebar-section" style="padding-top:6px;">
-                    <a href="{% url 'admin:blog_medialibrary_changelist' %}"
+                    <a href="{% url 'admin-media-library' %}"
                        class="btn-media-library"
                        style="display:block; background:#0d6efd; color:#fff; padding:10px 12px; border-radius:6px; text-align:center; font-weight:600; margin:6px 0; text-decoration:none; box-shadow:0 1px 0 rgba(0,0,0,0.05);">
                       <span style="display:inline-flex;align-items:center;gap:8px;">
@@ -59,7 +56,6 @@
                       </span>
                     </a>
                 </div>
-                {# === конец вставки === #}
 
                 <div class="sidebar-section">
                     <h4 class="sidebar-title">Быстрые действия</h4>
