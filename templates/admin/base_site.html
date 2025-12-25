@@ -6,128 +6,167 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>{% block title %}{{ site_title|default:_('Django admin') }}{% endblock %}</title>
 
-    {# Подключаем стандартные admin-css, затем наши правки #}
+    {# Подключаем минимально необходимые стили админа и ваши кастомные, если есть #}
     <link rel="stylesheet" href="{% static 'admin/css/base.css' %}" />
     <link rel="stylesheet" href="{% static 'admin/css/dashboard.css' %}" />
+    {# Подключение вашего кастомного CSS (если есть) - не удаляем #}
     <link rel="stylesheet" href="{% static 'admin/css/admin-fixes.css' %}" />
-    <script defer src="{% static 'admin/js/grappelli-custom.js' %}"></script>
-    <script defer src="{% static 'admin/js/simple_admin_editor.js' %}"></script>
 
     {% block extrahead %}{% endblock %}
+
     <style>
-      /* minimal inline fallback for older admin pages (won't override admin-fixes) */
-      html,body{height:100%}
+      /* Стили для кнопки — аккуратно, не ломают глобальные правила */
+      .pt-media-lib-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: .5rem;
+        background: #0d6efd;
+        color: #fff !important;
+        text-decoration: none;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-weight: 600;
+        box-shadow: 0 1px 0 rgba(0,0,0,0.05);
+        line-height: 1;
+        font-size: 14px;
+      }
+      .pt-media-lib-btn svg { display:inline-block; vertical-align:middle; }
+      /* Когда кнопка окажется в боковой панели — подправим блочное поведение */
+      .pt-media-lib-btn.sidebar-style {
+        display: block;
+        margin: 8px 12px;
+      }
+
+      /* Небольшая адаптация для узких экранов */
+      @media (max-width: 720px) {
+        .pt-media-lib-btn { padding: 6px 10px; font-size: 13px; border-radius:6px; }
+      }
     </style>
 </head>
 <body class="pt-admin-body">
-    <header class="pt-admin-topbar">
-        <div class="pt-container">
-            <div class="brand">
-                <a href="{% url 'admin:index' %}" class="brand-link">
-                    <img src="{% static 'admin/img/logo.png' %}" alt="logo" class="brand-logo" onerror="this.style.display='none'"/>
-                    <span class="brand-title">{{ site_header|default:_('Site administration') }}</span>
+    <header class="pt-admin-topbar" role="banner" style="background:transparent;">
+        <div class="pt-container" style="display:flex; align-items:center; gap:16px;">
+            <div style="flex:1;">
+                <a href="{% url 'admin:index' %}" class="brand-link" style="text-decoration:none; color:inherit;">
+                    {% if site_header %}<strong>{{ site_header }}</strong>{% else %}<strong>{% trans "Site administration" %}</strong>{% endif %}
                 </a>
             </div>
 
-            <nav class="top-actions">
-                <a href="{% url 'admin:app_list' 'blog' %}" class="top-action">Блог</a>
-                <a href="{% url 'admin:auth_user_changelist' %}" class="top-action">Пользователи</a>
-                <a href="{% url 'admin:logout' %}" class="top-action">Выйти</a>
-            </nav>
+            {# Кнопка в топ-баре — всегда видна, если боковая вставка не сработает, пользователь всегда сможет открыть медиатеку #}
+            <div style="flex:0 0 auto;">
+              {# Пытаемся использовать именованный URL, если он доступен; fallback — жёсткий путь /admin/media-library/ #}
+              {% url 'admin-media-library' as _murl %}
+              <a href="{% if _murl %}{{ _murl }}{% else %}/admin/media-library/{% endif %}"
+                 class="pt-media-lib-btn"
+                 id="pt-media-lib-primary-btn"
+                 title="{% trans 'Открыть медиабиблиотеку' %}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M8 13l2.5 3 2-2.5L15 17" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>{% trans "Медиа библиотека" %}</span>
+              </a>
+            </div>
         </div>
     </header>
 
-    <div class="pt-admin-shell">
-        <aside class="pt-admin-sidebar">
-            <div class="pt-container">
-                {# === ВСТАВЛЕННАЯ ВИДНАЯ КНОПКА МЕДИА-БИБЛИОТЕКИ ===
-                   Ссылка ведёт на именованный маршрут 'admin-media-library' (см. blog.admin).
-                #}
-                <div class="sidebar-section" style="padding-top:6px;">
-                    <a href="{% url 'admin-media-library' %}"
-                       class="btn-media-library"
-                       style="display:block; background:#0d6efd; color:#fff; padding:10px 12px; border-radius:6px; text-align:center; font-weight:600; margin:6px 0; text-decoration:none; box-shadow:0 1px 0 rgba(0,0,0,0.05);">
-                      <span style="display:inline-flex;align-items:center;gap:8px;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;">
-                          <path d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-                          <path d="M8 13l2.5 3 2-2.5L15 17" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        <strong>Медиа библиотека</strong>
-                      </span>
-                    </a>
-                </div>
-
-                <div class="sidebar-section">
-                    <h4 class="sidebar-title">Быстрые действия</h4>
-                    <ul class="sidebar-list">
-                        <li><a href="{% url 'admin:blog_post_add' %}">Добавить пост</a></li>
-                        <li><a href="{% url 'admin:blog_category_changelist' %}">Категории</a></li>
-                        <li><a href="{% url 'admin:blog_tag_changelist' %}">Теги</a></li>
-                        <li><a href="{% url 'admin:blog_medialibrary_changelist' %}">Медиабиблиотека</a></li>
-                    </ul>
-                </div>
-
-                <div class="sidebar-section">
-                    <h4 class="sidebar-title">Приложения</h4>
-                    <ul class="sidebar-list small">
-                        {% for app in app_list %}
-                        <li class="app-item">
-                          <strong>{{ app.name }}</strong>
-                          <ul class="model-list">
-                            {% for model in app.models %}
-                              <li><a href="{{ model.admin_url }}">{{ model.name }}</a></li>
-                            {% endfor %}
-                          </ul>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-
+    <div class="pt-admin-shell" style="display:flex; min-height:calc(100vh - 60px);">
+        <aside class="pt-admin-sidebar" style="width:260px; flex:0 0 260px;">
+            <div class="pt-container" style="padding:12px;">
+                {# Здесь типичное место для бокового меню — но мы дополнительно вставим кнопку через JS,
+                   чтобы не зависеть от точной структуры ваших шаблонов #}
+                <nav id="pt-admin-sidebar-nav">
+                    {# Если ваш проект уже рендерит меню здесь — он останется. JS ниже вставит кнопку корректно. #}
+                    {% block sidebar %}{% endblock %}
+                </nav>
             </div>
         </aside>
 
-        <main class="pt-main-content">
+        <main class="pt-main-content" style="flex:1; padding:20px;">
             <div class="pt-container">
-                {% block breadcrumbs %}
-                  {% if title %}
+                {% block breadcrumbs %}{% if title %}
                     <div class="breadcrumbs">
-                      <a href="{% url 'admin:index' %}">{% trans "Home" %}</a>
-                      &nbsp;/&nbsp;<span>{{ title }}</span>
+                        <a href="{% url 'admin:index' %}">{% trans "Home" %}</a> &nbsp;/&nbsp; <span>{{ title }}</span>
                     </div>
-                  {% endif %}
-                {% endblock %}
+                {% endif %}{% endblock %}
 
-                {% block messages %}
-                  {% if messages %}
-                    <div class="pt-messages">
-                      {% for m in messages %}
-                        <div class="msg {{ m.tags }}">{{ m }}</div>
-                      {% endfor %}
-                    </div>
-                  {% endif %}
-                {% endblock %}
-
-                {% block content %}
-                {# Стандартный контент админа будет здесь #}
-                {% endblock %}
-
+                {% block content %}{% endblock %}
             </div>
         </main>
     </div>
 
-    <footer class="pt-admin-footer">
+    <footer class="pt-admin-footer" style="padding:12px 16px;">
       <div class="pt-container">
-        <small>— версия интерфейса: 1</small>
+        <small>{% trans "Admin interface" %}</small>
       </div>
     </footer>
 
+    {# Скрипт — вставляем кнопку в боковое меню на всех страницах (без jQuery) #}
     <script>
-      // базовый csrf helper для клиентских вызовов
       (function(){
-        function getCookie(name){let v=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');return v?v.pop():'';}
-        window.ADMIN_CSRF = {csrfToken: getCookie('csrftoken')};
+        // Путь к медиатеке: пробуем получить именованный url, иначе используем абсолютный путь.
+        var mediaHref = (function(){
+          // Django шаблон выше пытается разрешить именованный url в _murl; если пуст — fallback строка.
+          var el = document.getElementById('pt-media-lib-primary-btn');
+          if (el) return el.getAttribute('href') || '/admin/media-library/';
+          return '/admin/media-library/';
+        })();
+
+        function makeBtn(clsForSidebar){
+          var a = document.createElement('a');
+          a.className = 'pt-media-lib-btn' + (clsForSidebar ? ' sidebar-style' : '');
+          a.setAttribute('href', mediaHref);
+          a.setAttribute('title', 'Открыть медиабиблиотеку');
+          a.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;"><path d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 13l2.5 3 2-2.5L15 17" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="margin-left:6px; vertical-align:middle;">Медиа библиотека</span>';
+          return a;
+        }
+
+        function alreadyHasLink(container){
+          if(!container) return false;
+          // ищем существующий элемент с таким href
+          var links = container.querySelectorAll('a[href*="/admin/media-library"], a[href*="media-library"]');
+          return links && links.length > 0;
+        }
+
+        function tryInsert(){
+          // набор вероятных селекторов для боковой панели в вашей теме
+          var selectors = [
+            '#pt-admin-sidebar-nav',    // наш контейнер в этом шаблоне
+            '.app-list',                // стандартный список приложений
+            '#sidebar',                 // общие кастомные темы
+            '.module',                  // grappelli-like
+            '.grp-module',              // grappelli
+            '.nav-sidebar',             // некоторые темы
+            '.col-side',                // fallback
+            '.sidebar',                 // generic
+            '#user-tools'               // near top actions
+          ];
+          for (var i=0;i<selectors.length;i++){
+            var s = selectors[i];
+            var el = document.querySelector(s);
+            if (!el) continue;
+            // не вставляем, если уже есть такая ссылка
+            if (alreadyHasLink(el)) return true;
+            // создаём кнопку и вставляем в начало
+            var btn = makeBtn(true);
+            // попытка вставить рядом с списком приложений, или в начало контейнера
+            if (el.firstElementChild) el.insertBefore(btn, el.firstElementChild);
+            else el.appendChild(btn);
+            return true;
+          }
+          return false;
+        }
+
+        // Выполняем на DOMContentLoaded и ещё раз через setTimeout на случай динамических тем.
+        document.addEventListener('DOMContentLoaded', function(){
+          tryInsert();
+          // ещё пара попыток позже, если меню создаётся динамически
+          setTimeout(tryInsert, 150);
+          setTimeout(tryInsert, 700);
+        });
       })();
     </script>
-    <script defer src="{% static 'admin/js/admin-global.js' %}"></script>
+
+    {% block extrafoot %}{% endblock %}
 </body>
 </html>
