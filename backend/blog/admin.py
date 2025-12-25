@@ -378,11 +378,11 @@ def admin_media_library_view(request):
                         try:
                             from django.conf import settings as _settings
                             SUPA_URL = getattr(_settings, "SUPABASE_URL", os.environ.get("SUPABASE_URL"))
-                            SUPA_KEY = getattr(_settings, "SUPABASE_KEY", os.environ.get("SUPABASE_KEY"))
+                            SUPA_KEY = getattr(_settings, "SUPABASE_SERVICE_ROLE_KEY", os.environ.get("SUPABASE_SERVICE_ROLE_KEY"))
                             SUPA_BUCKET = getattr(_settings, "SUPABASE_MEDIA_BUCKET", os.environ.get("SUPABASE_MEDIA_BUCKET", "media")) or "media"
                         except Exception:
                             SUPA_URL = os.environ.get("SUPABASE_URL")
-                            SUPA_KEY = os.environ.get("SUPABASE_KEY")
+                            SUPA_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
                             SUPA_BUCKET = os.environ.get("SUPABASE_MEDIA_BUCKET", "media") or "media"
                         try:
                             if SUPA_URL and SUPA_KEY:
@@ -415,11 +415,11 @@ def admin_media_library_view(request):
         try:
             from django.conf import settings as _settings
             SUPA_URL = getattr(_settings, "SUPABASE_URL", os.environ.get("SUPABASE_URL"))
-            SUPA_KEY = getattr(_settings, "SUPABASE_KEY", os.environ.get("SUPABASE_KEY"))
+            SUPA_KEY = getattr(_settings, "SUPABASE_SERVICE_ROLE_KEY", os.environ.get("SUPABASE_SERVICE_ROLE_KEY"))
             SUPA_BUCKET = getattr(_settings, "SUPABASE_MEDIA_BUCKET", os.environ.get("SUPABASE_MEDIA_BUCKET", "media")) or "media"
         except Exception:
             SUPA_URL = os.environ.get("SUPABASE_URL")
-            SUPA_KEY = os.environ.get("SUPABASE_KEY")
+            SUPA_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
             SUPA_BUCKET = os.environ.get("SUPABASE_MEDIA_BUCKET", "media") or "media"
 
         saved_path = None
@@ -583,11 +583,11 @@ def admin_media_thumbnail_view(request, pk):
             try:
                 from django.conf import settings as _settings
                 SUPA_URL = getattr(_settings, "SUPABASE_URL", os.environ.get("SUPABASE_URL"))
-                SUPA_KEY = getattr(_settings, "SUPABASE_KEY", os.environ.get("SUPABASE_KEY"))
+                SUPA_KEY = getattr(_settings, "SUPABASE_SERVICE_ROLE_KEY", os.environ.get("SUPABASE_SERVICE_ROLE_KEY"))
                 SUPA_BUCKET = getattr(_settings, "SUPABASE_MEDIA_BUCKET", os.environ.get("SUPABASE_MEDIA_BUCKET", "media")) or "media"
             except Exception:
                 SUPA_URL = os.environ.get("SUPABASE_URL")
-                SUPA_KEY = os.environ.get("SUPABASE_KEY")
+                SUPA_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
                 SUPA_BUCKET = os.environ.get("SUPABASE_MEDIA_BUCKET", "media") or "media"
 
             if SUPA_URL and SUPA_KEY:

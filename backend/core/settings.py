@@ -16,7 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ========== SUPABASE / S3 ==========
 SUPABASE_USE_PROXY = True
 SUPABASE_URL = env("SUPABASE_URL", "").strip() or None
-SUPABASE_KEY = env("SUPABASE_KEY", "").strip() or None
+SUPABASE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", "").strip() or None
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "post_attachments")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
