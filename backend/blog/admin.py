@@ -1,13 +1,15 @@
 # backend/blog/admin.py
 import os
+import io
 import json
 import logging
+from PIL import Image, UnidentifiedImageError  # Pillow, required for thumbnail generation
 from django import forms
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
 from django.urls import reverse, path
 from django.shortcuts import render, redirect
-from django.http import JsonResponse, Http404
+from django.http import JsonResponse, Http404, HttpResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_GET
 from django.core.files.storage import default_storage
@@ -411,7 +413,11 @@ def admin_media_library_view(request):
             return JsonResponse({'success': False, 'error': 'PostAttachment model not configured'}, status=500)
         try:
             att = PostAttachment()
-            att.title = title
+            # set readable title (basename fallback)
+            try:
+                att.title = title or os.path.basename(getattr(upload, 'name', '') or '')
+            except Exception:
+                att.title = title
             try:
                 att.uploaded_by = request.user
             except Exception:
@@ -424,8 +430,14 @@ def admin_media_library_view(request):
             except Exception:
                 pass
             att.save()
-            url = default_storage.url(saved_path)
-            # Build JSON response
+            # try to resolve public url
+            try:
+                url = getattr(att.file, 'url', '') or default_storage.url(getattr(att.file, 'name', ''))
+            except Exception:
+                try:
+                    url = default_storage.url(getattr(att.file, 'name', ''))
+                except Exception:
+                    url = ''
             resp = {'success': True, 'id': getattr(att, 'id', None), 'url': url, 'title': att.title}
             return JsonResponse(resp, status=201)
         except Exception:
@@ -445,8 +457,10 @@ def admin_media_library_view(request):
     for a in attachments_qs:
         try:
             file_obj = getattr(a, 'file', None)
+            # Prefer title (human), otherwise basename of storage name
+            raw_name = getattr(a, 'title', None) or (getattr(file_obj, 'name', None) or "")
+            filename = os.path.basename(raw_name) if raw_name else ""
             url = ""
-            name = getattr(a, 'title', None) or (getattr(file_obj, 'name', None) or "")
             if file_obj:
                 try:
                     url = getattr(file_obj, 'url', '') or default_storage.url(getattr(file_obj, 'name', ''))
@@ -457,10 +471,17 @@ def admin_media_library_view(request):
                         url = ''
             else:
                 url = ""
-            thumb = url if _is_image_name(getattr(file_obj, 'name', name)) else ""
+            # if looks like image — use thumbnail endpoint (generates from storage on the fly)
+            thumb = ""
+            try:
+                storage_name = getattr(file_obj, 'name', '') or filename
+                if _is_image_name(storage_name):
+                    thumb = reverse('admin-media-thumbnail', args=[getattr(a, 'id', '')])
+            except Exception:
+                thumb = url if _is_image_name(filename) else ""
             attachments.append({
                 'id': getattr(a, 'id', None),
-                'title': name,
+                'title': filename or (getattr(a, 'title', None) or ""),
                 'url': url,
                 'thumb': thumb,
                 'uploaded_at': getattr(a, 'uploaded_at', None),
@@ -474,6 +495,57 @@ def admin_media_library_view(request):
 
     context = {'attachments': attachments}
     return render(request, 'admin/media_library.html', context)
+
+
+@require_GET
+def admin_media_thumbnail_view(request, pk):
+    """
+    Returns a generated thumbnail (JPEG) for a PostAttachment id=pk.
+    Reads the original file via default_storage, resizes and returns JPEG bytes.
+    Caches for 1 day via Cache-Control header.
+    """
+    if not request.user.is_staff:
+        raise Http404("permission denied")
+    if PostAttachment is None:
+        raise Http404("PostAttachment not available")
+    try:
+        att = PostAttachment.objects.filter(pk=pk).first()
+        if not att:
+            raise Http404("attachment not found")
+        file_field = getattr(att, 'file', None)
+        if not file_field or not getattr(file_field, 'name', None):
+            raise Http404("file missing")
+        fname = getattr(file_field, 'name')
+        # open via storage
+        try:
+            with default_storage.open(fname, 'rb') as fh:
+                data = fh.read()
+        except Exception:
+            logger.exception("Cannot open file from storage for thumbnail", exc_info=True)
+            raise Http404("cannot open file")
+        # generate thumbnail via Pillow
+        try:
+            im = Image.open(io.BytesIO(data))
+            im = im.convert("RGB")
+            im.thumbnail((400, 400), Image.LANCZOS)
+            buf = io.BytesIO()
+            im.save(buf, format="JPEG", quality=85)
+            buf.seek(0)
+            resp = HttpResponse(buf.read(), content_type="image/jpeg")
+            resp["Cache-Control"] = "max-age=86400, public"
+            return resp
+        except UnidentifiedImageError:
+            # not an image -> return small SVG placeholder
+            svg = b'''<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#6b7280" font-family="Arial" font-size="14">No preview</text></svg>'''
+            return HttpResponse(svg, content_type="image/svg+xml")
+        except Exception:
+            logger.exception("thumbnail generation failed", exc_info=True)
+            raise Http404("thumbnail generation failed")
+    except Http404:
+        raise
+    except Exception:
+        logger.exception("media thumbnail error", exc_info=True)
+        raise Http404("thumbnail error")
 
 
 @require_POST
@@ -737,6 +809,7 @@ def register_admin_models(site_obj):
             path("dashboard/", admin_dashboard_view, name="admin-dashboard"),
             path("dashboard/stats-data/", admin_stats_api, name="admin-dashboard-stats"),
             path("media-library/", admin_media_library_view, name="admin-media-library"),
+            path("media-thumbnail/<int:pk>/", admin_media_thumbnail_view, name="admin-media-thumbnail"),
             path("posts/update/", admin_post_update_view, name="admin-post-update"),
             path("posts/autosave/", admin_autosave_view, name="admin-autosave"),
             path("posts/preview-token/", admin_preview_token_view, name="admin-preview-token"),
@@ -839,6 +912,11 @@ try:
     _ensure_registered(admin.site, PostReaction, PostReactionAdmin)
     if PostAttachment is not None:
         _ensure_registered(admin.site, MediaLibrary, MediaLibraryAdmin)
-        _ensure_registered(admin.site, PostAttachment, MediaLibraryAdmin)
+        _ensure_registered(custom_admin_site, MediaLibrary, MediaLibraryAdmin)
+        try:
+            _ensure_registered(admin.site, PostAttachment, MediaLibraryAdmin)
+            _ensure_registered(custom_admin_site, PostAttachment, MediaLibraryAdmin)
+        except Exception:
+            pass
 except Exception:
     logger.exception("Post-registration failed")

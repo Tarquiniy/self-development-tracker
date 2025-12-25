@@ -15,11 +15,23 @@
       <p class="media-lib-sub">Здесь вы можете загружать изображения, просматривать превью и вставлять в посты.</p>
     </div>
     <div class="media-lib-actions">
-      <label class="upload-btn" for="media-file-input">
+      {# Visible non-JS fallback upload form (POST to same view) #}
+      <form id="upload-form" method="post" enctype="multipart/form-data" style="display:inline-block;margin-right:8px;">
+        {% csrf_token %}
+        <input id="upload-file-visible" type="file" name="file" accept="image/*" />
+        <button type="submit" class="upload-btn" style="margin-left:6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span>{% trans "Загрузить изображение" %}</span>
+        </button>
+      </form>
+
+      {# JS-enhanced upload control (hidden native input, JS triggers upload) #}
+      <label class="upload-btn" for="media-file-input" title="{% trans 'Загрузить изображение (drag & drop)' %}">
         <input id="media-file-input" type="file" accept="image/*" style="display:none" />
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <span>{% trans "Загрузить" %}</span>
       </label>
+
       <div id="upload-status" class="upload-status" aria-live="polite"></div>
     </div>
   </div>
@@ -30,9 +42,10 @@
         <div class="media-thumb">
           {% if a.thumb %}
             <img src="{{ a.thumb }}" alt="{{ a.title|default:'attachment' }}" loading="lazy" />
+          {% elif a.url %}
+            <img src="{{ a.url }}" alt="{{ a.title|default:'attachment' }}" loading="lazy" />
           {% else %}
             <div class="media-icon">
-              <!-- generic image icon -->
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.2" />
                 <path d="M7 14l3-4 4 5 3-3 0 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -43,8 +56,12 @@
         <div class="media-meta">
           <div class="media-title" title="{{ a.title }}">{{ a.title|truncatechars:28 }}</div>
           <div class="media-actions">
-            <a class="btn btn-small btn-copy" href="{{ a.url }}" target="_blank" rel="noopener noreferrer">{% trans "Открыть" %}</a>
-            <button class="btn btn-small btn-insert" data-url="{{ a.url }}">{% trans "Вставить" %}</button>
+            {% if a.url %}
+              <a class="btn btn-small btn-copy" href="{{ a.url }}" target="_blank" rel="noopener noreferrer">{% trans "Открыть" %}</a>
+            {% endif %}
+            {% if a.url %}
+              <button class="btn btn-small btn-insert" data-url="{{ a.url }}">{% trans "Вставить" %}</button>
+            {% endif %}
             <button class="btn btn-small btn-delete" data-id="{{ a.id }}">{% trans "Удалить" %}</button>
           </div>
         </div>
@@ -57,4 +74,3 @@
 
 <script src="{% static 'admin/js/media_library.js' %}"></script>
 {% endblock %}
-  

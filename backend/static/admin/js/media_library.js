@@ -1,15 +1,15 @@
 // backend/static/admin/js/media_library.js
-// Handles upload, delete, UI updates for admin media library
 (function(){
   function $(sel, ctx){ return (ctx || document).querySelector(sel); }
   function $all(sel, ctx){ return Array.from((ctx || document).querySelectorAll(sel)); }
 
   const fileInput = document.getElementById('media-file-input');
+  const visibleFileInput = document.getElementById('upload-file-visible');
+  const uploadForm = document.getElementById('upload-form');
   const uploadStatus = document.getElementById('upload-status');
   const grid = document.getElementById('media-grid');
 
   function csrf() {
-    // read from cookie (Django's csrftoken)
     const match = document.cookie.match(/(^|;)\s*csrftoken=([^;]+)/);
     return match ? decodeURIComponent(match[2]) : '';
   }
@@ -18,7 +18,7 @@
     uploadStatus.textContent = text || '';
     uploadStatus.classList.toggle('error', !!isError);
     if(!text) return;
-    setTimeout(()=>{ uploadStatus.textContent = ''; uploadStatus.classList.remove('error'); }, 4000);
+    setTimeout(()=>{ uploadStatus.textContent = ''; uploadStatus.classList.remove('error'); }, 4500);
   }
 
   async function uploadFile(file){
@@ -48,17 +48,18 @@
   }
 
   function prependAttachmentToGrid(item){
-    // item: {id, url, title}
     const card = document.createElement('div');
     card.className = 'media-card';
     card.dataset.id = item.id;
-    const thumbHtml = item.url ? `<img src="${escapeHtml(item.url)}" loading="lazy" />` : '<div class="media-icon"></div>';
+    const escapedUrl = escapeHtml(item.url || '');
+    const escapedTitle = escapeHtml(truncate(item.title || '', 28));
+    const thumbHtml = item.id ? `<img src="/admin/media-thumbnail/${escapeHtml(item.id)}/" loading="lazy" />` : (escapedUrl ? `<img src="${escapedUrl}" loading="lazy" />` : '<div class="media-icon"></div>');
     card.innerHTML = `<div class="media-thumb">${thumbHtml}</div>
       <div class="media-meta">
-        <div class="media-title" title="${escapeHtml(item.title||'')}">${escapeHtml(truncate(item.title||'',28))}</div>
+        <div class="media-title" title="${escapedTitle}">${escapedTitle}</div>
         <div class="media-actions">
-          <a class="btn btn-small btn-copy" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Открыть</a>
-          <button class="btn btn-small btn-insert" data-url="${escapeHtml(item.url)}">Вставить</button>
+          <a class="btn btn-small btn-copy" href="${escapedUrl}" target="_blank" rel="noopener noreferrer">Открыть</a>
+          <button class="btn btn-small btn-insert" data-url="${escapedUrl}">Вставить</button>
           <button class="btn btn-small btn-delete" data-id="${escapeHtml(item.id)}">Удалить</button>
         </div>
       </div>`;
@@ -108,26 +109,47 @@
     const ins = card.querySelector('.btn-insert');
     if(ins) ins.addEventListener('click', (e)=>{
       const url = ins.dataset.url;
-      // Try to insert to opener (if editor integration) otherwise open new tab
       if(window.opener && typeof window.opener.insertMedia === 'function'){
         window.opener.insertMedia(url);
       } else {
-        // fallback: copy url to clipboard
         navigator.clipboard && navigator.clipboard.writeText(url).then(()=> showStatus('Ссылка скопирована в буфер'), ()=> showStatus('Не удалось скопировать', true));
       }
     });
   }
 
-  // attach handlers to existing cards
   document.addEventListener('DOMContentLoaded', function(){
     $all('.media-card').forEach(attachCardHandlers);
 
-    // file input change
     if(fileInput){
       fileInput.addEventListener('change', function(e){
         const f = this.files && this.files[0];
         if(f) uploadFile(f);
         this.value = '';
+      });
+    }
+    if(visibleFileInput){
+      visibleFileInput.addEventListener('change', function(e){
+        const f = this.files && this.files[0];
+        if(f){
+          // if user submitted via visible form, prefer AJAX (prevent full reload)
+          uploadFile(f);
+        }
+        this.value = '';
+      });
+    }
+
+    // intercept fallback form submit - upload via AJAX
+    if(uploadForm){
+      uploadForm.addEventListener('submit', function(ev){
+        // If no file chosen, allow normal submit to show validation
+        const f = visibleFileInput && visibleFileInput.files && visibleFileInput.files[0];
+        if(!f) {
+          ev.preventDefault();
+          showStatus('Выберите файл для загрузки', true);
+          return;
+        }
+        ev.preventDefault();
+        uploadFile(f);
       });
     }
 
