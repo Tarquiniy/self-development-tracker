@@ -363,14 +363,46 @@ class MediaLibraryAdmin(admin.ModelAdmin):
 @require_http_methods(["GET", "POST"])
 def admin_media_library_view(request):
     """
-    Админский view для медиатеки (GET — список, POST — загрузка).
-    Этот view используется как автономный маршрут /admin/media-library/ (зарегистрирован в blog.urls)
-    и также добавляется в admin через register_admin_models (если site wrapping включён).
+    Админский view для медиатеки (GET — список, POST — загрузка/delete).
+    Поддерживает:
+      - GET: рендер шаблона admin/media_library.html с контекстом {'attachments': [...]}.
+      - POST multipart (file): загрузка — возвращает JSON {success: True, id, url, title}
+      - POST action=delete&id=... : удаление указанного attachment — возвращает JSON {success: True}
+      - XHR (format=json or X-Requested-With) возвращает JSON представление.
     """
     if not request.user.is_staff:
         raise Http404("permission denied")
 
-    if request.method == "POST":
+    # DELETE via POST action
+    if request.method == "POST" and (request.POST.get("action") == "delete" or request.POST.get("action") == "remove"):
+        if PostAttachment is None:
+            return JsonResponse({'success': False, 'error': 'PostAttachment model not configured'}, status=500)
+        aid = request.POST.get("id") or request.POST.get("attachment_id")
+        if not aid:
+            return JsonResponse({'success': False, 'error': 'missing id'}, status=400)
+        try:
+            att = PostAttachment.objects.filter(pk=aid).first()
+            if not att:
+                return JsonResponse({'success': False, 'error': 'not_found'}, status=404)
+            # try delete file from storage if possible
+            try:
+                fobj = getattr(att, 'file', None)
+                if fobj and getattr(fobj, 'name', None):
+                    try:
+                        default_storage.delete(fobj.name)
+                    except Exception:
+                        logger.debug("default_storage.delete failed for %s", getattr(fobj, 'name', None), exc_info=True)
+            except Exception:
+                logger.debug("Error while deleting file from storage", exc_info=True)
+            # delete model record
+            att.delete()
+            return JsonResponse({'success': True})
+        except Exception:
+            logger.exception("Delete attachment failed")
+            return JsonResponse({'success': False, 'error': 'delete_failed'}, status=500)
+
+    # UPLOAD via multipart/form-data
+    if request.method == "POST" and request.FILES:
         upload = request.FILES.get("file") or request.FILES.get("image")
         title = request.POST.get("title") or (upload.name if upload else "")
         if not upload:
@@ -393,16 +425,53 @@ def admin_media_library_view(request):
                 pass
             att.save()
             url = default_storage.url(saved_path)
-            return JsonResponse({'success': True, 'id': getattr(att, 'id', None), 'url': url, 'title': att.title})
+            # Build JSON response
+            resp = {'success': True, 'id': getattr(att, 'id', None), 'url': url, 'title': att.title}
+            return JsonResponse(resp, status=201)
         except Exception:
             logger.exception("Upload failed")
             return JsonResponse({'success': False, 'error': 'upload_failed'}, status=500)
 
-    attachments = PostAttachment.objects.all().order_by('-uploaded_at')[:500] if PostAttachment is not None else []
+    # GET: prepare listing
+    attachments_qs = PostAttachment.objects.all().order_by('-uploaded_at')[:500] if PostAttachment is not None else []
+    # Build structured list with thumbnail decisions
+    def _is_image_name(name):
+        if not name:
+            return False
+        ext = os.path.splitext(name)[1].lower()
+        return ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp')
+
+    attachments = []
+    for a in attachments_qs:
+        try:
+            file_obj = getattr(a, 'file', None)
+            url = ""
+            name = getattr(a, 'title', None) or (getattr(file_obj, 'name', None) or "")
+            if file_obj:
+                try:
+                    url = getattr(file_obj, 'url', '') or default_storage.url(getattr(file_obj, 'name', ''))
+                except Exception:
+                    try:
+                        url = default_storage.url(getattr(file_obj, 'name', ''))
+                    except Exception:
+                        url = ''
+            else:
+                url = ""
+            thumb = url if _is_image_name(getattr(file_obj, 'name', name)) else ""
+            attachments.append({
+                'id': getattr(a, 'id', None),
+                'title': name,
+                'url': url,
+                'thumb': thumb,
+                'uploaded_at': getattr(a, 'uploaded_at', None),
+            })
+        except Exception:
+            logger.debug("Failed building attachment dict", exc_info=True)
+
     is_xhr = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json'
     if is_xhr:
-        data = [{'id': a.id, 'title': a.title or os.path.basename(getattr(a.file, 'name', '')), 'url': getattr(a.file, 'url', '')} for a in attachments]
-        return JsonResponse({'attachments': data})
+        return JsonResponse({'attachments': attachments})
+
     context = {'attachments': attachments}
     return render(request, 'admin/media_library.html', context)
 
