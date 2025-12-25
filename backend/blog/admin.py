@@ -411,6 +411,73 @@ def admin_media_library_view(request):
             return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
         if PostAttachment is None:
             return JsonResponse({'success': False, 'error': 'PostAttachment model not configured'}, status=500)
+
+        # Try to upload to Supabase explicitly if credentials available (use bucket name from settings or env)
+        uploaded_url = ""
+        saved_path = None
+        try:
+            from django.conf import settings as _settings
+            SUPA_URL = getattr(_settings, "SUPABASE_URL", os.environ.get("SUPABASE_URL"))
+            SUPA_KEY = getattr(_settings, "SUPABASE_KEY", os.environ.get("SUPABASE_KEY"))
+            SUPA_BUCKET = getattr(_settings, "SUPABASE_MEDIA_BUCKET", os.environ.get("SUPABASE_MEDIA_BUCKET", "media"))
+        except Exception:
+            SUPA_URL = os.environ.get("SUPABASE_URL")
+            SUPA_KEY = os.environ.get("SUPABASE_KEY")
+            SUPA_BUCKET = os.environ.get("SUPABASE_MEDIA_BUCKET", "media")
+
+        try:
+            if SUPA_URL and SUPA_KEY:
+                # lazy import - optional dependency
+                try:
+                    from supabase import create_client
+                except Exception:
+                    create_client = None
+
+                if create_client:
+                    try:
+                        client = create_client(SUPA_URL, SUPA_KEY)
+                        # build a storage path (you can change prefix)
+                        saved_path = f'post_attachments/{timezone.now().strftime("%Y/%m/%d")}/{upload.name}'
+                        # supabase client expects bytes or file-like
+                        upload_bytes = upload.read()
+                        # upload to bucket (overwrite = True)
+                        client.storage.from_(SUPA_BUCKET).upload(saved_path, upload_bytes)
+                        # get public url (if bucket public)
+                        try:
+                            # API may return dict or string depending on lib version
+                            public = client.storage.from_(SUPA_BUCKET).get_public_url(saved_path)
+                            if isinstance(public, dict):
+                                uploaded_url = public.get("publicURL") or public.get("public_url") or ""
+                            else:
+                                uploaded_url = public or ""
+                        except Exception:
+                            # fallback construct url if SUPA_URL known (public path)
+                            # Note: this pattern may vary per Supabase project config
+                            uploaded_url = f"{SUPA_URL.rstrip('/')}/storage/v1/object/public/{SUPA_BUCKET}/{saved_path}"
+                    except Exception:
+                        logger.exception("Supabase upload attempt failed; falling back to default_storage")
+                        saved_path = None
+                else:
+                    logger.debug("supabase client not installed; skipping direct supabase upload")
+        except Exception:
+            logger.exception("Supabase upload detection failed; continuing to default_storage")
+
+        # If supabase upload didn't set saved_path / uploaded_url then fallback to default_storage
+        try:
+            if not saved_path:
+                saved_path = default_storage.save(f'post_attachments/{timezone.now().strftime("%Y/%m/%d")}/{upload.name}', ContentFile(upload.read()))
+                try:
+                    uploaded_url = getattr(upload, 'url', '') or default_storage.url(saved_path)
+                except Exception:
+                    try:
+                        uploaded_url = default_storage.url(saved_path)
+                    except Exception:
+                        uploaded_url = ''
+        except Exception:
+            logger.exception("fallback default_storage.save failed")
+            return JsonResponse({'success': False, 'error': 'upload_failed'}, status=500)
+
+        # Create DB record
         try:
             att = PostAttachment()
             # set readable title (basename fallback)
@@ -423,26 +490,19 @@ def admin_media_library_view(request):
             except Exception:
                 pass
             att.uploaded_at = timezone.now()
-            saved_path = default_storage.save(f'post_attachments/{timezone.now().strftime("%Y/%m/%d")}/{upload.name}', ContentFile(upload.read()))
+            # If your PostAttachment model uses a FileField named 'file', try to set name to saved_path
             try:
-                if hasattr(att, 'file'):
+                if hasattr(att, 'file') and saved_path:
                     att.file.name = saved_path
             except Exception:
-                pass
+                logger.debug("Could not set att.file.name; continuing")
             att.save()
-            # try to resolve public url
-            try:
-                url = getattr(att.file, 'url', '') or default_storage.url(getattr(att.file, 'name', ''))
-            except Exception:
-                try:
-                    url = default_storage.url(getattr(att.file, 'name', ''))
-                except Exception:
-                    url = ''
-            resp = {'success': True, 'id': getattr(att, 'id', None), 'url': url, 'title': att.title}
-            return JsonResponse(resp, status=201)
         except Exception:
-            logger.exception("Upload failed")
-            return JsonResponse({'success': False, 'error': 'upload_failed'}, status=500)
+            logger.exception("Saving PostAttachment object failed")
+            return JsonResponse({'success': False, 'error': 'db_save_failed'}, status=500)
+
+        resp = {'success': True, 'id': getattr(att, 'id', None), 'url': uploaded_url, 'title': att.title}
+        return JsonResponse(resp, status=201)
 
     # GET: prepare listing
     attachments_qs = PostAttachment.objects.all().order_by('-uploaded_at')[:500] if PostAttachment is not None else []
@@ -501,8 +561,7 @@ def admin_media_library_view(request):
 def admin_media_thumbnail_view(request, pk):
     """
     Returns a generated thumbnail (JPEG) for a PostAttachment id=pk.
-    Reads the original file via default_storage, resizes and returns JPEG bytes.
-    Caches for 1 day via Cache-Control header.
+    Reads the original file via default_storage, if fails tries Supabase client directly.
     """
     if not request.user.is_staff:
         raise Http404("permission denied")
@@ -516,13 +575,56 @@ def admin_media_thumbnail_view(request, pk):
         if not file_field or not getattr(file_field, 'name', None):
             raise Http404("file missing")
         fname = getattr(file_field, 'name')
-        # open via storage
+
+        data = None
+        # Try default_storage first
         try:
             with default_storage.open(fname, 'rb') as fh:
                 data = fh.read()
         except Exception:
-            logger.exception("Cannot open file from storage for thumbnail", exc_info=True)
+            logger.debug("default_storage.open failed for %s, will try Supabase client", fname, exc_info=True)
+
+        # If no data from default_storage, try supabase client direct download
+        if not data:
+            try:
+                from django.conf import settings as _settings
+                SUPA_URL = getattr(_settings, "SUPABASE_URL", os.environ.get("SUPABASE_URL"))
+                SUPA_KEY = getattr(_settings, "SUPABASE_KEY", os.environ.get("SUPABASE_KEY"))
+                SUPA_BUCKET = getattr(_settings, "SUPABASE_MEDIA_BUCKET", os.environ.get("SUPABASE_MEDIA_BUCKET", "media"))
+            except Exception:
+                SUPA_URL = os.environ.get("SUPABASE_URL")
+                SUPA_KEY = os.environ.get("SUPABASE_KEY")
+                SUPA_BUCKET = os.environ.get("SUPABASE_MEDIA_BUCKET", "media")
+
+            if SUPA_URL and SUPA_KEY:
+                try:
+                    from supabase import create_client
+                    client = create_client(SUPA_URL, SUPA_KEY)
+                    # supabase-py storage download method may vary by version. Try common approaches:
+                    try:
+                        # some versions: download returns bytes
+                        result = client.storage.from_(SUPA_BUCKET).download(fname)
+                        # if result has 'read' (file-like), read, else if bytes, use directly
+                        if hasattr(result, 'read'):
+                            data = result.read()
+                        else:
+                            data = result
+                    except Exception:
+                        # alternative: use public URL (if public) and fetch via requests as last resort
+                        try:
+                            public = client.storage.from_(SUPA_BUCKET).get_public_url(fname)
+                            public_url = public.get("publicURL") if isinstance(public, dict) else public
+                            import requests
+                            r = requests.get(public_url, timeout=10)
+                            if r.status_code == 200:
+                                data = r.content
+                        except Exception:
+                            logger.exception("Supabase download fallback failed")
+                except Exception:
+                    logger.exception("Supabase client not available or download failed")
+        if not data:
             raise Http404("cannot open file")
+
         # generate thumbnail via Pillow
         try:
             im = Image.open(io.BytesIO(data))
@@ -535,7 +637,6 @@ def admin_media_thumbnail_view(request, pk):
             resp["Cache-Control"] = "max-age=86400, public"
             return resp
         except UnidentifiedImageError:
-            # not an image -> return small SVG placeholder
             svg = b'''<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#6b7280" font-family="Arial" font-size="14">No preview</text></svg>'''
             return HttpResponse(svg, content_type="image/svg+xml")
         except Exception:
