@@ -3,7 +3,7 @@ import os
 import io
 import json
 import logging
-from PIL import Image, UnidentifiedImageError  # Pillow, required for thumbnail generation
+from PIL import Image, UnidentifiedImageError  # Pillow for thumbnail generation
 from django import forms
 from django.contrib import admin
 from django.contrib.admin.sites import AlreadyRegistered
@@ -57,7 +57,6 @@ PREVIEW_SALT = "post-preview-salt"
 # -----------------------
 # TipTap Widget (robust fallback)
 # -----------------------
-# Prefer a project-provided widget at blog.widgets.TipTapWidget, otherwise use this internal implementation.
 TipTapWidget = None
 try:
     from .widgets import TipTapWidget as ProjectTipTapWidget  # noqa: F401
@@ -67,11 +66,6 @@ except Exception:
 
 if TipTapWidget is None:
     class TipTapWidget(forms.Widget):
-        """
-        Renders:
-         - a visible textarea with class 'admin-tiptap-textarea' (so fallback works),
-         - plus a wrapper div '.admin-tiptap-widget' which the frontend will enhance.
-        """
         def __init__(self, attrs=None, upload_url="/api/blog/media/upload/"):
             super().__init__(attrs or {})
             self.upload_url = upload_url
@@ -82,7 +76,6 @@ if TipTapWidget is None:
                 "uploadUrl": self.upload_url,
                 "placeholder": (self.attrs.get("placeholder") if isinstance(self.attrs, dict) else None) or "Введите текст...",
             }
-            # copy some simple attrs if present
             if attrs:
                 for k, v in attrs.items():
                     if isinstance(v, (str, bool, int, float)):
@@ -99,7 +92,6 @@ if TipTapWidget is None:
 
         def render(self, name, value, attrs=None, renderer=None):
             final_attrs = {} if attrs is None else dict(attrs)
-            # ensure expected class so JS can find it
             css_class = final_attrs.get("class", "")
             classes = (css_class + " admin-tiptap-textarea").strip()
             textarea_value = escape(self.value_as_text(value))
@@ -112,7 +104,6 @@ if TipTapWidget is None:
                 "data-post-id": final_attrs.get("data-post-id", final_attrs.get("data_post_id", "")),
             }
 
-            # build attribute string safely
             parts = []
             for k, v in textarea_attrs.items():
                 if v is None or v == "":
@@ -126,25 +117,21 @@ if TipTapWidget is None:
             except Exception:
                 cfg_json = "{}"
 
-            # wrapper for the visual editor
             wrapper_html = (
                 f'<div class="admin-tiptap-widget" data-tiptap-config="{escape(cfg_json)}" '
                 f'id="{escape(textarea_attrs.get("id"))}_tiptap_wrapper">'
-                # toolbar+editor placeholders will be filled by JS
                 f'<div class="tiptap-toolbar"></div><div class="tiptap-editor" contenteditable="true"></div>'
                 f'</div>'
             )
 
             textarea_html = f'<textarea {attr_str}>{textarea_value}</textarea>'
-
             noscript_html = '<noscript><p>Включите JavaScript для использования визуального редактора; доступен простой textarea.</p></noscript>'
 
             return mark_safe(textarea_html + wrapper_html + noscript_html)
 
         class Media:
-            # Try to use local static tiptap UMD files first (avoid CORS). Put these files into static/admin/vendor/tiptap/
             js = (
-                'admin/js/grp_shim.js',  # обязательно первым
+                'admin/js/grp_shim.js',
                 'https://cdn.jsdelivr.net/npm/ckeditor5-build-classic-all-plugin@latest/build/ckeditor.js',
                 'admin/js/ckeditor_admin_extra.js',
                 'https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js',
@@ -152,7 +139,7 @@ if TipTapWidget is None:
             )
             css = {
                 'all': (
-                'https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css',
+                    'https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css',
                 )
             }
 
@@ -238,7 +225,6 @@ class BasePostAdmin(VersionAdmin):
     )
 
     def save_model(self, request, obj, form, change):
-        # Если slug пустой или равен автоматическому - генерируем
         if not obj.slug:
             base = translit_slugify(obj.title) or translit_slugify(obj.meta_title or obj.excerpt or 'post')
             slug = base
@@ -247,13 +233,11 @@ class BasePostAdmin(VersionAdmin):
                 i += 1
                 slug = f"{base}-{i}"
             obj.slug = slug
-        # Ensure a default published_at if status=published and no date
         if getattr(obj, 'status', None) == 'published' and not obj.published_at:
             obj.published_at = timezone.now()
         super().save_model(request, obj, form, change)
 
     def get_form(self, request, obj=None, **kwargs):
-        # try to use ProjectPostAdminForm if present; on error, fall back to default admin form
         if ProjectPostAdminForm:
             try:
                 return super().get_form(request, obj, form=ProjectPostAdminForm, **kwargs)
@@ -355,7 +339,6 @@ class MediaLibraryAdmin(admin.ModelAdmin):
             pass
         return "-"
     def changelist_view(self, request, extra_context=None):
-        # Перенаправляем на централизованный view медиатеки (он определён ниже)
         return redirect("admin-media-library")
 
 
@@ -365,12 +348,9 @@ class MediaLibraryAdmin(admin.ModelAdmin):
 @require_http_methods(["GET", "POST"])
 def admin_media_library_view(request):
     """
-    Админский view для медиатеки (GET — список, POST — загрузка/delete).
-    Поддерживает:
-      - GET: рендер шаблона admin/media_library.html с контекстом {'attachments': [...]}.
-      - POST multipart (file): загрузка — возвращает JSON {success: True, id, url, title}
-      - POST action=delete&id=... : удаление указанного attachment — возвращает JSON {success: True}
-      - XHR (format=json or X-Requested-With) возвращает JSON представление.
+    GET: render media library page (admin/media_library.html) with attachments list.
+    POST (multipart): upload file (tries Supabase first if settings are present, else default_storage).
+    POST action=delete: delete attachment and attempt to delete file from storage.
     """
     if not request.user.is_staff:
         raise Http404("permission denied")
@@ -386,17 +366,36 @@ def admin_media_library_view(request):
             att = PostAttachment.objects.filter(pk=aid).first()
             if not att:
                 return JsonResponse({'success': False, 'error': 'not_found'}, status=404)
-            # try delete file from storage if possible
             try:
                 fobj = getattr(att, 'file', None)
                 if fobj and getattr(fobj, 'name', None):
                     try:
+                        # try default_storage delete
                         default_storage.delete(fobj.name)
                     except Exception:
                         logger.debug("default_storage.delete failed for %s", getattr(fobj, 'name', None), exc_info=True)
+                        # try supabase delete if configured
+                        try:
+                            from django.conf import settings as _settings
+                            SUPA_URL = getattr(_settings, "SUPABASE_URL", os.environ.get("SUPABASE_URL"))
+                            SUPA_KEY = getattr(_settings, "SUPABASE_KEY", os.environ.get("SUPABASE_KEY"))
+                            SUPA_BUCKET = getattr(_settings, "SUPABASE_MEDIA_BUCKET", os.environ.get("SUPABASE_MEDIA_BUCKET", "media")) or "media"
+                        except Exception:
+                            SUPA_URL = os.environ.get("SUPABASE_URL")
+                            SUPA_KEY = os.environ.get("SUPABASE_KEY")
+                            SUPA_BUCKET = os.environ.get("SUPABASE_MEDIA_BUCKET", "media") or "media"
+                        try:
+                            if SUPA_URL and SUPA_KEY:
+                                try:
+                                    from supabase import create_client
+                                    client = create_client(SUPA_URL, SUPA_KEY)
+                                    client.storage.from_(SUPA_BUCKET).remove([fobj.name])
+                                except Exception:
+                                    logger.debug("Supabase delete failed", exc_info=True)
+                        except Exception:
+                            logger.debug("Supabase delete fallback encountered error", exc_info=True)
             except Exception:
                 logger.debug("Error while deleting file from storage", exc_info=True)
-            # delete model record
             att.delete()
             return JsonResponse({'success': True})
         except Exception:
@@ -406,66 +405,66 @@ def admin_media_library_view(request):
     # UPLOAD via multipart/form-data
     if request.method == "POST" and request.FILES:
         upload = request.FILES.get("file") or request.FILES.get("image")
-        title = request.POST.get("title") or (upload.name if upload else "")
+        title = request.POST.get("title") or (getattr(upload, 'name', '') if upload else "")
         if not upload:
             return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
         if PostAttachment is None:
             return JsonResponse({'success': False, 'error': 'PostAttachment model not configured'}, status=500)
 
-        # Try to upload to Supabase explicitly if credentials available (use bucket name from settings or env)
-        uploaded_url = ""
-        saved_path = None
+        # Get supabase settings (with sensible default bucket)
         try:
             from django.conf import settings as _settings
             SUPA_URL = getattr(_settings, "SUPABASE_URL", os.environ.get("SUPABASE_URL"))
             SUPA_KEY = getattr(_settings, "SUPABASE_KEY", os.environ.get("SUPABASE_KEY"))
-            SUPA_BUCKET = getattr(_settings, "SUPABASE_MEDIA_BUCKET", os.environ.get("SUPABASE_MEDIA_BUCKET", "media"))
+            SUPA_BUCKET = getattr(_settings, "SUPABASE_MEDIA_BUCKET", os.environ.get("SUPABASE_MEDIA_BUCKET", "media")) or "media"
         except Exception:
             SUPA_URL = os.environ.get("SUPABASE_URL")
             SUPA_KEY = os.environ.get("SUPABASE_KEY")
-            SUPA_BUCKET = os.environ.get("SUPABASE_MEDIA_BUCKET", "media")
+            SUPA_BUCKET = os.environ.get("SUPABASE_MEDIA_BUCKET", "media") or "media"
 
-        try:
-            if SUPA_URL and SUPA_KEY:
-                # lazy import - optional dependency
+        saved_path = None
+        uploaded_url = ""
+
+        # Try Supabase upload if credentials are present
+        if SUPA_URL and SUPA_KEY:
+            try:
                 try:
                     from supabase import create_client
                 except Exception:
                     create_client = None
-
                 if create_client:
+                    client = create_client(SUPA_URL, SUPA_KEY)
+                    saved_path = f'post_attachments/{timezone.now().strftime("%Y/%m/%d")}/{getattr(upload, "name", "")}'
+                    # supabase expects bytes or file-like
+                    file_bytes = upload.read()
                     try:
-                        client = create_client(SUPA_URL, SUPA_KEY)
-                        # build a storage path (you can change prefix)
-                        saved_path = f'post_attachments/{timezone.now().strftime("%Y/%m/%d")}/{upload.name}'
-                        # supabase client expects bytes or file-like
-                        upload_bytes = upload.read()
-                        # upload to bucket (overwrite = True)
-                        client.storage.from_(SUPA_BUCKET).upload(saved_path, upload_bytes)
-                        # get public url (if bucket public)
+                        # upload may expect a file-like; supabase-py often accepts bytes
+                        client.storage.from_(SUPA_BUCKET).upload(saved_path, file_bytes)
                         try:
-                            # API may return dict or string depending on lib version
                             public = client.storage.from_(SUPA_BUCKET).get_public_url(saved_path)
                             if isinstance(public, dict):
                                 uploaded_url = public.get("publicURL") or public.get("public_url") or ""
                             else:
                                 uploaded_url = public or ""
                         except Exception:
-                            # fallback construct url if SUPA_URL known (public path)
-                            # Note: this pattern may vary per Supabase project config
                             uploaded_url = f"{SUPA_URL.rstrip('/')}/storage/v1/object/public/{SUPA_BUCKET}/{saved_path}"
                     except Exception:
-                        logger.exception("Supabase upload attempt failed; falling back to default_storage")
+                        logger.exception("Supabase upload attempt failed; will fallback to default_storage")
                         saved_path = None
-                else:
-                    logger.debug("supabase client not installed; skipping direct supabase upload")
-        except Exception:
-            logger.exception("Supabase upload detection failed; continuing to default_storage")
+            except Exception:
+                logger.exception("Supabase upload flow failed; falling back to default_storage")
+                saved_path = None
 
-        # If supabase upload didn't set saved_path / uploaded_url then fallback to default_storage
-        try:
-            if not saved_path:
-                saved_path = default_storage.save(f'post_attachments/{timezone.now().strftime("%Y/%m/%d")}/{upload.name}', ContentFile(upload.read()))
+        # Fallback to default_storage if Supabase didn't work
+        if not saved_path:
+            try:
+                # ensure content read (upload.read() might have been called earlier)
+                if hasattr(upload, 'seek'):
+                    try:
+                        upload.seek(0)
+                    except Exception:
+                        pass
+                saved_path = default_storage.save(f'post_attachments/{timezone.now().strftime("%Y/%m/%d")}/{getattr(upload, "name", "")}', ContentFile(upload.read()))
                 try:
                     uploaded_url = getattr(upload, 'url', '') or default_storage.url(saved_path)
                 except Exception:
@@ -473,14 +472,13 @@ def admin_media_library_view(request):
                         uploaded_url = default_storage.url(saved_path)
                     except Exception:
                         uploaded_url = ''
-        except Exception:
-            logger.exception("fallback default_storage.save failed")
-            return JsonResponse({'success': False, 'error': 'upload_failed'}, status=500)
+            except Exception:
+                logger.exception("fallback default_storage.save failed")
+                return JsonResponse({'success': False, 'error': 'upload_failed'}, status=500)
 
         # Create DB record
         try:
             att = PostAttachment()
-            # set readable title (basename fallback)
             try:
                 att.title = title or os.path.basename(getattr(upload, 'name', '') or '')
             except Exception:
@@ -490,7 +488,6 @@ def admin_media_library_view(request):
             except Exception:
                 pass
             att.uploaded_at = timezone.now()
-            # If your PostAttachment model uses a FileField named 'file', try to set name to saved_path
             try:
                 if hasattr(att, 'file') and saved_path:
                     att.file.name = saved_path
@@ -504,9 +501,8 @@ def admin_media_library_view(request):
         resp = {'success': True, 'id': getattr(att, 'id', None), 'url': uploaded_url, 'title': att.title}
         return JsonResponse(resp, status=201)
 
-    # GET: prepare listing
+    # GET: build listing
     attachments_qs = PostAttachment.objects.all().order_by('-uploaded_at')[:500] if PostAttachment is not None else []
-    # Build structured list with thumbnail decisions
     def _is_image_name(name):
         if not name:
             return False
@@ -517,7 +513,6 @@ def admin_media_library_view(request):
     for a in attachments_qs:
         try:
             file_obj = getattr(a, 'file', None)
-            # Prefer title (human), otherwise basename of storage name
             raw_name = getattr(a, 'title', None) or (getattr(file_obj, 'name', None) or "")
             filename = os.path.basename(raw_name) if raw_name else ""
             url = ""
@@ -531,7 +526,6 @@ def admin_media_library_view(request):
                         url = ''
             else:
                 url = ""
-            # if looks like image — use thumbnail endpoint (generates from storage on the fly)
             thumb = ""
             try:
                 storage_name = getattr(file_obj, 'name', '') or filename
@@ -561,7 +555,7 @@ def admin_media_library_view(request):
 def admin_media_thumbnail_view(request, pk):
     """
     Returns a generated thumbnail (JPEG) for a PostAttachment id=pk.
-    Reads the original file via default_storage, if fails tries Supabase client directly.
+    Tries default_storage first, then Supabase client if default_storage cannot open the file.
     """
     if not request.user.is_staff:
         raise Http404("permission denied")
@@ -577,55 +571,57 @@ def admin_media_thumbnail_view(request, pk):
         fname = getattr(file_field, 'name')
 
         data = None
-        # Try default_storage first
+        # Try default storage
         try:
             with default_storage.open(fname, 'rb') as fh:
                 data = fh.read()
         except Exception:
             logger.debug("default_storage.open failed for %s, will try Supabase client", fname, exc_info=True)
 
-        # If no data from default_storage, try supabase client direct download
+        # If default_storage failed, try Supabase client download
         if not data:
             try:
                 from django.conf import settings as _settings
                 SUPA_URL = getattr(_settings, "SUPABASE_URL", os.environ.get("SUPABASE_URL"))
                 SUPA_KEY = getattr(_settings, "SUPABASE_KEY", os.environ.get("SUPABASE_KEY"))
-                SUPA_BUCKET = getattr(_settings, "SUPABASE_MEDIA_BUCKET", os.environ.get("SUPABASE_MEDIA_BUCKET", "media"))
+                SUPA_BUCKET = getattr(_settings, "SUPABASE_MEDIA_BUCKET", os.environ.get("SUPABASE_MEDIA_BUCKET", "media")) or "media"
             except Exception:
                 SUPA_URL = os.environ.get("SUPABASE_URL")
                 SUPA_KEY = os.environ.get("SUPABASE_KEY")
-                SUPA_BUCKET = os.environ.get("SUPABASE_MEDIA_BUCKET", "media")
+                SUPA_BUCKET = os.environ.get("SUPABASE_MEDIA_BUCKET", "media") or "media"
 
             if SUPA_URL and SUPA_KEY:
                 try:
-                    from supabase import create_client
-                    client = create_client(SUPA_URL, SUPA_KEY)
-                    # supabase-py storage download method may vary by version. Try common approaches:
                     try:
-                        # some versions: download returns bytes
-                        result = client.storage.from_(SUPA_BUCKET).download(fname)
-                        # if result has 'read' (file-like), read, else if bytes, use directly
-                        if hasattr(result, 'read'):
-                            data = result.read()
-                        else:
-                            data = result
+                        from supabase import create_client
                     except Exception:
-                        # alternative: use public URL (if public) and fetch via requests as last resort
+                        create_client = None
+                    if create_client:
+                        client = create_client(SUPA_URL, SUPA_KEY)
                         try:
-                            public = client.storage.from_(SUPA_BUCKET).get_public_url(fname)
-                            public_url = public.get("publicURL") if isinstance(public, dict) else public
-                            import requests
-                            r = requests.get(public_url, timeout=10)
-                            if r.status_code == 200:
-                                data = r.content
+                            result = client.storage.from_(SUPA_BUCKET).download(fname)
+                            if hasattr(result, 'read'):
+                                data = result.read()
+                            else:
+                                data = result
                         except Exception:
-                            logger.exception("Supabase download fallback failed")
+                            # Last resort: try public URL fetch
+                            try:
+                                public = client.storage.from_(SUPA_BUCKET).get_public_url(fname)
+                                public_url = public.get("publicURL") if isinstance(public, dict) else public
+                                import requests
+                                r = requests.get(public_url, timeout=10)
+                                if r.status_code == 200:
+                                    data = r.content
+                            except Exception:
+                                logger.exception("Supabase download fallback failed", exc_info=True)
                 except Exception:
-                    logger.exception("Supabase client not available or download failed")
+                    logger.exception("Supabase client not available or download failed", exc_info=True)
+
         if not data:
             raise Http404("cannot open file")
 
-        # generate thumbnail via Pillow
+        # Generate thumbnail
         try:
             im = Image.open(io.BytesIO(data))
             im = im.convert("RGB")
@@ -804,6 +800,7 @@ def admin_stats_api(request):
     views_series = build_series(views_qs)
     return JsonResponse({'labels': labels, 'posts': posts_series, 'comments': comments_series, 'views': views_series})
 
+
 @require_GET
 def admin_dashboard_view(request):
     if not request.user.is_staff:
@@ -823,12 +820,18 @@ def admin_dashboard_view(request):
     context = dict(ctx_base, title="Admin dashboard", posts_count=posts_count, comments_count=comments_count, users_count=users_count, app_list=app_list)
     return render(request, "admin/dashboard.html", context)
 
+
 # -----------------------
 # Registration helpers & main entrypoint
 # -----------------------
 def _ensure_registered(site_obj, model, admin_class=None):
+    """
+    Safely register model on provided site_obj. If site_obj is None, fallback to admin.site.
+    """
     if model is None:
         return
+    if site_obj is None:
+        site_obj = admin.site
     try:
         if model not in getattr(site_obj, "_registry", {}):
             if admin_class:
@@ -852,12 +855,10 @@ def register_admin_models(site_obj):
     global custom_admin_site
     custom_admin_site = site_obj or admin.site
 
-    # choose post admin class (allow emergency switch by env)
     def _choose_post_admin():
         try:
             ev = os.environ.get("EMERGENCY_ADMIN", "").strip().lower()
             if ev in ("1", "true", "yes", "on"):
-                # define emergency minimal admin
                 class EmergencyPostAdmin(admin.ModelAdmin):
                     list_display = ("title", "status", "author", "published_at")
                     fields = ("title", "slug", "author", "status", "published_at", "excerpt", "content", "featured_image")
@@ -950,7 +951,6 @@ else:
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             try:
-                # ВАЖНО: передаём класс admin-tiptap-textarea чтобы наш JS нашёл textarea
                 if TipTapWidget:
                     self.fields['content'].widget = TipTapWidget(attrs={'class': 'admin-tiptap-textarea'})
                 else:
@@ -966,17 +966,14 @@ class PostAdmin(BasePostAdmin):
 
     class Media:
         js = (
-        "admin/js/grp_shim.js",           # если используете shim для grp
-            # CDN-версия (точная рекомендованная сборка ниже). Можно заменить на локальную копию.
-        "https://cdn.jsdelivr.net/npm/@ckeditor/ckeditor5-build-classic@47.0.0/build/ckeditor.js",
-        "admin/js/ckeditor_admin_extra.js",
-        "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js",
-        "admin/js/admin_slug_seo.js",
+            "admin/js/grp_shim.js",
+            "https://cdn.jsdelivr.net/npm/@ckeditor/ckeditor5-build-classic@47.0.0/build/ckeditor.js",
+            "admin/js/ckeditor_admin_extra.js",
+            "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js",
+            "admin/js/admin_slug_seo.js",
         )
         css = {
-            'all': ('admin/vendor/ckeditor5/ckeditor.css', "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css",
-                    ),
-
+            'all': ('admin/vendor/ckeditor5/ckeditor.css', "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css",),
         }
 
     def media(self):
@@ -996,7 +993,8 @@ class PostAdmin(BasePostAdmin):
 
     media = property(media)
 
-# Register admin classes safely
+
+# Register admin classes safely (module-level fallback)
 try:
     if Post is not None:
         admin.site.register(Post, PostAdmin)
@@ -1005,7 +1003,6 @@ except AlreadyRegistered:
 except Exception:
     logger.exception("Could not register Post admin")
 
-# register other models with safe helper
 try:
     _ensure_registered(admin.site, Category, CategoryAdmin)
     _ensure_registered(admin.site, Tag, TagAdmin)
@@ -1013,11 +1010,6 @@ try:
     _ensure_registered(admin.site, PostReaction, PostReactionAdmin)
     if PostAttachment is not None:
         _ensure_registered(admin.site, MediaLibrary, MediaLibraryAdmin)
-        _ensure_registered(custom_admin_site, MediaLibrary, MediaLibraryAdmin)
-        try:
-            _ensure_registered(admin.site, PostAttachment, MediaLibraryAdmin)
-            _ensure_registered(custom_admin_site, PostAttachment, MediaLibraryAdmin)
-        except Exception:
-            pass
+        _ensure_registered(admin.site, PostAttachment, MediaLibraryAdmin)
 except Exception:
     logger.exception("Post-registration failed")
