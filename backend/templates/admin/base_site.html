@@ -1,8 +1,7 @@
 {% extends "admin/base.html" %}
 {% load static i18n %}
 
-{# Шаблон исправлен: теперь расширяет реальный admin/base.html (jazzmin). #}
-{# Здесь мы сохраняем ваш оригинальный ensureDollar shim и добавляем кнопку в sidebar. #}
+{# Исправленный шаблон — НЕ использует имена переменных с ведущим подчёркиванием. #}
 
 {% block extrahead %}
 <script>
@@ -27,7 +26,7 @@
 
 <style>
 /* Стили для заметной кнопки медиатеки */
-.__media_lib_btn {
+.media-lib-btn {
   display: inline-flex;
   align-items: center;
   gap: .5rem;
@@ -41,21 +40,15 @@
   line-height: 1;
   font-size: 14px;
 }
-
-/* Когда кнопка вставлена в боковую панель — делаем блочным элементом и растягиваем */
-.__media_lib_btn.__sidebar {
+.media-lib-btn.sidebar {
   display: block;
   width: calc(100% - 16px);
   text-align: left;
   padding-left: 14px;
   margin: 6px 8px;
 }
-
-/* Понятный маленький svg-икон для кнопки */
-.__media_lib_btn svg { vertical-align: middle; }
-
-/* Если тема очень тёмная — сохраним контраст */
-.__media_lib_btn:focus, .__media_lib_btn:hover { opacity: 0.95; text-decoration: none; }
+.media-lib-btn svg { vertical-align: middle; }
+.media-lib-btn:focus, .media-lib-btn:hover { opacity: 0.95; text-decoration: none; }
 </style>
 
 {{ block.super }}
@@ -63,31 +56,30 @@
 
 {% block contenttitle %}
   {{ block.super }}
-  {# Дополнительный резервный элемент — верхняя кнопка (соответствует тому, если боковая вставка не сработает). #}
-  {% url 'admin-media-library' as _murl %}
+  {# Верхняя (резервная) кнопка медиатеки — будет видна, если боковая вставка не сработает #}
+  {% url 'admin-media-library' as media_url %}
   <div style="margin-top:8px;">
-    <a id="__media_lib_top" class="__media_lib_btn" href="{% if _murl %}{{ _murl }}{% else %}/admin/media-library/{% endif %}" title="{% trans 'Открыть медиабиблиотеку' %}">
+    <a id="media_lib_top" class="media-lib-btn" href="{% if media_url %}{{ media_url }}{% else %}/admin/media-library/{% endif %}" title="{% trans 'Открыть медиабиблиотеку' %}">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="vertical-align:middle;margin-right:6px" aria-hidden="true"><path d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 13l2.5 3 2-2.5L15 17" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>{% trans "Медиа библиотека" %}</span>
     </a>
   </div>
 {% endblock contenttitle %}
 
-{# Ниже — скрипт, который ищет боковую панель и вставляет туда большую кнопку. #}
 {% block extrafooter %}
 {{ block.super }}
 <script>
 (function(){
-  // Получаем href медиатеки: попробуем прочитать из уже вставленного верхнего backup-элемента
+  // пробуем получить href медиатеки из верхней кнопки
   var mediaHref = (function(){
-    var top = document.getElementById('__media_lib_top');
+    var top = document.getElementById('media_lib_top');
     if (top && top.getAttribute) return top.getAttribute('href') || '/admin/media-library/';
     return '/admin/media-library/';
   })();
 
   function makeButton(sidebarStyle){
     var a = document.createElement('a');
-    a.className = '__media_lib_btn' + (sidebarStyle ? ' __sidebar' : '');
+    a.className = 'media-lib-btn' + (sidebarStyle ? ' sidebar' : '');
     a.setAttribute('href', mediaHref);
     a.setAttribute('title', 'Открыть медиабиблиотеку');
     a.setAttribute('aria-label','Медиа библиотека');
@@ -97,13 +89,13 @@
 
   function alreadyExists(container){
     if(!container) return false;
-    var links = container.querySelectorAll('a.__media_lib_btn, a[href*="media-library"]');
+    var links = container.querySelectorAll('a.media-lib-btn, a[href*="media-library"]');
     return links && links.length > 0;
   }
 
   function tryInsert(){
     var selectors = [
-      '#nav-sidebar',       // возможные id/классы в кастомных темах
+      '#nav-sidebar',
       '.app-list',
       '.module',
       '.grp-module',
@@ -112,37 +104,32 @@
       '.col-side',
       '.sidenav',
       '#user-tools',
-      '.model-list',        // внутри списка моделей
-      '.admindoc'           // fallback
+      '.model-list',
+      '.admindoc'
     ];
     for (var i=0;i<selectors.length;i++){
       var sel = selectors[i];
       var el = document.querySelector(sel);
       if (!el) continue;
       if (alreadyExists(el)) return true;
-      // вставляем в начало контейнера
       try {
         var btn = makeButton(true);
         if (el.firstElementChild) el.insertBefore(btn, el.firstElementChild);
         else el.appendChild(btn);
         return true;
       } catch(e){
-        // игнорируем и пробуем следующий селектор
         continue;
       }
     }
 
-    // Если не нашли подходящего контейнера — попробуем рядом с видимыми пунктами меню,
-    // например найти элемент с текстом "Админпанель" и вставить после него.
-    var anchors = Array.prototype.slice.call(document.querySelectorAll('a, button, div'));
+    // fallback: поиск по тексту "Админпанель" или "Панель"
+    var anchors = Array.prototype.slice.call(document.querySelectorAll('a, button, div, span'));
     for (var j=0;j<anchors.length;j++){
       var node = anchors[j];
       if (!node || !node.textContent) continue;
       var txt = node.textContent.trim();
       if (!txt) continue;
-      // ищем точные метки, которые присутствуют в вашей боковой панели (по скриншоту)
       if (/Админпанель|Панель|Dashboard/i.test(txt)) {
-        // вставим нашу кнопку после этого узла
         if (node.parentNode && !alreadyExists(node.parentNode)) {
           try {
             var btn2 = makeButton(true);
@@ -157,7 +144,6 @@
   }
 
   document.addEventListener('DOMContentLoaded', function(){
-    // пытаемся вставить сразу и несколько раз (на случай, если меню рендерится динамически)
     tryInsert();
     setTimeout(tryInsert, 120);
     setTimeout(tryInsert, 700);
