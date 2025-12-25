@@ -40,6 +40,27 @@
     <div class="pt-admin-shell">
         <aside class="pt-admin-sidebar">
             <div class="pt-container">
+
+                {# === ВСТАВЛЕННАЯ ВИДНАЯ КНОПКА МЕДИА-БИБЛИОТЕКИ ===
+                   Большая синяя кнопка в начале боковой панели.
+                   Ссылка ведёт на changelist медиабиблиотеки:
+                   {% url 'admin:blog_medialibrary_changelist' %}
+                   При необходимости можно заменить на другой именованный маршрут. #}
+                <div class="sidebar-section" style="padding-top:6px;">
+                    <a href="{% url 'admin:blog_medialibrary_changelist' %}"
+                       class="btn-media-library"
+                       style="display:block; background:#0d6efd; color:#fff; padding:10px 12px; border-radius:6px; text-align:center; font-weight:600; margin:6px 0; text-decoration:none; box-shadow:0 1px 0 rgba(0,0,0,0.05);">
+                      <span style="display:inline-flex;align-items:center;gap:8px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;">
+                          <path d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M8 13l2.5 3 2-2.5L15 17" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <strong>Медиа библиотека</strong>
+                      </span>
+                    </a>
+                </div>
+                {# === конец вставки === #}
+
                 <div class="sidebar-section">
                     <h4 class="sidebar-title">Быстрые действия</h4>
                     <ul class="sidebar-list">
@@ -65,15 +86,19 @@
                         {% endfor %}
                     </ul>
                 </div>
+
             </div>
         </aside>
 
-        <main class="pt-admin-main">
-            <div class="pt-container content-area">
-                {% block content_title %}
-                    {% if title %}
-                        <h1 class="page-title">{{ title }}</h1>
-                    {% endif %}
+        <main class="pt-main-content">
+            <div class="pt-container">
+                {% block breadcrumbs %}
+                  {% if title %}
+                    <div class="breadcrumbs">
+                      <a href="{% url 'admin:index' %}">{% trans "Home" %}</a>
+                      &nbsp;/&nbsp;<span>{{ title }}</span>
+                    </div>
+                  {% endif %}
                 {% endblock %}
 
                 {% block messages %}
@@ -89,17 +114,24 @@
                 {% block content %}
                 {# Стандартный контент админа будет здесь #}
                 {% endblock %}
+
             </div>
         </main>
     </div>
 
     <footer class="pt-admin-footer">
-        <div class="pt-container">
-            <div>© {{ now|date:"Y" }} {{ site_title|default:"Admin" }}</div>
-            <div class="footer-right">Backend · Django · 2025</div>
-        </div>
+      <div class="pt-container">
+        <small>— версия интерфейса: 1</small>
+      </div>
     </footer>
 
-    {% block extrabody %}{% endblock %}
+    <script>
+      // базовый csrf helper для клиентских вызовов
+      (function(){
+        function getCookie(name){let v=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');return v?v.pop():'';}
+        window.ADMIN_CSRF = {csrfToken: getCookie('csrftoken')};
+      })();
+    </script>
+    <script defer src="{% static 'admin/js/admin-global.js' %}"></script>
 </body>
 </html>
