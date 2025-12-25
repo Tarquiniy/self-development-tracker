@@ -153,6 +153,7 @@ if TipTapWidget is None:
                 'https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css',
                 )
             }
+
 # -----------------------
 # Helpers
 # -----------------------
@@ -193,7 +194,6 @@ def _pretty_change_message(raw):
 
 # -----------------------
 # Admin classes
-# (оставил логику как в твоём файле — для краткости я не менял остальные админы)
 # -----------------------
 class BasePostAdmin(VersionAdmin):
     change_form_template = None
@@ -353,6 +353,7 @@ class MediaLibraryAdmin(admin.ModelAdmin):
             pass
         return "-"
     def changelist_view(self, request, extra_context=None):
+        # Перенаправляем на централизованный view медиатеки (он определён ниже)
         return redirect("admin-media-library")
 
 
@@ -361,6 +362,11 @@ class MediaLibraryAdmin(admin.ModelAdmin):
 # -----------------------
 @require_http_methods(["GET", "POST"])
 def admin_media_library_view(request):
+    """
+    Админский view для медиатеки (GET — список, POST — загрузка).
+    Этот view используется как автономный маршрут /admin/media-library/ (зарегистрирован в blog.urls)
+    и также добавляется в admin через register_admin_models (если site wrapping включён).
+    """
     if not request.user.is_staff:
         raise Http404("permission denied")
 
@@ -735,18 +741,14 @@ class PostAdmin(BasePostAdmin):
         try:
             extra = forms.Media(
                 js=(
-                    # Предпочтительно: разместите свою собственную сборку CKEditor (с нужными плагинами)
-                    # в static/admin/vendor/ckeditor5/ckeditor.js и укажите путь ниже.
-                    # Если хотите CDN, замените на CDN URL LTS (см. заметки).
                     "admin/js/grp_shim.js",
                     "admin/vendor/ckeditor5/ckeditor.js",
-                    "admin/js/ckeditor_admin_extra.js",  # инициализатор (ниже)
+                    "admin/js/ckeditor_admin_extra.js",
                 ),
                 css={'all': ("admin/css/ckeditor_admin.css",)}
             )
             return media + extra
         except Exception:
-            # на ошибку не падаем, возвращаем базовый media
             return media
 
     media = property(media)

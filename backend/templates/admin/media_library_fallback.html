@@ -1,0 +1,23 @@
+{# backend/templates/admin/media_library_fallback.html #}
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block content %}
+  <div style="max-width:920px;margin:16px auto;padding:18px;background:#fff;border-radius:8px;box-shadow:0 1px 0 rgba(0,0,0,0.04);">
+    <h1>{% trans "Медиа библиотека" %}</h1>
+    <p>{% trans "Не удалось автоматически найти changelist медиабиблиотеки. Ниже — полезные ссылки и варианты перехода." %}</p>
+
+    <ul>
+      {% for item in fallback_links %}
+        <li style="margin:8px 0;">
+          <a href="{{ item.url }}" style="display:inline-block;padding:8px 12px;background:#0d6efd;color:#fff;border-radius:6px;text-decoration:none;">
+            {{ item.label }}
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+
+    <hr style="margin:18px 0;" />
+    <p>{% trans "Если у вас есть модель медиабиблиотеки в приложении blog, убедитесь, что она зарегистрирована в admin.py (ModelAdmin) — тогда при следующем заходе вы будете автоматически перенаправлены." %}</p>
+  </div>
+{% endblock %}

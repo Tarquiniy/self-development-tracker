@@ -23,6 +23,9 @@ from .views import (
     get_csrf_token,  # <-- new
 )
 
+# Импортируем админский view медиатеки из blog.admin
+from .admin import admin_media_library_view
+
 app_name = 'blog'
 
 router = DefaultRouter()
@@ -41,6 +44,9 @@ urlpatterns = [
 
     path('admin/quick-action/', quick_action_view, name='quick-action'),
     path('admin/dashboard-stats/', dashboard_stats, name='dashboard-stats'),
+
+    # Здесь регистрируем админский маршрут медиатеки — доступен как /admin/media-library/
+    path('admin/media-library/', admin_media_library_view, name='admin-media-library'),
 
     path('media/list/', media_list, name='media-list'),
     path('media/upload/', media_upload, name='media-upload'),
