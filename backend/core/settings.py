@@ -219,6 +219,7 @@ INSTALLED_APPS = [
     "payments",
     "analytics",
     "blog",
+    "media.apps.MediaConfig",
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"

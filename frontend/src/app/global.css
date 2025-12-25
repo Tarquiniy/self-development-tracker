@@ -1129,3 +1129,61 @@ pre {
   box-shadow: 0 0 0 6px rgba(34, 120, 255, 0.08) !important;
   outline: none;
 }
+
+
+/* =========================
+   Page offset, breadcrumbs, and no-hover overrides for blog pages
+   ========================= */
+
+/* make content start a bit lower under the header */
+.page-offset {
+  margin-top: calc(var(--header-height) + 28px); /* header height + extra space */
+}
+
+/* a larger offset (if needed) */
+.page-offset-large {
+  margin-top: calc(var(--header-height) + 44px);
+}
+
+/* breadcrumbs styles */
+.breadcrumbs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.95rem;
+  color: hsl(var(--muted-foreground));
+  margin-top: 8px;
+  margin-bottom: 12px;
+}
+.breadcrumbs a {
+  color: hsl(var(--primary));
+  text-decoration: none;
+  font-weight: 600;
+}
+.breadcrumbs a:hover { text-decoration: underline; }
+
+/* Disable hover transform for cards with .no-hover */
+.card.no-hover:hover,
+.post-article.card.no-hover:hover {
+  transform: none !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* Ensure post-content prose has comfortable spacing */
+.post-content {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* Ensure excerpt HTML inside card-excerpt is styled consistently */
+.card-excerpt :where(p, h1, h2, h3, h4, ul, ol, strong, em) {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+/* Slightly larger spacing between navbar and topmost container on small screens too */
+@media (max-width: 720px) {
+  .page-offset { margin-top: calc(var(--header-height) + 20px); }
+}

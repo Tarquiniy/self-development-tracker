@@ -1,0 +1,18 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% block title %}Media Library{% endblock %}
+{% block content %}
+<h1>Media Library</h1>
+
+<div id="uploader">
+  <input id="file-input" type="file" accept="image/*" />
+  <button id="upload-btn">Upload</button>
+  <span id="upload-status"></span>
+</div>
+
+<hr />
+
+<div id="media-grid" style="display:flex; flex-wrap:wrap; gap:10px;"></div>
+
+<script src="{% static 'media/js/media_uploader.js' %}"></script>
+{% endblock %}
