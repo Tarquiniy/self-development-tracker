@@ -1,0 +1,20 @@
+<div class="media-widget">
+  <input type="hidden"
+         name="{{ widget.name }}"
+         id="{{ widget.attrs.id }}"
+         value="{{ widget.value|default:'' }}">
+
+  <div class="media-widget-preview">
+    {% if widget.value %}
+      <img src="{{ widget.value }}" alt="" />
+    {% else %}
+      <div class="placeholder">Изображение не выбрано</div>
+    {% endif %}
+  </div>
+
+  <button type="button"
+          class="button media-widget-open"
+          data-field="{{ widget.attrs.id }}">
+    Выбрать
+  </button>
+</div>

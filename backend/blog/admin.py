@@ -23,6 +23,7 @@ from django.utils.safestring import mark_safe
 from django.utils.html import escape
 from django.utils.module_loading import import_string
 
+from backend.blog.static.admin.widgets import MediaLibraryWidget
 
 from .utils import translit_slugify
 
@@ -1079,6 +1080,10 @@ class PostAdmin(BasePostAdmin):
     form = PostAdminForm
     exclude = ('content_json',)
     change_form_template = BasePostAdmin.change_form_template or 'admin/blog/post/change_form.html'
+    formfield_overrides = {
+        models.URLField: {"widget": MediaLibraryWidget},
+        models.CharField: {"widget": MediaLibraryWidget},
+    }
 
     class Media:
         js = (
