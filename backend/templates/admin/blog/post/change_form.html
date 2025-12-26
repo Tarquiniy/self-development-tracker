@@ -13,7 +13,105 @@
     .ck-editor__editable_inline { min-height:260px; background:#fff; color:#0f1724; border-radius:6px; padding:12px; border:1px solid #e6eef3; }
     .action-extra { margin-left:8px; }
     /* Если хотите — можете переопределить кнопки панели через CSS здесь */
+    /* preview for featured image */
+    .featured-preview { margin-top:8px; max-width:240px; display:block; }
   </style>
+
+  <script>
+    (function(){
+      // Получаем id текущего поста из URL (/admin/blog/post/<id>/change/)
+      function getPostId(){
+        var m = window.location.pathname.match(/\/(\d+)\/change\/$/);
+        if(m) return m[1];
+        // fallback: try hidden input
+        var el = document.querySelector('input[name="id"]') || document.getElementById('id_id');
+        if(el) return el.value;
+        return null;
+      }
+
+      window.openMediaLibrary = function(e){
+        if(e && e.preventDefault) e.preventDefault();
+        var postId = getPostId();
+        var field = 'featured_image';
+        if(!postId){
+          // Open plain media library (no attach)
+          var url = "{% url 'admin-media-library' %}";
+          window.open(url, 'media-library', 'width=1000,height=700');
+          return false;
+        }
+        // Open with attach parameters
+        var url = "{% url 'admin-media-library' %}?attach_to=post&post_id=" + encodeURIComponent(postId) + "&field=" + encodeURIComponent(field);
+        window.open(url, 'media-library', 'width=1000,height=700');
+        return false;
+      };
+
+      // Handler for messages from media library
+      window.addEventListener('message', function(ev){
+        try {
+          var msg = ev.data;
+          if(!msg || msg.type !== 'media-library-selected') return;
+          var field = msg.field || 'featured_image';
+          var url = msg.url || '';
+          var attachment_id = msg.attachment_id || msg.attachmentId || null;
+
+          // Update form input: look for id_field
+          var input = document.getElementById('id_' + field) || document.querySelector('input[name="' + field + '"]');
+          if(input){
+            // If input is text-like (e.g., CharField storing URL) set URL.
+            try {
+              if(input.type === 'text' || input.type === 'url' || input.tagName.toLowerCase() === 'input') {
+                input.value = url || input.value;
+              } else {
+                // Otherwise try set to attachment_id if exists
+                if(attachment_id) input.value = attachment_id;
+              }
+            } catch(e){}
+          }
+
+          // Update preview image
+          var preview = document.getElementById(field + '_preview');
+          if(preview && url){
+            preview.src = url;
+          } else if (url) {
+            // try to insert preview next to the field
+            var fieldRow = document.getElementById('id_' + field);
+            var container = fieldRow && fieldRow.parentNode ? fieldRow.parentNode : document.querySelector('.form-row.field-' + field);
+            if(container){
+              var img = document.getElementById(field + '_preview');
+              if(!img){
+                img = document.createElement('img');
+                img.id = field + '_preview';
+                img.className = 'featured-preview';
+                img.style.maxWidth = '240px';
+                container.appendChild(img);
+              }
+              img.src = url;
+            }
+          }
+
+          // small UI flash
+          (function showTemp(txt){
+            var el = document.createElement('div');
+            el.textContent = txt || 'Изображение привязано';
+            el.style.position = 'fixed';
+            el.style.right = '20px';
+            el.style.top = '20px';
+            el.style.padding = '8px 12px';
+            el.style.background = '#10B981';
+            el.style.color = '#fff';
+            el.style.borderRadius = '6px';
+            el.style.zIndex = 2000;
+            document.body.appendChild(el);
+            setTimeout(function(){ el.remove(); }, 2200);
+          })('Изображение привязано');
+
+        } catch (e) {
+          console.error('media-library message handling error', e);
+        }
+      }, false);
+    })();
+  </script>
+
 {% endblock %}
 
 {% block submit_buttons_top %}

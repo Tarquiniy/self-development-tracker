@@ -1,3 +1,4 @@
+// backend/blog/static/admin/js/media_library.js
 // media_library.js — updated: show immediate preview + replace with server URL when ready
 (function(){
   function $(sel, ctx){ return (ctx || document).querySelector(sel); }
@@ -8,6 +9,9 @@
   const uploadForm = document.getElementById('upload-form');
   const uploadStatus = document.getElementById('upload-status');
   const grid = document.getElementById('media-grid');
+
+  // Endpoint used to attach an attachment to a post (admin-side)
+  const ATTACH_ENDPOINT = '/admin/media-attach/';
 
   function csrf() {
     const match = document.cookie.match(/(^|;)\s*csrftoken=([^;]+)/);
@@ -21,6 +25,15 @@
     if(!text) return;
     setTimeout(()=>{ uploadStatus.textContent = ''; uploadStatus.classList.remove('error'); }, 4500);
   }
+
+  // Query params helper
+  function getQueryParams(){
+    try{ return new URLSearchParams(window.location.search); }catch(e){ return new URLSearchParams(); }
+  }
+  const q = getQueryParams();
+  const attachTo = q.get('attach_to'); // 'post' or null
+  const attachPostId = q.get('post_id');
+  const attachField = q.get('field') || 'featured_image';
 
   // build a temporary unique id for preview cards
   function tempId() { return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
@@ -133,8 +146,6 @@
       if(!res.ok || !data.success){
         showStatus('Ошибка при загрузке', true);
         console.error('upload failed', data);
-        // optionally remove temp preview card
-        // removeCardByIdentifier({tempId: tempCardId});
         return;
       }
       // Replace preview with server-provided URL / thumbnail
@@ -143,6 +154,34 @@
     }catch(e){
       console.error(e);
       showStatus('Ошибка при загрузке', true);
+    }
+  }
+
+  // Attach attachment to a post via admin endpoint; callback(err, data)
+  async function attachToPost(attachmentId, callback){
+    if(!attachPostId) {
+      return callback && callback({success:false, error:'missing_post_id'});
+    }
+    try{
+      const payload = { post_id: attachPostId, attachment_id: attachmentId, field: attachField };
+      const res = await fetch(ATTACH_ENDPOINT, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrf()
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if(res.ok && data && data.success){
+        return callback && callback(null, data);
+      } else {
+        return callback && callback(data || {success:false});
+      }
+    }catch(e){
+      console.error('attachToPost error', e);
+      return callback && callback({success:false, error:String(e)});
     }
   }
 
@@ -186,7 +225,40 @@
     });
     const ins = card.querySelector('.btn-insert');
     if(ins) ins.addEventListener('click', (e)=>{
-      const url = ins.dataset.url || (card.querySelector('.media-thumb img') && card.querySelector('.media-thumb img').src) || '';
+      const cardEl = ins.closest('.media-card');
+      const attachmentId = cardEl && cardEl.dataset && cardEl.dataset.id ? cardEl.dataset.id : null;
+      const url = ins.dataset.url || (cardEl.querySelector('.media-thumb img') && cardEl.querySelector('.media-thumb img').src) || '';
+
+      // If media library opened for attaching to a post, use attach flow
+      if(attachTo === 'post' && attachPostId && attachmentId){
+        showStatus('Привязка изображения...');
+        attachToPost(attachmentId, function(err, data){
+          if(err || !data || !data.success){
+            showStatus('Ошибка привязки', true);
+            console.error('attach error', err || data);
+            return;
+          }
+          // notify opener window (post change form) with message
+          try {
+            window.opener.postMessage({
+              type: 'media-library-selected',
+              kind: 'attachment-attached',
+              field: attachField,
+              post_id: attachPostId,
+              attachment_id: data.attachment_id || data.id,
+              url: data.url || url
+            }, '*');
+          } catch (e) {
+            console.warn('postMessage failed', e);
+          }
+          showStatus('Изображение привязано');
+          // close popup if possible (admin opens in new window)
+          try { window.close(); } catch(e){}
+        });
+        return;
+      }
+
+      // default behavior: insert / copy link
       if(window.opener && typeof window.opener.insertMedia === 'function'){
         window.opener.insertMedia(url);
       } else {

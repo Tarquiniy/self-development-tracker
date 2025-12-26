@@ -23,12 +23,18 @@ interface PostCardProps {
 }
 
 export default function PostCard({ post }: PostCardProps) {
-  const imageUrl = post.featured_image || post.og_image || '/placeholder-article.jpg'
-  const readingTime = post.reading_time || Math.ceil((post.excerpt?.length || 0) / 200)
-  
+  // Prefer featured_image (admin-selected), then og_image, then placeholder.
+  // If featured_image is a relative path (starts with '/'), use as-is.
+  // If it's empty, fallback to og_image or placeholder.
+  const imageUrl = post.featured_image && post.featured_image !== ''
+    ? post.featured_image
+    : (post.og_image && post.og_image !== '' ? post.og_image : '/placeholder-article.jpg')
+
+  const readingTime = post.reading_time || Math.max(1, Math.ceil((post.excerpt?.replace(/<[^>]*>/g, '').length || 0) / 200))
+
   return (
     <article className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-      <Link href={`/blog/${post.slug}`}>
+      <Link href={`/blog/${post.slug}`} className="block">
         <div className="aspect-video relative overflow-hidden">
           <Image 
             src={imageUrl} 
@@ -36,6 +42,7 @@ export default function PostCard({ post }: PostCardProps) {
             fill
             className="object-cover hover:scale-105 transition-transform"
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            priority={false}
           />
         </div>
         

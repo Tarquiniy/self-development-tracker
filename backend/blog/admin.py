@@ -21,6 +21,8 @@ from django.db.models import Count
 from django.db import models
 from django.utils.safestring import mark_safe
 from django.utils.html import escape
+from django.utils.module_loading import import_string
+
 
 from .utils import translit_slugify
 
@@ -801,6 +803,93 @@ def admin_stats_api(request):
     return JsonResponse({'labels': labels, 'posts': posts_series, 'comments': comments_series, 'views': views_series})
 
 
+@require_POST
+def admin_media_attach_view(request):
+    """
+    Прикрепить существующий PostAttachment к посту:
+    Ожидает JSON body или form-data с: post_id, attachment_id, field (по умолчанию 'featured_image').
+    Возвращает {'success': True, 'url': '<public_url>', 'post_id': ..., 'attachment_id': ...}
+    """
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': 'permission_denied'}, status=403)
+
+    # Поддержка JSON body или form POST
+    try:
+        payload = json.loads(request.body.decode('utf-8') or '{}') if request.content_type == 'application/json' else request.POST
+    except Exception:
+        payload = request.POST
+
+    post_id = payload.get('post_id') or payload.get('postId') or None
+    attachment_id = payload.get('attachment_id') or payload.get('attachmentId') or payload.get('id')
+    field = payload.get('field') or 'featured_image'
+
+    if not post_id or not attachment_id:
+        return JsonResponse({'success': False, 'error': 'missing_parameters'}, status=400)
+
+    # Find objects
+    try:
+        post_obj = Post.objects.get(pk=post_id)
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'post_not_found'}, status=404)
+
+    try:
+        att = PostAttachment.objects.get(pk=attachment_id)
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'attachment_not_found'}, status=404)
+
+    # Attempt to assign attachment.file to post.field in a robust way
+    file_field = getattr(att, 'file', None)
+    assigned = False
+    url = ''
+
+    try:
+        # prefer assigning file object if field exists and is FileField/ImageField on Post
+        if hasattr(post_obj, field):
+            try:
+                # If post.field is a FileField descriptor, assign the file object (will copy name)
+                setattr(post_obj, field, file_field)
+                post_obj.save()
+                assigned = True
+            except Exception:
+                # Try assigning the filename (name string)
+                try:
+                    setattr(post_obj, field, getattr(file_field, 'name', None))
+                    post_obj.save()
+                    assigned = True
+                except Exception:
+                    assigned = False
+        else:
+            # as fallback, try to set an attribute like field + '_id' if exists (for FK)
+            if hasattr(post_obj, f"{field}_id"):
+                try:
+                    setattr(post_obj, f"{field}_id", getattr(att, 'id', None))
+                    post_obj.save()
+                    assigned = True
+                except Exception:
+                    assigned = False
+    except Exception:
+        logger.exception("Failed while assigning attachment to post")
+        assigned = False
+
+    # Try to compute a usable URL for client
+    try:
+        if file_field and getattr(file_field, 'name', None):
+            try:
+                url = getattr(file_field, 'url', '') or default_storage.url(getattr(file_field, 'name'))
+            except Exception:
+                try:
+                    url = default_storage.url(getattr(file_field, 'name'))
+                except Exception:
+                    url = ''
+    except Exception:
+        url = ''
+
+    if not assigned:
+        return JsonResponse({'success': False, 'error': 'assign_failed'}, status=500)
+
+    return JsonResponse({'success': True, 'url': url, 'post_id': post_obj.pk, 'attachment_id': att.pk})
+
+
 @require_GET
 def admin_dashboard_view(request):
     if not request.user.is_staff:
@@ -912,6 +1001,7 @@ def register_admin_models(site_obj):
             path("dashboard/stats-data/", admin_stats_api, name="admin-dashboard-stats"),
             path("media-library/", admin_media_library_view, name="admin-media-library"),
             path("media-thumbnail/<int:pk>/", admin_media_thumbnail_view, name="admin-media-thumbnail"),
+            path("media-attach/", admin_media_attach_view, name="admin-media-attach"),
             path("posts/update/", admin_post_update_view, name="admin-post-update"),
             path("posts/autosave/", admin_autosave_view, name="admin-autosave"),
             path("posts/preview-token/", admin_preview_token_view, name="admin-preview-token"),
