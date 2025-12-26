@@ -1,4 +1,4 @@
-// backend/static/admin/js/media_library.js
+// media_library.js — updated: show immediate preview + replace with server URL when ready
 (function(){
   function $(sel, ctx){ return (ctx || document).querySelector(sel); }
   function $all(sel, ctx){ return Array.from((ctx || document).querySelectorAll(sel)); }
@@ -15,13 +15,109 @@
   }
 
   function showStatus(text, isError){
+    if(!uploadStatus) return;
     uploadStatus.textContent = text || '';
     uploadStatus.classList.toggle('error', !!isError);
     if(!text) return;
     setTimeout(()=>{ uploadStatus.textContent = ''; uploadStatus.classList.remove('error'); }, 4500);
   }
 
-  async function uploadFile(file){
+  // build a temporary unique id for preview cards
+  function tempId() { return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+  // create card and return element; if previewUrl provided, card is temporary and gets data-temp-id
+  function prependAttachmentToGrid(item, opts){
+    if(!grid) return null;
+    opts = opts || {};
+    const isTemp = !!opts.tempId;
+    const card = document.createElement('div');
+    card.className = 'media-card';
+    if(isTemp) {
+      card.dataset.tempId = opts.tempId;
+    } else if (item && item.id) {
+      card.dataset.id = item.id;
+    }
+    const previewSrc = item && item._previewSrc;
+    const imgSrc = previewSrc || item.url || (item.id ? `/admin/media-thumbnail/${item.id}/` : '');
+    const escapedUrl = escapeHtml(item.url || '');
+    const escapedTitle = escapeHtml(truncate(item.title || '', 28));
+    const thumbHtml = imgSrc ? `<img src="${imgSrc}" alt="${escapedTitle}" loading="lazy" />` : '<div class="media-icon"></div>';
+    card.innerHTML = `<div class="media-thumb">${thumbHtml}</div>
+      <div class="media-meta">
+        <div class="media-title" title="${escapedTitle}">${escapedTitle}</div>
+        <div class="media-actions">
+          ${ item.url ? `<a class="btn btn-small btn-copy" href="${escapedUrl}" target="_blank" rel="noopener noreferrer">Открыть</a>` : '' }
+          <button class="btn btn-small btn-insert" data-url="${escapedUrl}">Вставить</button>
+          <button class="btn btn-small btn-delete" data-id="${escapeHtml(item.id || '')}" data-temp-id="${isTemp ? opts.tempId : ''}">Удалить</button>
+        </div>
+      </div>`;
+    grid.insertBefore(card, grid.firstChild);
+    attachCardHandlers(card);
+    return card;
+  }
+
+  function escapeHtml(s){
+    if(!s) return '';
+    return s.replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
+  }
+  function truncate(s,n){ return s && s.length>n ? s.slice(0,n-1)+'…' : s||''; }
+
+  // update temporary card (identified by tempId) with server response (set proper data-id and real src)
+  function updateTempCardWithServerData(tempId, serverData){
+    if(!grid) return;
+    const card = grid.querySelector(`[data-temp-id="${CSS.escape(tempId)}"]`);
+    if(!card) return;
+    // update data-id
+    if(serverData.id){
+      card.dataset.id = serverData.id;
+    }
+    // Update image src: prefer serverData.url, else use thumbnail endpoint
+    const img = card.querySelector('.media-thumb img');
+    const newSrc = serverData.url || (serverData.id ? `/admin/media-thumbnail/${serverData.id}/` : '');
+    if(img && newSrc){
+      // revoke old objectURL if any
+      const oldSrc = img.src || '';
+      try {
+        if(oldSrc && oldSrc.startsWith('blob:')) {
+          URL.revokeObjectURL(oldSrc);
+        }
+      } catch(e){}
+      img.src = newSrc;
+    }
+    // update actions (Open link)
+    const openLink = card.querySelector('.btn-copy');
+    if(serverData.url){
+      if(openLink){
+        openLink.href = serverData.url;
+      } else {
+        const actions = card.querySelector('.media-actions');
+        const a = document.createElement('a');
+        a.className = 'btn btn-small btn-copy';
+        a.href = serverData.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = "Открыть";
+        actions.insertBefore(a, actions.firstChild);
+      }
+    }
+    // remove temp-id attribute
+    card.removeAttribute('data-temp-id');
+    // update delete button data-id
+    const delBtn = card.querySelector('.btn-delete');
+    if(delBtn && serverData.id){
+      delBtn.dataset.id = serverData.id;
+      delBtn.removeAttribute('data-temp-id');
+    }
+  }
+
+  // remove a card by tempId or id
+  function removeCardByIdentifier({id, tempId}){
+    const selector = tempId ? `[data-temp-id="${CSS.escape(tempId)}"]` : `[data-id="${CSS.escape(id)}"]`;
+    const card = grid.querySelector(selector);
+    if(card && card.parentNode) card.parentNode.removeChild(card);
+  }
+
+  async function uploadFile(file, tempCardId){
     if(!file) return;
     const fd = new FormData();
     fd.append('file', file);
@@ -33,47 +129,22 @@
         credentials: 'same-origin',
         headers: { 'X-CSRFToken': csrf() },
       });
-      const data = await res.json();
+      const data = await res.json().catch(()=>({success:false}));
       if(!res.ok || !data.success){
         showStatus('Ошибка при загрузке', true);
         console.error('upload failed', data);
+        // optionally remove temp preview card
+        // removeCardByIdentifier({tempId: tempCardId});
         return;
       }
+      // Replace preview with server-provided URL / thumbnail
+      updateTempCardWithServerData(tempCardId, data);
       showStatus('Загружено');
-      prependAttachmentToGrid(data);
     }catch(e){
       console.error(e);
       showStatus('Ошибка при загрузке', true);
     }
   }
-
-  function prependAttachmentToGrid(item){
-    const card = document.createElement('div');
-    card.className = 'media-card';
-    card.dataset.id = item.id;
-    const escapedUrl = escapeHtml(item.url || '');
-    const escapedTitle = escapeHtml(truncate(item.title || '', 28));
-    const thumbHtml = item.id ? `<img src="/admin/media-thumbnail/${escapeHtml(item.id)}/" loading="lazy" />` : (escapedUrl ? `<img src="${escapedUrl}" loading="lazy" />` : '<div class="media-icon"></div>');
-    card.innerHTML = `<div class="media-thumb">${thumbHtml}</div>
-      <div class="media-meta">
-        <div class="media-title" title="${escapedTitle}">${escapedTitle}</div>
-        <div class="media-actions">
-          <a class="btn btn-small btn-copy" href="${escapedUrl}" target="_blank" rel="noopener noreferrer">Открыть</a>
-          <button class="btn btn-small btn-insert" data-url="${escapedUrl}">Вставить</button>
-          <button class="btn btn-small btn-delete" data-id="${escapeHtml(item.id)}">Удалить</button>
-        </div>
-      </div>`;
-    if(grid){
-      grid.insertBefore(card, grid.firstChild);
-      attachCardHandlers(card);
-    }
-  }
-
-  function escapeHtml(s){
-    if(!s) return '';
-    return s.replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
-  }
-  function truncate(s,n){ return s && s.length>n ? s.slice(0,n-1)+'…' : s||''; }
 
   async function deleteAttachment(id, cardEl){
     if(!confirm('Удалить файл?')) return;
@@ -103,12 +174,19 @@
   function attachCardHandlers(card){
     const del = card.querySelector('.btn-delete');
     if(del) del.addEventListener('click', (e)=>{
+      const temp = del.dataset.tempId;
       const id = del.dataset.id;
-      deleteAttachment(id, card);
+      if(temp){
+        // just remove preview card (not uploaded yet)
+        removeCardByIdentifier({tempId: temp});
+        return;
+      }
+      const cardEl = del.closest('.media-card');
+      deleteAttachment(id, cardEl);
     });
     const ins = card.querySelector('.btn-insert');
     if(ins) ins.addEventListener('click', (e)=>{
-      const url = ins.dataset.url;
+      const url = ins.dataset.url || (card.querySelector('.media-thumb img') && card.querySelector('.media-thumb img').src) || '';
       if(window.opener && typeof window.opener.insertMedia === 'function'){
         window.opener.insertMedia(url);
       } else {
@@ -123,7 +201,15 @@
     if(fileInput){
       fileInput.addEventListener('change', function(e){
         const f = this.files && this.files[0];
-        if(f) uploadFile(f);
+        if(f){
+          // create immediate preview card
+          const tId = tempId();
+          const previewUrl = URL.createObjectURL(f);
+          const previewItem = { title: f.name || 'file', url: '', _previewSrc: previewUrl };
+          prependAttachmentToGrid(previewItem, { tempId: tId });
+          // upload in background and swap when done
+          uploadFile(f, tId);
+        }
         this.value = '';
       });
     }
@@ -131,17 +217,18 @@
       visibleFileInput.addEventListener('change', function(e){
         const f = this.files && this.files[0];
         if(f){
-          // if user submitted via visible form, prefer AJAX (prevent full reload)
-          uploadFile(f);
+          const tId = tempId();
+          const previewUrl = URL.createObjectURL(f);
+          const previewItem = { title: f.name || 'file', url: '', _previewSrc: previewUrl };
+          prependAttachmentToGrid(previewItem, { tempId: tId });
+          uploadFile(f, tId);
         }
         this.value = '';
       });
     }
 
-    // intercept fallback form submit - upload via AJAX
     if(uploadForm){
       uploadForm.addEventListener('submit', function(ev){
-        // If no file chosen, allow normal submit to show validation
         const f = visibleFileInput && visibleFileInput.files && visibleFileInput.files[0];
         if(!f) {
           ev.preventDefault();
@@ -149,7 +236,11 @@
           return;
         }
         ev.preventDefault();
-        uploadFile(f);
+        const tId = tempId();
+        const previewUrl = URL.createObjectURL(f);
+        const previewItem = { title: f.name || 'file', url: '', _previewSrc: previewUrl };
+        prependAttachmentToGrid(previewItem, { tempId: tId });
+        uploadFile(f, tId);
       });
     }
 
@@ -158,7 +249,13 @@
     if(container){
       container.addEventListener('dragover', (ev)=>{ ev.preventDefault(); container.classList.add('dragover'); });
       container.addEventListener('dragleave', (ev)=>{ container.classList.remove('dragover'); });
-      container.addEventListener('drop', (ev)=>{ ev.preventDefault(); container.classList.remove('dragover'); const f = ev.dataTransfer.files && ev.dataTransfer.files[0]; if(f) uploadFile(f); });
+      container.addEventListener('drop', (ev)=>{ ev.preventDefault(); container.classList.remove('dragover'); const f = ev.dataTransfer.files && ev.dataTransfer.files[0]; if(f){
+          const tId = tempId();
+          const previewUrl = URL.createObjectURL(f);
+          const previewItem = { title: f.name || 'file', url: '', _previewSrc: previewUrl };
+          prependAttachmentToGrid(previewItem, { tempId: tId });
+          uploadFile(f, tId);
+      } });
     }
   });
 })();
