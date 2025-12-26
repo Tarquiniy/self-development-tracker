@@ -1,0 +1,80 @@
+/* backend/static/admin/css/media_library.css */
+.media-lib-container{
+  max-width: 1200px;
+  margin: 18px auto;
+  padding: 18px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(12,18,30,0.06);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+.media-lib-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:16px;
+  margin-bottom:14px;
+}
+
+.media-lib-title{ margin:0; font-size:20px; }
+.media-lib-sub{ margin:0; color:#666; font-size:13px; }
+
+.media-lib-actions{ display:flex; align-items:center; gap:12px; }
+
+.upload-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 12px;
+  background:#0d6efd;
+  color:#fff;
+  border-radius:8px;
+  text-decoration:none;
+  cursor:pointer;
+  font-weight:600;
+}
+.upload-btn svg{ opacity:0.95; }
+
+.upload-status{ font-size:13px; color:#333; min-width:150px; }
+.upload-status.error{ color:#b00020; }
+
+.media-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap:12px;
+}
+
+.media-card{
+  background:#fafafa;
+  border-radius:10px;
+  overflow:hidden;
+  border:1px solid rgba(14,20,30,0.04);
+  display:flex;
+  flex-direction:column;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.media-card:hover{ transform: translateY(-4px); box-shadow: 0 8px 20px rgba(12,18,30,0.06); }
+
+.media-thumb{
+  height:140px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0.01));
+}
+.media-thumb img{ max-width:100%; max-height:100%; object-fit:cover; display:block; }
+
+.media-icon{ opacity:.6; }
+
+.media-meta{ padding:10px; display:flex; flex-direction:column; gap:8px; }
+.media-title{ font-size:13px; font-weight:600; color:#111; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; }
+.media-actions{ display:flex; gap:8px; align-items:center; }
+
+.btn{ padding:6px 8px; border-radius:6px; border:0; cursor:pointer; font-size:13px; text-decoration:none; color:#fff; background:#4a5568; }
+.btn-small{ padding:6px 8px; font-size:12px; }
+.btn-copy{ background:#0d6efd; color:#fff; }
+.btn-insert{ background:#06b6d4; color:#fff; }
+.btn-delete{ background:#ef4444; color:#fff; }
+
+.media-empty{ padding:28px; text-align:center; color:#666; }
