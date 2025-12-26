@@ -23,7 +23,12 @@ from django.utils.safestring import mark_safe
 from django.utils.html import escape
 from django.utils.module_loading import import_string
 
-from blog.static.admin.widgets import MediaLibraryWidget
+# Correct import for widget defined under blog/admin/widgets.py
+try:
+    from .admin.widgets import MediaLibraryWidget
+except Exception:
+    # fallback to import error, but code will continue — missing widget will raise later if used
+    MediaLibraryWidget = None
 
 from .utils import translit_slugify
 
@@ -48,7 +53,7 @@ except Exception:
     Post = Category = Tag = Comment = PostReaction = PostView = PostAttachment = MediaLibrary = None
     logger.exception("Could not import blog.models")
 
-# Optional admin form (TipTap integration)
+# Optional admin form (Project-provided)
 try:
     from .forms import PostAdminForm as ProjectPostAdminForm
 except Exception:
@@ -228,50 +233,56 @@ class BasePostAdmin(VersionAdmin):
     )
 
     def save_model(self, request, obj, form, change):
-        if not obj.slug:
-            base = translit_slugify(obj.title) or translit_slugify(obj.meta_title or obj.excerpt or 'post')
+        # slug generation
+        if not getattr(obj, "slug", None):
+            base = translit_slugify(getattr(obj, "title", "") or "")
+            if not base:
+                base = translit_slugify(getattr(obj, "meta_title", "") or getattr(obj, "excerpt", "") or "post")
             slug = base
             i = 1
             while self.model.objects.filter(slug=slug).exclude(pk=getattr(obj, 'pk', None)).exists():
                 i += 1
                 slug = f"{base}-{i}"
             obj.slug = slug
-        if getattr(obj, 'status', None) == 'published' and not obj.published_at:
-            obj.published_at = timezone.now()
-        super().save_model(request, obj, form, change)
-        pass
 
-        # --- NEW: handle pending featured image URL for new posts created via admin media picker ---
+        # ensure published_at
+        if getattr(obj, 'status', None) == 'published' and not getattr(obj, 'published_at', None):
+            obj.published_at = timezone.now()
+
+        # Save once to ensure obj.pk exists
+        super().save_model(request, obj, form, change)
+
+        # --- handle pending featured image URL for new posts created via admin media picker ---
         try:
             pending = request.POST.get('featured_image_url_pending') or request.POST.get('featured_image_url') or None
             if pending:
-                # If PostAttachment exists with this URL, attach its file to the post field
                 try:
                     if PostAttachment is not None:
-                        att = PostAttachment.objects.filter(file__icontains=pending).first()
+                        # try to match by file name or URL fragment
+                        att = PostAttachment.objects.filter(models.Q(title__icontains=os.path.basename(pending)) |
+                                                            models.Q(file__icontains=os.path.basename(pending))).first()
+                        if not att:
+                            # last resort: try to match by full URL stored in JSON exported 'url' (some storages)
+                            att = PostAttachment.objects.filter(models.Q(file__icontains=pending) | models.Q(title__icontains=pending)).first()
                         if att and hasattr(obj, 'featured_image'):
-                            # assign file object or name
                             try:
+                                # If featured_image is a FileField/ImageField on Post, assign file object
                                 setattr(obj, 'featured_image', att.file)
+                                obj.save()
                             except Exception:
                                 try:
                                     setattr(obj, 'featured_image', getattr(att.file, 'name', None))
+                                    obj.save()
                                 except Exception:
-                                    pass
+                                    logger.exception("Failed assigning pending featured image by filename")
                 except Exception:
                     logger.exception("Failed to resolve pending featured image to PostAttachment")
         except Exception:
             logger.exception("Error while handling pending featured image")
 
-        super().save_model(request, obj, form, change)
-
 
     def get_form(self, request, obj=None, **kwargs):
-        if ProjectPostAdminForm:
-            try:
-                return super().get_form(request, obj, form=ProjectPostAdminForm, **kwargs)
-            except Exception:
-                logger.exception("Project PostAdminForm raised during get_form — falling back to default admin form.")
+        # try to use ProjectPostAdminForm if present; but we explicitly want our PostAdminForm if available
         try:
             return super().get_form(request, obj, **kwargs)
         except Exception:
@@ -939,6 +950,7 @@ def admin_dashboard_view(request):
 
 # -----------------------
 # Registration helpers & main entrypoint
+# (rest of file continues unchanged)
 # -----------------------
 def _ensure_registered(site_obj, model, admin_class=None):
     """
@@ -1055,18 +1067,43 @@ def register_admin_models(site_obj):
 
 
 # -----------------------
-# PostAdminForm + PostAdmin
+# PostAdminForm + PostAdmin (final registration)
 # -----------------------
+# Build PostAdminForm by inheriting project-provided form if present, otherwise ModelForm;
+# ensure our MediaLibraryWidget is applied to featured_image.
 if ProjectPostAdminForm:
-    PostAdminForm = ProjectPostAdminForm
+    # inherit and augment Meta.widgets
+    try:
+        base_meta = getattr(ProjectPostAdminForm, 'Meta', None)
+        class PostAdminForm(ProjectPostAdminForm):
+            class Meta(base_meta.__class__ if base_meta is not None else object):
+                # Try to copy attributes from base Meta
+                pass
+        # now try to set widgets by copying existing mapping (if any)
+        try:
+            base_widgets = getattr(ProjectPostAdminForm.Meta, 'widgets', {}) or {}
+        except Exception:
+            base_widgets = {}
+        widgets = dict(base_widgets)
+        if MediaLibraryWidget is not None:
+            widgets.update({'featured_image': MediaLibraryWidget(attrs={'id': 'id_featured_image'})})
+        # attach to PostAdminForm.Meta
+        PostAdminForm.Meta.widgets = widgets
+    except Exception:
+        # fallback: simple wrapper
+        class PostAdminForm(ProjectPostAdminForm):
+            class Meta:
+                model = Post
+                fields = '__all__'
+                widgets = {'featured_image': MediaLibraryWidget(attrs={'id': 'id_featured_image'})}
 else:
     class PostAdminForm(forms.ModelForm):
         class Meta:
             model = Post
             fields = '__all__'
             widgets = {
-            'featured_image': MediaLibraryWidget(attrs={'id': 'id_featured_image'}),
-        }
+                'featured_image': MediaLibraryWidget(attrs={'id': 'id_featured_image'}) if MediaLibraryWidget is not None else {}
+            }
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -1083,9 +1120,10 @@ class PostAdmin(BasePostAdmin):
     form = PostAdminForm
     exclude = ('content_json',)
     change_form_template = BasePostAdmin.change_form_template or 'admin/blog/post/change_form.html'
+    # keep formfield_overrides as a fallback for other string/url fields, but explicit widget is set above
     formfield_overrides = {
-        models.URLField: {"widget": MediaLibraryWidget},
-        models.CharField: {"widget": MediaLibraryWidget},
+        models.URLField: {"widget": MediaLibraryWidget} if MediaLibraryWidget is not None else {},
+        models.CharField: {"widget": MediaLibraryWidget} if MediaLibraryWidget is not None else {},
     }
 
     class Media:
@@ -1127,6 +1165,7 @@ except AlreadyRegistered:
 except Exception:
     logger.exception("Could not register Post admin")
 
+# register other models with safe helper
 try:
     _ensure_registered(admin.site, Category, CategoryAdmin)
     _ensure_registered(admin.site, Tag, TagAdmin)

@@ -1,13 +1,13 @@
 {# backend/templates/admin/widgets/media_library_widget.html #}
 <div class="media-widget" id="media-widget-{{ widget.attrs.id }}">
-  {# Hidden text input (the actual form value) #}
+  {# actual input (text/url) that stores the value #}
   <input type="text"
          name="{{ widget.name }}"
          id="{{ widget.attrs.id }}"
          value="{{ widget.value|default_if_none:'' }}"
-         class="vTextField">
+         class="{{ widget.attrs.class|default:'vTextField' }}">
 
-  <div class="media-widget-preview" aria-hidden="false" style="margin-top:6px;">
+  <div class="media-widget-preview" aria-hidden="false" style="margin-top:8px;">
     {% if widget.value %}
       <img src="{{ widget.value }}" alt="" />
     {% else %}
@@ -15,8 +15,8 @@
     {% endif %}
   </div>
 
-  <div style="margin-top:8px;">
+  <div style="margin-top:8px; display:flex; gap:8px;">
     <button type="button" class="button media-widget-open" data-field="{{ widget.attrs.id }}">Выбрать</button>
-    <button type="button" class="button" data-field="{{ widget.attrs.id }}" onclick="(function(f){ navigator.clipboard && navigator.clipboard.writeText(document.getElementById(f).value); })('{{ widget.attrs.id }}')">Копировать URL</button>
+    <button type="button" class="button media-widget-clear" data-field="{{ widget.attrs.id }}">Очистить</button>
   </div>
 </div>
