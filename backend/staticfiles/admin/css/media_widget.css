@@ -1,0 +1,26 @@
+.media-widget {
+  margin-top: 6px;
+}
+
+.media-widget-preview {
+  width: 260px;
+  height: 150px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  background: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.media-widget-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: cover;
+}
+
+.media-widget .placeholder {
+  color: #9ca3af;
+  font-size: 13px;
+}

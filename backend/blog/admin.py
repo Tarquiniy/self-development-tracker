@@ -1064,6 +1064,9 @@ else:
         class Meta:
             model = Post
             fields = '__all__'
+            widgets = {
+            'featured_image': MediaLibraryWidget(attrs={'id': 'id_featured_image'}),
+        }
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
