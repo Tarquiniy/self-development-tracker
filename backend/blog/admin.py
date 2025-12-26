@@ -23,7 +23,7 @@ from django.utils.safestring import mark_safe
 from django.utils.html import escape
 from django.utils.module_loading import import_string
 
-from backend.blog.static.admin.widgets import MediaLibraryWidget
+from blog.static.admin.widgets import MediaLibraryWidget
 
 from .utils import translit_slugify
 
