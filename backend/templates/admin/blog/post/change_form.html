@@ -3,173 +3,92 @@
 
 {% block extrahead %}
   {{ block.super }}
+
   <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
-  {# CKEditor4 CDN (standard-all) для полного набора базовых плагинов #}
+
+  {# CKEditor #}
   <script src="https://cdn.ckeditor.com/4.21.0/standard-all/ckeditor.js"></script>
-  {# Наш локальный инициализатор, который гарантирует правильную последовательность загрузки #}
   <script src="{% static 'admin/js/ckeditor_admin_extra.js' %}"></script>
 
   <style>
-    .ck-editor__editable_inline { min-height:260px; background:#fff; color:#0f1724; border-radius:6px; padding:12px; border:1px solid #e6eef3; }
+    .ck-editor__editable_inline {
+      min-height:260px;
+      background:#fff;
+      color:#0f1724;
+      border-radius:6px;
+      padding:12px;
+      border:1px solid #e6eef3;
+    }
     .action-extra { margin-left:8px; }
-    /* preview for featured image */
-    .featured-preview { margin-top:8px; max-width:320px; display:block; border-radius:6px; border:1px solid #e6eef3; }
-    /* Inline media picker styles */
-    .media-picker { margin-top:18px; padding:10px 6px; background:#fff; border:1px solid #e6eef3; border-radius:8px; }
-    .media-picker .picker-toolbar { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
-    .media-picker .picker-toolbar .button { white-space:nowrap; }
-    .media-picker .picker-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap:10px; max-height:420px; overflow:auto; padding:6px; }
-    .media-picker .media-tile { cursor:pointer; border-radius:6px; overflow:hidden; border:1px solid #eaeaea; display:flex; flex-direction:column; background:#f9fafb; transition: transform .12s ease, box-shadow .12s ease; }
-    .media-picker .media-tile:hover { transform: translateY(-4px); box-shadow: 0 6px 18px rgba(15,23,42,0.08); }
-    .media-picker .media-tile img { width:100%; height:96px; object-fit:cover; display:block; }
-    .media-picker .media-tile .meta { padding:6px; font-size:13px; color:#374151; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .picker-loading { padding:12px; color:#6b7280; text-align:center; }
-    .mp-small { font-size:12px; color:#6b7280; }
-    .mp-search { padding:6px; border-radius:6px; border:1px solid #e5e7eb; width:100%; }
+    .featured-preview {
+      margin-top:8px;
+      max-width:320px;
+      display:block;
+      border-radius:6px;
+      border:1px solid #e6eef3;
+    }
   </style>
-{% endblock %}
 
-{% block submit_buttons_top %}
-  {{ block.super }}
-  <a href="#" class="button action-extra" onclick="return openMediaLibrary(event)" title="{% trans 'Открыть медиабиблиотеку' %}">{% trans "Медиатека" %}</a>
-  <button type="button" class="button action-extra" id="preview-btn-top">{% trans "Предпросмотр" %}</button>
-{% endblock %}
-
-{% block content %}
-  {{ block.super }}
-
-  {# ---------------------------
-     Inline media picker (под полем "Главное изображение")
-     --------------------------- #}
-  <div class="media-picker" id="inline-media-picker" aria-label="Media picker">
-    <div class="picker-toolbar">
-      <button type="button" class="button" id="mp-refresh">{% trans "Обновить" %}</button>
-      <input type="search" id="mp-search" class="mp-search" placeholder="{% trans 'Поиск по названию или имени файла...' %}" aria-label="{% trans 'Поиск медиа' %}">
-      <label style="display:flex;gap:8px;align-items:center;margin-left:8px" class="mp-small">
-        <input type="checkbox" id="mp-show-uploaded-only" style="margin-right:6px"> {% trans "Только мои" %}
-      </label>
-      <div id="mp-status" style="min-width:180px;text-align:right;color:#374151;font-size:13px;"></div>
-    </div>
-
-    <div class="picker-grid" id="mp-grid" aria-live="polite" role="list">
-      <div class="picker-loading" id="mp-loading">{% trans "Загрузка медиатеки…" %}</div>
-    </div>
-
-    <div style="margin-top:8px;">
-      <small class="mp-small">{% trans "Кликните по миниатюре, чтобы выбрать её как главное изображение. При редактировании поста изображение привяжется сразу." %}</small>
-    </div>
-  </div>
-
-  {# hidden field to remember selection on new-post pages (applied on save in admin.save_model) #}
-  <input type="hidden" name="featured_image_url_pending" id="id_featured_image_url_pending" value="">
-{% endblock %}
-
-{% block extra_footer %}
-  {{ block.super }}
-  {# Подключаем JS медиапикера (положите файл в static/admin/js/post_media_picker.js) #}
-  <script src="{% static 'admin/js/post_media_picker.js' %}"></script>
-{% endblock %}
-
-{# Inline JS: открытие отдельной медиатеки в popup и обработчик сообщений (для совместимости с существующей медиатекой) #}
-{% block extrahead %}
-  {{ block.super }}
   <script>
     (function(){
-      // Получаем id текущего поста из URL (/admin/blog/post/<id>/change/)
+
       function getPostId(){
-        var m = window.location.pathname.match(/\/(\d+)\/change\/$/);
-        if(m) return m[1];
-        // fallback: try hidden input
-        var el = document.querySelector('input[name="id"]') || document.getElementById('id_id');
-        if(el) return el.value;
+        const m = window.location.pathname.match(/\/(\d+)\/change\/$/);
+        if (m) return m[1];
         return null;
       }
 
       window.openMediaLibrary = function(e){
-        if(e && e.preventDefault) e.preventDefault();
-        var postId = getPostId();
-        var field = 'featured_image';
-        if(!postId){
-          // Open plain media library (no attach)
-          var url = "{% url 'admin-media-library' %}";
-          window.open(url, 'media-library', 'width=1000,height=700');
-          return false;
+        if(e) e.preventDefault();
+
+        const postId = getPostId();
+        let url = "{% url 'admin-media-library' %}";
+
+        if (postId) {
+          url += "?select=1&field=featured_image";
         }
-        // Open with attach parameters
-        var url = "{% url 'admin-media-library' %}?attach_to=post&post_id=" + encodeURIComponent(postId) + "&field=" + encodeURIComponent(field);
-        window.open(url, 'media-library', 'width=1000,height=700');
+
+        window.open(url, 'media-library', 'width=1100,height=750');
         return false;
       };
 
-      // Handler for messages from separate media library popup (backwards compatibility)
+      // Получение выбранного изображения из медиабиблиотеки
       window.addEventListener('message', function(ev){
-        try {
-          var msg = ev.data;
-          if(!msg || msg.type !== 'media-library-selected') return;
-          var field = msg.field || 'featured_image';
-          var url = msg.url || '';
-          var attachment_id = msg.attachment_id || msg.attachmentId || null;
+        const msg = ev.data;
+        if (!msg || msg.type !== 'media-selected') return;
 
-          // Update form input: try to find text/url input or ImageField id input
-          var input = document.getElementById('id_' + field) || document.querySelector('input[name="' + field + '"]');
-          if(input){
-            try {
-              if(input.type === 'text' || input.type === 'url' || input.tagName.toLowerCase() === 'input') {
-                input.value = url || input.value;
-              } else {
-                if(attachment_id) input.value = attachment_id;
-              }
-            } catch(e){}
-          }
+        const imageUrl = msg.url;
+        if (!imageUrl) return;
 
-          // Update preview image (create if missing)
-          var preview = document.getElementById(field + '_preview');
-          if(preview && url){
-            preview.src = url;
-          } else if (url) {
-            var fieldRow = document.getElementById('id_' + field);
-            var container = fieldRow && fieldRow.parentNode ? fieldRow.parentNode : document.querySelector('.form-row.field-' + field);
-            if(container){
-              var img = document.getElementById(field + '_preview');
-              if(!img){
-                img = document.createElement('img');
-                img.id = field + '_preview';
-                img.className = 'featured-preview';
-                img.style.maxWidth = '320px';
-                container.appendChild(img);
-              }
-              img.src = url;
-            }
-          }
+        const input =
+          document.getElementById('id_featured_image') ||
+          document.querySelector('input[name="featured_image"]');
 
-          // If it's a pending selection (new post), store in hidden pending field
-          try {
-            var pending = document.getElementById('id_featured_image_url_pending');
-            if(pending && url){
-              pending.value = url;
-            }
-          } catch(e){}
+        if (input) input.value = imageUrl;
 
-          // Show a tiny notice
-          (function showTemp(txt){
-            var el = document.createElement('div');
-            el.textContent = txt || 'Изображение привязано';
-            el.style.position = 'fixed';
-            el.style.right = '20px';
-            el.style.top = '20px';
-            el.style.padding = '8px 12px';
-            el.style.background = '#10B981';
-            el.style.color = '#fff';
-            el.style.borderRadius = '6px';
-            el.style.zIndex = 2000;
-            document.body.appendChild(el);
-            setTimeout(function(){ el.remove(); }, 2200);
-          })('Изображение выбрано');
-
-        } catch (e) {
-          console.error('media-library message handling error', e);
+        let preview = document.getElementById('featured_image_preview');
+        if (!preview) {
+          preview = document.createElement('img');
+          preview.id = 'featured_image_preview';
+          preview.className = 'featured-preview';
+          input.parentNode.appendChild(preview);
         }
+        preview.src = imageUrl;
+
       }, false);
+
     })();
   </script>
+{% endblock %}
+
+{% block submit_buttons_top %}
+  {{ block.super }}
+  <a href="#" class="button action-extra"
+     onclick="return openMediaLibrary(event)">
+    {% trans "Медиатека" %}
+  </a>
+{% endblock %}
+
+{% block content %}
+  {{ block.super }}
 {% endblock %}
