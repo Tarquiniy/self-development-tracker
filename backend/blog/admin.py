@@ -238,6 +238,32 @@ class BasePostAdmin(VersionAdmin):
         if getattr(obj, 'status', None) == 'published' and not obj.published_at:
             obj.published_at = timezone.now()
         super().save_model(request, obj, form, change)
+        pass
+
+        # --- NEW: handle pending featured image URL for new posts created via admin media picker ---
+        try:
+            pending = request.POST.get('featured_image_url_pending') or request.POST.get('featured_image_url') or None
+            if pending:
+                # If PostAttachment exists with this URL, attach its file to the post field
+                try:
+                    if PostAttachment is not None:
+                        att = PostAttachment.objects.filter(file__icontains=pending).first()
+                        if att and hasattr(obj, 'featured_image'):
+                            # assign file object or name
+                            try:
+                                setattr(obj, 'featured_image', att.file)
+                            except Exception:
+                                try:
+                                    setattr(obj, 'featured_image', getattr(att.file, 'name', None))
+                                except Exception:
+                                    pass
+                except Exception:
+                    logger.exception("Failed to resolve pending featured image to PostAttachment")
+        except Exception:
+            logger.exception("Error while handling pending featured image")
+
+        super().save_model(request, obj, form, change)
+
 
     def get_form(self, request, obj=None, **kwargs):
         if ProjectPostAdminForm:
