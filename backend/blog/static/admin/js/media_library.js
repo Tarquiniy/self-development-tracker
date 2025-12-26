@@ -1,5 +1,5 @@
 // backend/blog/static/admin/js/media_library.js
-// media_library.js — updated: show immediate preview + replace with server URL when ready
+// media_library.js — updated: immediate preview + attach fallback lookup when id missing
 (function(){
   function $(sel, ctx){ return (ctx || document).querySelector(sel); }
   function $all(sel, ctx){ return Array.from((ctx || document).querySelectorAll(sel)); }
@@ -38,6 +38,12 @@
   // build a temporary unique id for preview cards
   function tempId() { return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
+  function escapeHtml(s){
+    if(!s) return '';
+    return s.replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
+  }
+  function truncate(s,n){ return s && s.length>n ? s.slice(0,n-1)+'…' : s||''; }
+
   // create card and return element; if previewUrl provided, card is temporary and gets data-temp-id
   function prependAttachmentToGrid(item, opts){
     if(!grid) return null;
@@ -69,35 +75,21 @@
     return card;
   }
 
-  function escapeHtml(s){
-    if(!s) return '';
-    return s.replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
-  }
-  function truncate(s,n){ return s && s.length>n ? s.slice(0,n-1)+'…' : s||''; }
-
   // update temporary card (identified by tempId) with server response (set proper data-id and real src)
   function updateTempCardWithServerData(tempId, serverData){
     if(!grid) return;
     const card = grid.querySelector(`[data-temp-id="${CSS.escape(tempId)}"]`);
     if(!card) return;
-    // update data-id
     if(serverData.id){
       card.dataset.id = serverData.id;
     }
-    // Update image src: prefer serverData.url, else use thumbnail endpoint
     const img = card.querySelector('.media-thumb img');
     const newSrc = serverData.url || (serverData.id ? `/admin/media-thumbnail/${serverData.id}/` : '');
     if(img && newSrc){
-      // revoke old objectURL if any
       const oldSrc = img.src || '';
-      try {
-        if(oldSrc && oldSrc.startsWith('blob:')) {
-          URL.revokeObjectURL(oldSrc);
-        }
-      } catch(e){}
+      try { if(oldSrc && oldSrc.startsWith('blob:')) URL.revokeObjectURL(oldSrc); } catch(e){}
       img.src = newSrc;
     }
-    // update actions (Open link)
     const openLink = card.querySelector('.btn-copy');
     if(serverData.url){
       if(openLink){
@@ -113,9 +105,7 @@
         actions.insertBefore(a, actions.firstChild);
       }
     }
-    // remove temp-id attribute
     card.removeAttribute('data-temp-id');
-    // update delete button data-id
     const delBtn = card.querySelector('.btn-delete');
     if(delBtn && serverData.id){
       delBtn.dataset.id = serverData.id;
@@ -148,7 +138,6 @@
         console.error('upload failed', data);
         return;
       }
-      // Replace preview with server-provided URL / thumbnail
       updateTempCardWithServerData(tempCardId, data);
       showStatus('Загружено');
     }catch(e){
@@ -210,13 +199,41 @@
     }
   }
 
+  // Try to resolve attachment id by its URL via XHR to the same media-library view (format=json)
+  async function resolveAttachmentIdByUrl(url){
+    try{
+      // Request attachments list (view supports format=json/XHR)
+      const listUrl = window.location.pathname + (window.location.search ? window.location.search + '&format=json' : '?format=json');
+      const res = await fetch(listUrl, { credentials: 'same-origin', headers: {'X-Requested-With':'XMLHttpRequest'} });
+      if(!res.ok) return null;
+      const payload = await res.json();
+      const attachments = payload.attachments || [];
+      // try exact match
+      for(const a of attachments){
+        if(!a) continue;
+        if(a.url && a.url === url) return a.id;
+      }
+      // try matching by filename (basename)
+      const target = url ? url.split('/').pop() : '';
+      if(target){
+        for(const a of attachments){
+          if(a.url && a.url.split('/').pop() === target) return a.id;
+          if(a.title && a.title.split('/').pop() === target) return a.id;
+        }
+      }
+      return null;
+    }catch(e){
+      console.error('resolveAttachmentIdByUrl error', e);
+      return null;
+    }
+  }
+
   function attachCardHandlers(card){
     const del = card.querySelector('.btn-delete');
     if(del) del.addEventListener('click', (e)=>{
       const temp = del.dataset.tempId;
       const id = del.dataset.id;
       if(temp){
-        // just remove preview card (not uploaded yet)
         removeCardByIdentifier({tempId: temp});
         return;
       }
@@ -224,37 +241,78 @@
       deleteAttachment(id, cardEl);
     });
     const ins = card.querySelector('.btn-insert');
-    if(ins) ins.addEventListener('click', (e)=>{
+    if(ins) ins.addEventListener('click', async (e)=>{
       const cardEl = ins.closest('.media-card');
-      const attachmentId = cardEl && cardEl.dataset && cardEl.dataset.id ? cardEl.dataset.id : null;
+      const attachmentId = (cardEl && cardEl.dataset && cardEl.dataset.id) ? cardEl.dataset.id : null;
+      const tempId = cardEl && cardEl.dataset ? cardEl.dataset.tempId : null;
       const url = ins.dataset.url || (cardEl.querySelector('.media-thumb img') && cardEl.querySelector('.media-thumb img').src) || '';
 
       // If media library opened for attaching to a post, use attach flow
-      if(attachTo === 'post' && attachPostId && attachmentId){
-        showStatus('Привязка изображения...');
-        attachToPost(attachmentId, function(err, data){
-          if(err || !data || !data.success){
-            showStatus('Ошибка привязки', true);
-            console.error('attach error', err || data);
+      if(attachTo === 'post' && attachPostId){
+        // If card is temporary and upload not finished
+        if(tempId && !attachmentId){
+          showStatus('Файл ещё загружается — подождите, затем нажмите снова', true);
+          return;
+        }
+
+        // If we have attachmentId — good, just attach
+        if(attachmentId){
+          showStatus('Привязка изображения...');
+          attachToPost(attachmentId, function(err, data){
+            if(err || !data || !data.success){
+              showStatus('Ошибка привязки', true);
+              console.error('attach error', err || data);
+              return;
+            }
+            try {
+              window.opener.postMessage({
+                type: 'media-library-selected',
+                kind: 'attachment-attached',
+                field: attachField,
+                post_id: attachPostId,
+                attachment_id: data.attachment_id || data.id,
+                url: data.url || url
+              }, '*');
+            } catch (e) { console.warn('postMessage failed', e); }
+            showStatus('Изображение привязано');
+            try { window.close(); } catch(e){}
+          });
+          return;
+        }
+
+        // No attachmentId present — try to resolve by URL via server list
+        if(url){
+          showStatus('Поиск файла на сервере...');
+          const foundId = await resolveAttachmentIdByUrl(url);
+          if(foundId){
+            showStatus('Привязка изображения...');
+            attachToPost(foundId, function(err, data){
+              if(err || !data || !data.success){
+                showStatus('Ошибка привязки', true);
+                console.error('attach error', err || data);
+                return;
+              }
+              try {
+                window.opener.postMessage({
+                  type: 'media-library-selected',
+                  kind: 'attachment-attached',
+                  field: attachField,
+                  post_id: attachPostId,
+                  attachment_id: data.attachment_id || data.id,
+                  url: data.url || url
+                }, '*');
+              } catch (e) { console.warn('postMessage failed', e); }
+              showStatus('Изображение привязано');
+              try { window.close(); } catch(e){}
+            });
+            return;
+          } else {
+            showStatus('Не удалось найти файл на сервере (id отсутствует).', true);
             return;
           }
-          // notify opener window (post change form) with message
-          try {
-            window.opener.postMessage({
-              type: 'media-library-selected',
-              kind: 'attachment-attached',
-              field: attachField,
-              post_id: attachPostId,
-              attachment_id: data.attachment_id || data.id,
-              url: data.url || url
-            }, '*');
-          } catch (e) {
-            console.warn('postMessage failed', e);
-          }
-          showStatus('Изображение привязано');
-          // close popup if possible (admin opens in new window)
-          try { window.close(); } catch(e){}
-        });
+        }
+
+        showStatus('Не могу определить файл для привязки', true);
         return;
       }
 
@@ -274,12 +332,10 @@
       fileInput.addEventListener('change', function(e){
         const f = this.files && this.files[0];
         if(f){
-          // create immediate preview card
           const tId = tempId();
           const previewUrl = URL.createObjectURL(f);
           const previewItem = { title: f.name || 'file', url: '', _previewSrc: previewUrl };
           prependAttachmentToGrid(previewItem, { tempId: tId });
-          // upload in background and swap when done
           uploadFile(f, tId);
         }
         this.value = '';
