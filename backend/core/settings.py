@@ -17,12 +17,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SUPABASE_USE_PROXY = True
 SUPABASE_URL = env("SUPABASE_URL", "").strip() or None
 SUPABASE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", "").strip() or None
-SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "post_attachments")
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "media")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_MEDIA_BUCKET= os.getenv("SUPABASE_MEDIA_BUCKET", "media")
 
 AWS_ACCESS_KEY_ID = env("SUPABASE_S3_KEY", "").strip() or None
 AWS_SECRET_ACCESS_KEY = env("SUPABASE_S3_SECRET", "").strip() or None
-AWS_STORAGE_BUCKET_NAME = "post_attachments"
+AWS_STORAGE_BUCKET_NAME = "media"
 
 SUPABASE_PUBLIC_BUCKET = True
 AWS_S3_ENDPOINT_URL = os.environ.get("AWS_S3_ENDPOINT_URL", SUPABASE_URL)
