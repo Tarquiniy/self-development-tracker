@@ -1,92 +1,191 @@
 {% extends "admin/change_form.html" %}
 {% load static i18n %}
 
+{# Полностью контролируем extrahead — подключаем стили/скрипты и наш инлайн-скрипт #}
 {% block extrahead %}
   {{ block.super }}
 
   <link rel="stylesheet" href="{% static 'admin/css/admin-post-form.css' %}">
 
-  {# CKEditor #}
-  <script src="https://cdn.ckeditor.com/4.21.0/standard-all/ckeditor.js"></script>
-  <script src="{% static 'admin/js/ckeditor_admin_extra.js' %}"></script>
-
   <style>
-    .ck-editor__editable_inline {
-      min-height:260px;
-      background:#fff;
-      color:#0f1724;
-      border-radius:6px;
-      padding:12px;
-      border:1px solid #e6eef3;
+    .featured-widget {
+      margin-top: 6px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      flex-wrap: wrap;
     }
-    .action-extra { margin-left:8px; }
     .featured-preview {
-      margin-top:8px;
-      max-width:320px;
-      display:block;
-      border-radius:6px;
-      border:1px solid #e6eef3;
+      max-width: 320px;
+      width: 100%;
+      max-height: 220px;
+      border-radius: 6px;
+      border: 1px solid #e6eef3;
+      background: #fff;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .featured-preview img { width:100%; height:100%; object-fit:cover; display:block; }
+    .featured-controls { display:flex; flex-direction:column; gap:8px; }
+    .featured-controls .btn { display:inline-block; padding:6px 10px; cursor:pointer; border-radius:6px; border:1px solid #cbd5e1; background:#f8fafc; }
+    .featured-placeholder { color: #9aa3ad; padding: 8px; font-size:13px; text-align:center; }
+    .media-flash {
+      position: fixed;
+      right: 20px;
+      top: 20px;
+      background: #10B981;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      z-index: 3000;
+      box-shadow: 0 4px 12px rgba(2,6,23,0.08);
     }
   </style>
 
   <script>
-    (function(){
+  (function(){
+    // helper: extract post id from admin URL like /admin/blog/post/123/change/
+    function getPostIdFromPath() {
+      var m = window.location.pathname.match(/\/admin\/[^\/]+\/[^\/]+\/(\d+)\/change\/$/);
+      if(m) return m[1];
+      return null;
+    }
 
-      function getPostId(){
-        const m = window.location.pathname.match(/\/(\d+)\/change\/$/);
-        if (m) return m[1];
-        return null;
+    // open media library popup; pass 'select=1' and desired field id
+    window.openMediaLibraryFromPostForm = function(fieldId){
+      var postId = getPostIdFromPath();
+      var url = "{% url 'admin-media-library' %}";
+      var params = new URLSearchParams();
+      params.set('select', '1');
+      params.set('field', fieldId);
+      if (postId) params.set('post_id', postId);
+      url += '?' + params.toString();
+      var w = window.open(url, 'admin-media-library', 'width=1100,height=700');
+      if (w) w.focus();
+      return false;
+    };
+
+    // receive selection messages from popup
+    window.addEventListener('message', function(ev){
+      try {
+        var msg = ev.data;
+        if (!msg || (msg.type !== 'media-selected' && msg.type !== 'media-library-selected' && msg.type !== 'media-selected-v2')) return;
+        var field = msg.field || 'id_featured_image';
+        var url = msg.url || msg.file_url || msg.fileUrl || '';
+        var attachmentId = msg.attachment_id || msg.attachmentId || msg.id || null;
+        if (!url) return;
+
+        var input = document.getElementById(field) || document.querySelector('input[name="featured_image"]') || document.getElementById('id_featured_image');
+        if (input) {
+          // set value and trigger change (so admin notices unsaved change)
+          input.value = url;
+          var ev = new Event('change',{bubbles:true});
+          input.dispatchEvent(ev);
+        }
+
+        // update preview
+        var wrap = document.getElementById('featured-widget-wrap');
+        if (wrap) {
+          var preview = wrap.querySelector('.featured-preview');
+          if (preview) {
+            preview.innerHTML = '<img src="' + url + '" alt="preview">';
+          }
+        }
+
+        // Flash tiny success
+        (function showTemp(txt){
+          var el = document.createElement('div');
+          el.className = 'media-flash';
+          el.textContent = txt || 'Изображение выбрано';
+          document.body.appendChild(el);
+          setTimeout(function(){ el.remove(); }, 2200);
+        })('Изображение привязано');
+
+      } catch (e) {
+        console.error('media-library message handling error', e);
       }
+    }, false);
 
-      window.openMediaLibrary = function(e){
-        if(e) e.preventDefault();
 
-        const postId = getPostId();
-        let url = "{% url 'admin-media-library' %}";
+    // On DOM ready insert the widget near the featured_image field
+    document.addEventListener('DOMContentLoaded', function(){
+      try {
+        var input = document.getElementById('id_featured_image') || document.querySelector('input[name="featured_image"]');
+        if (!input) return;
 
-        if (postId) {
-          url += "?select=1&field=featured_image";
+        // ensure we don't insert twice
+        if (document.getElementById('featured-widget-wrap')) return;
+
+        // Build widget DOM
+        var wrap = document.createElement('div');
+        wrap.id = 'featured-widget-wrap';
+        wrap.className = 'featured-widget';
+
+        var preview = document.createElement('div');
+        preview.className = 'featured-preview';
+        if (input.value && input.value.trim()) {
+          preview.innerHTML = '<img src="' + input.value.trim() + '" alt="preview">';
+        } else {
+          preview.innerHTML = '<div class="featured-placeholder">Изображение не выбрано</div>';
         }
 
-        window.open(url, 'media-library', 'width=1100,height=750');
-        return false;
-      };
+        var controls = document.createElement('div');
+        controls.className = 'featured-controls';
+        // choose button
+        var chooseBtn = document.createElement('button');
+        chooseBtn.type = 'button';
+        chooseBtn.className = 'btn';
+        chooseBtn.textContent = 'Выбрать';
+        chooseBtn.addEventListener('click', function(e){
+          e.preventDefault();
+          window.openMediaLibraryFromPostForm(input.id || 'id_featured_image');
+        });
+        // clear button
+        var clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'btn';
+        clearBtn.textContent = 'Очистить';
+        clearBtn.addEventListener('click', function(e){
+          e.preventDefault();
+          input.value = '';
+          var ev = new Event('change',{bubbles:true});
+          input.dispatchEvent(ev);
+          preview.innerHTML = '<div class="featured-placeholder">Изображение не выбрано</div>';
+        });
 
-      // Получение выбранного изображения из медиабиблиотеки
-      window.addEventListener('message', function(ev){
-        const msg = ev.data;
-        if (!msg || msg.type !== 'media-selected') return;
+        controls.appendChild(chooseBtn);
+        controls.appendChild(clearBtn);
 
-        const imageUrl = msg.url;
-        if (!imageUrl) return;
+        wrap.appendChild(preview);
+        wrap.appendChild(controls);
 
-        const input =
-          document.getElementById('id_featured_image') ||
-          document.querySelector('input[name="featured_image"]');
-
-        if (input) input.value = imageUrl;
-
-        let preview = document.getElementById('featured_image_preview');
-        if (!preview) {
-          preview = document.createElement('img');
-          preview.id = 'featured_image_preview';
-          preview.className = 'featured-preview';
-          input.parentNode.appendChild(preview);
+        // Insert after the field widget (place under label / field)
+        // Find the row element that contains this field
+        var fieldRow = document.querySelector('.form-row.field-featured_image') || (input.closest('.form-row') || input.parentNode);
+        if (fieldRow && fieldRow.parentNode) {
+          // put widget after the existing input element
+          // we prefer to place it after the input element in the DOM
+          input.style.width = '100%'; // keep input visible if present
+          fieldRow.appendChild(wrap);
+        } else {
+          // fallback: append to document
+          input.parentNode.insertBefore(wrap, input.nextSibling);
         }
-        preview.src = imageUrl;
 
-      }, false);
-
-    })();
+      } catch (err) {
+        console.error('featured widget injection error', err);
+      }
+    });
+  })();
   </script>
+
 {% endblock %}
 
 {% block submit_buttons_top %}
   {{ block.super }}
-  <a href="#" class="button action-extra"
-     onclick="return openMediaLibrary(event)">
-    {% trans "Медиатека" %}
-  </a>
+  <button type="button" class="button action-extra" onclick="return openMediaLibraryFromPostForm('id_featured_image')">{% trans "Медиатека" %}</button>
 {% endblock %}
 
 {% block content %}
