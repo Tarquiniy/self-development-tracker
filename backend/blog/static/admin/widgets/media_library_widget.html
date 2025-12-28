@@ -1,22 +1,22 @@
-{# backend/templates/admin/widgets/media_library_widget.html #}
-<div class="media-widget" id="media-widget-{{ widget.attrs.id }}">
-  {# actual input (text/url) that stores the value #}
-  <input type="text"
-         name="{{ widget.name }}"
-         id="{{ widget.attrs.id }}"
-         value="{{ widget.value|default_if_none:'' }}"
-         class="{{ widget.attrs.class|default:'vTextField' }}">
+  {# backend/templates/admin/widgets/media_library_widget.html #}
+  <div class="media-widget" id="media-widget-{{ widget.attrs.id }}">
+    {# actual input (text/url) that stores the value #}
+    <input type="text"
+          name="{{ widget.name }}"
+          id="{{ widget.attrs.id }}"
+          value="{{ widget.value|default_if_none:'' }}"
+          class="{{ widget.attrs.class|default:'vTextField' }}">
 
-  <div class="media-widget-preview" aria-hidden="false" style="margin-top:8px;">
-    {% if widget.value %}
-      <img src="{{ widget.value }}" alt="" />
-    {% else %}
-      <div class="placeholder">Изображение не выбрано</div>
-    {% endif %}
-  </div>
+    <div class="media-widget-preview" aria-hidden="false" style="margin-top:8px;">
+      {% if widget.value %}
+        <img src="{{ widget.value }}" alt="" />
+      {% else %}
+        <div class="placeholder">Изображение не выбрано</div>
+      {% endif %}
+    </div>
 
-  <div style="margin-top:8px; display:flex; gap:8px;">
-    <button type="button" class="button media-widget-open" data-field="{{ widget.attrs.id }}">Выбрать</button>
-    <button type="button" class="button media-widget-clear" data-field="{{ widget.attrs.id }}">Очистить</button>
+    <div style="margin-top:8px; display:flex; gap:8px;">
+      <button type="button" class="button media-widget-open" data-field="{{ widget.attrs.id }}">Выбрать</button>
+      <button type="button" class="button media-widget-clear" data-field="{{ widget.attrs.id }}">Очистить</button>
+    </div>
   </div>
-</div>
