@@ -1,15 +1,19 @@
 # backend/users/serializers.py
+import logging
+from django.db import IntegrityError
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from django.db import IntegrityError
 
-from .models import UserProfile
-
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
+    """
+    Полноценный сериализатор регистрации: валидация пароля, create -> create_user,
+    после создания явно гарантируем создание UserProfile (get_or_create).
+    """
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password_confirm = serializers.CharField(write_only=True, required=True)
 
@@ -34,48 +38,47 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        # remove password_confirm from data
+        # remove confirm and extract password
         validated_data.pop("password_confirm", None)
         password = validated_data.pop("password")
 
         try:
-            # try using create_user if available on custom user manager
-            user = None
+            # Prefer custom manager's create_user when signature allows
             try:
                 user = User.objects.create_user(password=password, **validated_data)
             except TypeError:
-                # fallback if create_user has different signature
+                # Fallback for custom user model with different create_user signature
                 user = User(**validated_data)
                 user.set_password(password)
                 user.save()
         except IntegrityError as exc:
-            # Convert DB integrity errors into serializer validation errors
             raise serializers.ValidationError({"detail": "Could not create user: integrity error", "error": str(exc)})
         except Exception as exc:
             raise serializers.ValidationError({"detail": "Could not create user", "error": str(exc)})
 
-        # If CustomUser has a helper to generate verification token — call it
+        # If model exposes generate_verification_token — call it but don't fail on error
         try:
             if hasattr(user, "generate_verification_token") and callable(user.generate_verification_token):
                 try:
                     user.generate_verification_token()
                 except Exception:
-                    # don't fail registration if token generation fails
-                    logger = getattr(self, "logger", None)
-                    if logger:
-                        logger.debug("generate_verification_token failed for user %s", getattr(user, "id", None))
+                    logger.exception("generate_verification_token failed for user %s", getattr(user, "id", None))
         except Exception:
-            # swallow any unexpected problems
+            # swallow any unexpected issues
             pass
 
-        # Ensure UserProfile exists (also covered by signal, but do it explicitly to be deterministic)
+        # Явно гарантируем создание профиля (сигнал тоже должен покрывать это, но дублируем для надёжности)
         try:
+            from .models import UserProfile  # локальный импорт, чтобы избежать циклов при импортировании
             UserProfile.objects.get_or_create(user=user)
         except Exception:
-            # Not fatal for user creation
-            pass
+            logger.exception("Failed to ensure UserProfile for user %s", getattr(user, "id", None))
 
         return user
+
+
+# Backwards-compatible alias — многие места в коде импортируют RegisterSerializer
+RegisterSerializer = UserRegistrationSerializer
 
 
 class UserLoginSerializer(serializers.Serializer):
@@ -90,7 +93,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
     last_name = serializers.CharField(source="user.last_name", read_only=True)
 
     class Meta:
-        model = UserProfile
+        # импорт модели профиля локально — избежать проблем при цикличных зависимостях
+        from .models import UserProfile as _UP  # type: ignore
+        model = _UP
         fields = [
             "email",
             "username",
