@@ -5,10 +5,12 @@ import sys
 
 def main():
     """Run administrative tasks."""
-    # Добавьте путь к проекту
+    # Django-проект находится в backend/, поэтому добавляем backend в PYTHONPATH,
+    # чтобы модуль core.* импортировался корректно.
     project_path = os.path.dirname(os.path.abspath(__file__))
-    if project_path not in sys.path:
-        sys.path.append(project_path)
+    backend_path = os.path.join(project_path, "backend")
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
     
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
     try:

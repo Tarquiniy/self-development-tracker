@@ -4,25 +4,30 @@ services:
     env: python
     plan: free
     buildCommand: |
+      cd backend
       pip install --upgrade pip
       pip install -r requirements.txt
       python manage.py collectstatic --noinput
       python manage.py migrate
-    startCommand: gunicorn core.wsgi:application
+    startCommand: gunicorn core.wsgi:application --chdir backend
     envVars:
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
         value: "False"
       - key: DATABASE_URL
-        value: "postgresql://postgres.fjqbhcmsqypevfbpzcxj:TrackerPass@aws-1-eu-north-1.pooler.supabase.com:5432/postgres"
+        value: "postgresql://USER:PASSWORD@HOST:5432/postgres"
       - key: SUPABASE_URL
-        value: "https://fjqbhcmsqypevfbpzcxj.supabase.co"
-      - key: SUPABASE_KEY
-        value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqcWJoY21zcXlwZXZmYnB6Y3hqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2NDE1NzEsImV4cCI6MjA3MjIxNzU3MX0.QPmyPnP8VbvXYnmfWEumeErBsZjItcVPJv3dwhsJMpc"
+        value: "https://YOUR_PROJECT_REF.supabase.co"
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        value: "YOUR_SERVICE_ROLE_KEY"
+      - key: SUPABASE_ANON_KEY
+        value: "YOUR_ANON_KEY"
+      - key: SUPABASE_S3_KEY
+        value: "YOUR_SUPABASE_S3_ACCESS_KEY"
+      - key: SUPABASE_S3_SECRET
+        value: "YOUR_SUPABASE_S3_SECRET_KEY"
       - key: TELEGRAM_BOT_TOKEN
-        value: "8300811327:AAFnVMh21kSS7vemrdtdGmnhMjF0npCWNhs"
-      - key: TELEGRAM_BOT_NAME
-        value: "self_development_tracker_bot"
+        value: "YOUR_TELEGRAM_BOT_TOKEN"
       - key: PYTHON_VERSION
         value: "3.11.9"

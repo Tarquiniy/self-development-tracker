@@ -2,10 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY . .
+# Кладём код backend/ в /app так, чтобы /app/core/* был импортируемым как core.*.
+COPY backend/ .
 
 RUN python manage.py collectstatic --noinput
 
