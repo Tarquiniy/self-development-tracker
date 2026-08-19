@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 set -o errexit
 
-#echo "=== Installing Python dependencies ==="
-#pip install --upgrade pip
-#pip install -r requirements.txt
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-#echo "=== Collecting static files ==="
-#python manage.py collectstatic --noinput
+echo "=== Installing Python dependencies (backend) ==="
+pip install --upgrade pip
+pip install -r backend/requirements.txt
 
-#echo "=== Making migrations ==="
-#python manage.py makemigrations
+echo "=== Collecting static files (backend) ==="
+cd backend
+python manage.py collectstatic --noinput --clear
 
-#echo "=== Applying database migrations ==="
-#python manage.py migrate
+echo "=== Making migrations (backend) ==="
+python manage.py makemigrations
+
+echo "=== Applying database migrations (backend) ==="
+python manage.py migrate
 
 echo "=== Build completed successfully ==="

@@ -114,13 +114,14 @@ python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
 # 3. Install dependencies
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
 # 4. Configure environment
 cp backend/.env.example backend/.env
 # Edit backend/.env with your Supabase credentials, Redis URL, etc.
 
 # 5. Apply migrations
+cd backend
 python manage.py migrate
 
 # 6. Create a superuser (for /admin)
@@ -183,9 +184,22 @@ See `backend/.env.example` for a full list.
 
 | Variable | Description | Required |
 |---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | ✅ |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key | ✅ |
-| `NEXT_PUBLIC_API_URL` | Django backend URL | ✅ |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (client) | ✅ |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (client) | ✅ |
+| `NEXT_PUBLIC_API_URL` | Django backend URL (client) | ✅ |
+| `NEXT_PUBLIC_BACKEND_URL` | Backend origin for OAuth/redirect helpers | ✅ |
+| `NEXT_PUBLIC_SITE_ORIGIN` | Site origin for redirects | ✅ |
+| `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` | Telegram bot username (widget) | ✅ |
+| `NEXT_PUBLIC_YANDEX_CLIENT_ID` | Yandex OAuth client id | ⚠️ (if used) |
+
+| Variable | Description | Required |
+|---|---|---|
+| `SUPABASE_URL` | Supabase project URL (server routes) | ✅ |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server routes) | ✅ |
+| `SUPABASE_ANON_KEY` | Supabase anon key (server routes, if needed) | ⚠️ |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token (server routes) | ✅ |
+| `SITE_URL` | Base site URL used by server routes | ✅ |
+| `DEBUG_TELEGRAM` | Enable extra debug for telegram auth | ⚠️ |
 
 See `frontend/.env.example` for a full list.
 
@@ -229,9 +243,9 @@ Base URL: `https://positive-theta-5n2d.onrender.com/api/`
 
 The `render.yaml` file defines all Render services. On every push to `main`:
 
-1. Render installs Python deps via `pip install -r requirements.txt`.
-2. The build command runs `python manage.py collectstatic --noinput && python manage.py migrate`.
-3. Gunicorn starts via the `Procfile`: `web: gunicorn core.wsgi`.
+1. Render installs Python deps via `pip install -r backend/requirements.txt` (inside `backend/`).
+2. The build command runs `python manage.py collectstatic --noinput && python manage.py migrate` (inside `backend/`).
+3. Gunicorn starts via the `Procfile`/render config with `--chdir backend` so `core.wsgi` is resolvable.
 
 Required environment variables must be set in the Render dashboard.
 
