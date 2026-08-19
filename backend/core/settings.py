@@ -78,7 +78,7 @@ JAZZMIN_SETTINGS = {
     "site_header": "Positive Theta Панель",
     "site_brand": "Positive Theta",
     "welcome_sign": "Добро пожаловать в панель управления",
-    "copyright": "Positive Theta © 2025",
+    "copyright": "Positive Theta © 2026",
     "show_ui_builder": True,
     "icons": {
         "auth": "fas fa-users-cog",
@@ -163,7 +163,7 @@ DATABASES = {
         'NAME': os.environ.get('SUPABASE_DB_NAME', 'postgres'),
         'USER': os.environ.get('SUPABASE_DB_USER', 'postgres'),
         'PASSWORD': os.environ.get('SUPABASE_DB_PASSWORD', ''),
-        'HOST': os.environ.get('SUPABASE_DB_HOST', 'db.fjqbhcmsqypevfbpzcxj.supabase.co'),
+        'HOST': os.environ.get('SUPABASE_DB_HOST', 'localhost'),
         'PORT': os.environ.get('SUPABASE_DB_PORT', '5432'),
     }
 }

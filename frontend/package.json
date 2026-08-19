@@ -1,8 +1,8 @@
 {
   "name": "frontend",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "description",
+  "description": "Positive Theta — a self-development tracker PWA built with Next.js and Django",
   "homepage": "https://github.com/Tarquiniy/self-development-tracker#readme",
   "bugs": {
     "url": "https://github.com/Tarquiniy/self-development-tracker/issues"
@@ -12,14 +12,16 @@
     "url": "git+https://github.com/Tarquiniy/self-development-tracker.git"
   },
   "license": "ISC",
-  "author": "",
+  "author": "Positive Theta Team",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@react-spring/web": "^10.0.3",
